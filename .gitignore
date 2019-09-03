@@ -103,5 +103,9 @@ venv.bak/
 # mypy
 .mypy_cache/
 
+
+# PyCharm project settings
+.idea/
+
 # Data source file
 /data_dir_source
