@@ -15,7 +15,7 @@ from data.preprocess import coord_in_bbox
 
 
 # Set road discretisation distance in metres
-increment_dist = 2
+increment_dist = 3
 
 # GPS noise variance (isotropic)
 sigma2_GPS = 20 ** 2
@@ -118,7 +118,7 @@ if __name__ == '__main__':
                     if len(polyline) > 2 and coord_in_bbox(polyline[0], bbox_utm)]
 
     # Select single polyline start
-    single_index = 1
+    single_index = 2
     poly_start = start_points[single_index]
 
     # Discretise close edges

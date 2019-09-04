@@ -105,6 +105,10 @@ if __name__ == "__main__":
     # Directory to save graphs
     graph_dir = process_data_path + '/graphs/'
 
+    # Create graph folder in process_data_path if it doesn't already exist
+    if not os.path.exists(process_data_path + '/graphs/'):
+        os.mkdir(process_data_path + '/graphs/')
+
     # Download full graph (many nodes, each edge a straight line)
     full_graph = download_full_graph()
     save_graph(full_graph, graph_dir + data.utils.project_title + '_graph_full_LL.graphml')

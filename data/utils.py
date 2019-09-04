@@ -100,8 +100,10 @@ def choose_data():
     """
     _, process_path = source_data()
     root = tkinter.Tk()
-    root.wm_withdraw()
-    data_path = filedialog.askopenfilename(initialdir=process_path + "/data/", title='Locate data')
+    root.withdraw()
+    root.update()
+    data_path = filedialog.askopenfilename(parent=root, initialdir=process_path + "/data/", title='Locate data')
+    root.update()
     root.destroy()
     return data_path
 

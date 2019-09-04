@@ -227,6 +227,10 @@ if __name__ == '__main__':
         + 'bbox'\
         + '.csv'
 
+    # Create data folder in process_data_path if it doesn't already exist
+    if not os.path.exists(process_data_path + '/data/'):
+        os.mkdir(process_data_path + '/data/')
+
     # Check if file already exists (as save_chunk appends)
     if os.path.isfile(save_data_path):
         print("File already exists at " + save_data_path)
