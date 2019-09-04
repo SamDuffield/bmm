@@ -93,6 +93,19 @@ def save_chunk(path, chunk):
     chunk.to_csv(path, mode='a', index=False, header=not csv_exists)
 
 
+def choose_data():
+    """
+    Prompts file dialog to ask user to locate data file.
+    :return: path of chosen file (string)
+    """
+    _, process_path = source_data()
+    root = tkinter.Tk()
+    root.wm_withdraw()
+    data_path = filedialog.askopenfilename(initialdir=process_path + "/data/", title='Locate data')
+    root.destroy()
+    return data_path
+
+
 if __name__ == '__main__':
 
     # User inputs raw file and process directory
@@ -101,8 +114,11 @@ if __name__ == '__main__':
     # Write to data/data_source
     write_to_data_source(raw_path, process_path)
 
-    # Load data with
+    # Load data paths with
     # import data.utils
     # raw_path, process_data_path = data.utils.source_data()
     # or
     # _, process_data_path = data.utils.source_data()
+
+    # Locate a data file with
+    # data_path = data.utils.choose_data()
