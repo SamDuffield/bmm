@@ -11,8 +11,6 @@ import osmnx as ox
 import matplotlib.pyplot as plt
 import data.utils
 from tools.graph import load_graph, plot_graph, get_bbox_from_graph
-from data.preprocess import coord_in_bbox
-
 
 # Set road discretisation distance in metres
 increment_dist = 3
@@ -113,23 +111,19 @@ if __name__ == '__main__':
     # Get UTM bbox
     bbox_utm = get_bbox_from_graph(graph)
 
-    # Get chunk, extract initial GPS coordinates and extract only those in bbox
-    start_points = [polyline[0] for polyline in raw_data['POLYLINE_UTM']
-                    if len(polyline) > 2 and coord_in_bbox(polyline[0], bbox_utm)]
+    # Select single polyline
+    single_index = 4
+    poly_single = raw_data['POLYLINE_UTM'][single_index]
 
-    # Select single polyline start
-    single_index = 2
-    poly_start = start_points[single_index]
+    # Discretise edges close to start point of polyline
+    dis_edges = get_truncated_discrete_edges(graph, poly_single[0], sigma2_GPS)
 
-    # Discretise close edges
-    dis_edges = get_truncated_discrete_edges(graph, poly_start, sigma2_GPS)
-
-    # Coords of discretise edges
+    # Coords of discretised edges
     dis_edge_coords = np.asarray([edge_interpolate(edge, alpha) for edge, alpha in dis_edges])
 
     # Plot
-    fig, ax = plot_graph(graph, [poly_start])
+    fig, ax = plot_graph(graph, poly_single)
     ax.scatter(dis_edge_coords[:, 0], dis_edge_coords[:, 1], c='blue')
-    truncate_circle = plt.Circle(tuple(poly_start), np.sqrt(sigma2_GPS) * 3, color='orange', fill=False)
+    truncate_circle = plt.Circle(tuple(poly_single[0]), np.sqrt(sigma2_GPS) * 3, color='orange', fill=False)
     ax.add_patch(truncate_circle)
     plt.show(block=True)
