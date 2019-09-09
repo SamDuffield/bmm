@@ -42,7 +42,7 @@ def timestamp_end_extract(row):
     return timestamp_poly_end
 
 
-def convert_to_timestamp(date_time: datetime.datetime):
+def datetime_to_timestamp(date_time: datetime.datetime):
     """
     Convert a datetime object (in local timezone) to a UNIX timestamp (seconds since 01 Jan 1970. (UTC))
     Requires predefined global timezone object (from pytz), time_zone.
@@ -56,6 +56,25 @@ def convert_to_timestamp(date_time: datetime.datetime):
     timestamp = local_date_time.timestamp()
 
     return timestamp
+
+
+def timestamp_to_datetime(timestamp):
+    """
+    Convert a UNIX timestamp (seconds since 01 Jan 1970. (UTC)) to a datetime object (in local timezone).
+    Requires predefined global timezone object (from pytz), time_zone.
+    :param UNIX timestamp (float or int)
+    :return: local_date_time: datetime object (local timezone)
+    """
+    # Get UTC datetime
+    utc_dt = datetime.datetime.utcfromtimestamp(timestamp)
+
+    # Make datetime object aware it is UTC
+    utc_dt = utc_dt.replace(tzinfo=timezone('UTC'))
+
+    # Change to local timezone
+    local_date_time = utc_dt.astimezone(time_zone)
+
+    return local_date_time
 
 
 def coord_in_bbox(coordinate, bbox):
@@ -215,8 +234,8 @@ if __name__ == '__main__':
     time_end = datetime.datetime(2014, 5, 12, 0, 0, 0)
 
     # Convert to UNIX timestamp
-    timestamp_start = convert_to_timestamp(time_start)
-    timestamp_end = convert_to_timestamp(time_end)
+    timestamp_start = datetime_to_timestamp(time_start)
+    timestamp_end = datetime_to_timestamp(time_end)
 
     # Destination path for preprocessed data file
     save_data_path = process_data_path + '/data/'\

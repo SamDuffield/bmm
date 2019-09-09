@@ -77,7 +77,7 @@ def plot_graph(graph, polyline=None, edges_to_highlight=None):
     :param graph:
     :param polyline:
     :param edges_to_highlight:
-    :return:
+    :return: fig, ax of plotted road network (plus polyline)
     """
     if edges_to_highlight is not None:
         edge_colours = ['blue' if [u, v] in edges_to_highlight or [v, u] in edges_to_highlight

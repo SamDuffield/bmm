@@ -10,7 +10,7 @@ import numpy as np
 import osmnx as ox
 import matplotlib.pyplot as plt
 import data.utils
-from tools.graph import load_graph, plot_graph, get_bbox_from_graph
+from tools.graph import load_graph, plot_graph
 
 # Set road discretisation distance in metres
 increment_dist = 3
@@ -107,9 +107,6 @@ if __name__ == '__main__':
     # Load taxi data
     data_path = data.utils.choose_data()
     raw_data = data.utils.read_data(data_path, 100).get_chunk()
-
-    # Get UTM bbox
-    bbox_utm = get_bbox_from_graph(graph)
 
     # Select single polyline
     single_index = 4
