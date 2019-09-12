@@ -65,6 +65,7 @@ def propagate_particle(edge, alpha, av_speeds, t_end):
 
 
 
+
 def plot_graph_with_samples(graph, polyline=None, samples=None):
     """
     Wrapper for plot_graph. Adds sampled points to graph.

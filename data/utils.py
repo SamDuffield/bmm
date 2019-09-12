@@ -43,7 +43,8 @@ def write_to_data_source(raw_file, process_dir):
     json_dict = json.dumps({'raw_data_file': raw_file,
                             'process_data_dir': process_dir})
 
-    source_file = open("data_source", "w")
+    curdir = os.path.dirname(os.path.abspath(__file__))
+    source_file = open(curdir + "data_source", "w")
     source_file.write(json_dict)
     source_file.close()
 

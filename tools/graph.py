@@ -10,16 +10,110 @@ import osmnx as ox
 import geopandas as gpd
 import os
 import matplotlib.pyplot as plt
+import json
+import tkinter
 
 
 def download_full_graph():
     """
-    Returns a graph of road network in the form of a networkx multidigraph
+    Returns a graph of road network in the form of a networkx multidigraph, based off latest OSM data.
     :return: networkx object
     """
 
     graph_full = ox.graph_from_bbox(bbox_ll[0], bbox_ll[1], bbox_ll[2], bbox_ll[3], network_type='drive_service',
-                                    truncate_by_edge=True, simplify=False)
+                                    truncate_by_edge=True, simplify=False, name='latest')
+
+    return graph_full
+
+
+def load_road_types():
+    """
+    Load pre-defined list of road types accessible by car.
+    :return: list of road types (strings)
+    """
+    curdir = os.path.dirname(os.path.abspath(__file__))
+    source_file = open(curdir + "/road_types.txt", "r")
+    json_road_types = source_file.read()
+    source_file.close()
+
+    road_types = json.loads(json_road_types)
+
+    return road_types
+
+
+def prune_non_highways(graph):
+    """
+    Removes all edges from graph that aren't for highways (cars) and subsequent isolated nodes.
+    :param graph: Full graph with variety of edges
+    :return: Graph with only highway type edges
+    """
+    pruned_graph = graph.copy()
+
+    road_types = load_road_types()
+
+    for u, v, k in graph.edges:
+        edge_data = graph.get_edge_data(u, v, k)
+
+        if 'highway' not in edge_data.keys():
+            pruned_graph.remove_edge(u, v, k)
+        else:
+            highway = edge_data['highway']
+            if type(highway) == str:
+                highway = [highway]
+
+            remove = True
+            for val in highway:
+                if val in road_types:
+                    remove = False
+
+            if remove:
+                pruned_graph.remove_edge(u, v, k)
+
+    pruned_graph = ox.remove_isolated_nodes(pruned_graph)
+
+    return pruned_graph
+
+
+def extract_full_graph_from_osm(osm_path, osm_data_name="external"):
+    """
+    Extracts graph from a pre-downloaded OSM file (either xml or pbf format).
+    Typically useful if using older data and thus latest OSM map might be too up to date.
+    You can download old OSM files from http://download.geofabrik.de/
+    e.g. http://download.geofabrik.de/europe/portugal.html -> raw directory index - > *.osm.pbf
+    If OSM file this function requires osmconvert, which can be installed with apt install osmctools.
+    :param osm_path: path of OSM pbf or xml file
+    :param osm_data_name: name of data (i.e. location and data)
+    :return: networkx graph, pruned but not simplified or projected
+    """
+
+    # Source data paths
+    _, process_data_path = data.utils.source_data()
+
+    # Check extension of data
+    if osm_path[-3:] == 'pbf':
+        # Convert pbf to xml
+        _, process_data_path = data.utils.source_data()
+
+        convert_path = process_data_path + '/graphs/' + os.path.basename(osm_path)[:-3] + 'xml'
+
+        # Use osmconvert to convert
+        osmconvert_cmd = "osmconvert " + osm_path \
+                         + " -b={},{},{},{}".format(bbox_ll[3], bbox_ll[1], bbox_ll[2], bbox_ll[0]) \
+                         + "--drop-broken-refs --complete-ways" \
+                         + " -o=" + convert_path
+
+        os.system(osmconvert_cmd)
+
+    elif osm_path[-3:] == 'xml':
+        convert_path = osm_path
+    else:
+        raise ValueError('OSM file must be either .xml or .pbf')
+
+    graph_full = ox.graph_from_file(convert_path, name=osm_data_name, simplify=False)
+
+    graph_full = ox.truncate_graph_bbox(graph_full, bbox_ll[0], bbox_ll[1], bbox_ll[2], bbox_ll[3])
+
+    graph_full = prune_non_highways(graph_full)
 
     return graph_full
 
@@ -40,8 +134,11 @@ def load_graph(path=None):
     :return: loaded graph
     """
     if path is None:
-        _, process_data_path = data.utils.source_data()
-        path = process_data_path + '/graphs/' + data.utils.project_title + '_graph_simple.graphml'
+        # path = os.environ.get('GRAPH_PATH')
+        curdir = os.path.dirname(os.path.abspath(__file__))
+        source_file = open(curdir + "/graph_source", "r")
+        path = source_file.read()
+        source_file.close()
 
     return ox.load_graphml(folder=os.path.dirname(path), filename=os.path.basename(path))
 
@@ -73,7 +170,7 @@ def polyline_axis(polyline, axis):
 
 def plot_graph(graph, polyline=None, edges_to_highlight=None):
     """
-    Plot OSMNx graph, with optional polyline and highlighted edges.
+    Plot OSMnx graph, with optional polyline and highlighted edges.
     :param graph:
     :param polyline:
     :param edges_to_highlight:
@@ -109,17 +206,48 @@ if __name__ == "__main__":
     if not os.path.exists(process_data_path + '/graphs/'):
         os.mkdir(process_data_path + '/graphs/')
 
-    # Download full graph (many nodes, each edge a straight line)
-    full_graph = download_full_graph()
-    save_graph(full_graph, graph_dir + data.utils.project_title + '_graph_full_LL.graphml')
+    # Ask user if they have pre-downloaded OSM data
+    root = tkinter.Tk()
+    osm_data = tkinter.messagebox.askquestion("OSM data",
+                                              "Do you have OSM data already downloaded (xml or pbf) to construct a"
+                                              "graph from? (otherwise we'll just download the latest graph)")
+    if osm_data == 'yes':
+        # Get data location
+        root.update()
+        osm_data_path = tkinter.filedialog.askopenfilename(parent=root, title='Locate OSM file (xml or pbf)')
+        root.update()
+        root.destroy()
 
-    # Project graph to UTM
+        # Get name of data
+        data_name = os.path.basename(osm_data_path)[:-3]
+
+        # Extract full graph (many nodes, each edge a straight line)
+        full_graph = extract_full_graph_from_osm(osm_data_path, data_name)
+
+    else:
+        root.destroy()
+        # Download full graph (many nodes, each edge a straight line)
+        full_graph = download_full_graph()
+
+    # Save full graph
+    graph_base_name = data.utils.project_title + '_graph_' + full_graph.name
+    save_graph(full_graph, graph_dir + graph_base_name + 'LL_full.graphml')
+
+    # Project graph to UTM and save
     project_graph = ox.project_graph(full_graph)
-    save_graph(project_graph, graph_dir + data.utils.project_title + '_graph_full.graphml')
+    save_graph(project_graph, graph_dir + graph_base_name + '_full.graphml')
 
-    # Simplify graph (fewer nodes, edges incorporate non-straight geometry)
+    # Simplify graph (fewer nodes, edges incorporate non-straight geometry) and save
     simplified_graph = ox.simplify_graph(project_graph)
-    save_graph(simplified_graph, graph_dir + data.utils.project_title + '_graph_simple.graphml')
+    save_graph(simplified_graph, graph_dir + graph_base_name + '_simple.graphml')
+
+    # Save in text file path for load_graph to call later
+    curdir = os.path.dirname(os.path.abspath(__file__))
+    source_file = open(curdir + "/graph_source", "w")
+    source_file.write(graph_dir + graph_base_name + '_simple.graphml')
+    source_file.close()
+
+    # os.environ['GRAPH_PATH'] = graph_dir + graph_base_name + '_simple.graphml'
 
     # Plot simplified projected graph
     fig, ax = plot_graph(simplified_graph)

@@ -109,7 +109,7 @@ if __name__ == '__main__':
     raw_data = data.utils.read_data(data_path, 100).get_chunk()
 
     # Select single polyline
-    single_index = 4
+    single_index = 0
     poly_single = raw_data['POLYLINE_UTM'][single_index]
 
     # Discretise edges close to start point of polyline
