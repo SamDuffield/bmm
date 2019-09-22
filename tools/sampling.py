@@ -1,6 +1,6 @@
 ################################################################################
 # Module: sampling.py
-# Description: Sample initial coordinate. Given average speeds across all links
+# Description: Sample initial coordinate. Given speeds across all links
 #              sample trajectories.
 # Web: https://github.com/SamDuffield/bayesian-traffic
 ################################################################################
@@ -50,20 +50,6 @@ def sample_x0(graph, y0, N_sample):
     sampled_points = [dis_points[i] for i in sampled_indices]
 
     return sampled_points
-
-
-def propagate_particle(edge, alpha, av_speeds, t_end):
-
-    t_current = 0
-
-
-
-
-
-
-
-
-
 
 
 def plot_graph_with_samples(graph, polyline=None, samples=None):

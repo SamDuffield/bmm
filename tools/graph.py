@@ -1,6 +1,7 @@
 ################################################################################
 # Module: graph.py
-# Description: Download, project, simplify and save road network using OSMNx.
+# Description: Download/prune, project, simplify
+#              and save road network using OSMNx.
 # Web: https://github.com/SamDuffield/bayesian-traffic
 ################################################################################
 
@@ -11,7 +12,8 @@ import geopandas as gpd
 import os
 import matplotlib.pyplot as plt
 import json
-import tkinter
+import tkinter.messagebox
+import tkinter.filedialog
 
 
 def download_full_graph():
@@ -80,7 +82,9 @@ def extract_full_graph_from_osm(osm_path, osm_data_name="external"):
     Typically useful if using older data and thus latest OSM map might be too up to date.
     You can download old OSM files from http://download.geofabrik.de/
     e.g. http://download.geofabrik.de/europe/portugal.html -> raw directory index - > *.osm.pbf
-    If OSM file this function requires osmconvert, which can be installed with apt install osmctools.
+    If OSM file, this function requires osmconvert, which can be installed with:
+        Linux: apt install osmctools
+        Mac OS: brew install interline-io/planetutils/osmctools
     :param osm_path: path of OSM pbf or xml file
     :param osm_data_name: name of data (i.e. location and data)
     :return: networkx graph, pruned but not simplified or projected
@@ -207,6 +211,8 @@ if __name__ == "__main__":
         os.mkdir(process_data_path + '/graphs/')
 
     # Ask user if they have pre-downloaded OSM data
+    #     You can download old OSM files from http://download.geofabrik.de/
+    #     e.g. http://download.geofabrik.de/europe/portugal.html -> raw directory index - > *.osm.pbf
     root = tkinter.Tk()
     osm_data = tkinter.messagebox.askquestion("OSM data",
                                               "Do you have OSM data already downloaded (xml or pbf) to construct a"
@@ -246,8 +252,6 @@ if __name__ == "__main__":
     source_file = open(curdir + "/graph_source", "w")
     source_file.write(graph_dir + graph_base_name + '_simple.graphml')
     source_file.close()
-
-    # os.environ['GRAPH_PATH'] = graph_dir + graph_base_name + '_simple.graphml'
 
     # Plot simplified projected graph
     fig, ax = plot_graph(simplified_graph)
