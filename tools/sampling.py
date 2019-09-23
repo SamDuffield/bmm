@@ -28,7 +28,7 @@ def gaussian_weights(points, obs_point):
     return un_weights / sum(un_weights)
 
 
-def sample_x0(graph, y0, N_sample):
+def sample_x0(graph_edges, y0, N_sample):
     """
     Samples from Gaussian centred around y0, constrained to the road network.
     :param graph: defines road network
@@ -38,7 +38,7 @@ def sample_x0(graph, y0, N_sample):
     """
 
     # Discretize nearby edges
-    dis_points = tools.edges.get_truncated_discrete_edges(graph, y0, tools.edges.sigma2_GPS)
+    dis_points = tools.edges.get_truncated_discrete_edges(graph_edges, y0, tools.edges.sigma2_GPS)
 
     # Calculate likelihood weights
     weights = gaussian_weights(dis_points, y0)
@@ -81,6 +81,7 @@ if __name__ == '__main__':
 
     # Load networkx graph
     graph = load_graph()
+    graph_edges = tools.edges.graph_edges_extract(graph)
 
     # Load small taxi data set (i.e. only 15 minutes)
     data_path = data.utils.choose_data()
@@ -94,7 +95,7 @@ if __name__ == '__main__':
     N_samps = 100
 
     # Sample x0|y0
-    x0_samples = sample_x0(graph, poly_single[0], N_samps)
+    x0_samples = sample_x0(graph_edges, poly_single[0], N_samps)
 
     # Plot initial samples
     plot_graph_with_samples(graph, poly_single, x0_samples)

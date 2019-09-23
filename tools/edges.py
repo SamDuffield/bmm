@@ -34,28 +34,37 @@ def edge_interpolate(edge, alpha):
     return coord
 
 
-def get_edges_within_dist(graph, coord, dist):
+def graph_edges_extract(graph):
+    """
+    Converts networkx graph to geopandas data frame and then returns list of edges. (Fast!)
+    :param graph: networkx object
+    :return: list of edges, [u, v, k, geometry]
+    """
+    gdf = ox.graph_to_gdfs(graph, nodes=False, fill_edge_geometry=True)
+    edge_list = gdf[["u", "v", "key", "geometry"]].values.tolist()
+    return edge_list
+
+
+def get_edges_within_dist(graph_edges, coord, dist):
     """
     Given a point returns all edges that fall within a radius of dist.
-    :param graph: simplified graph
+    :param graph_edges: simplified graph converted to edge list (with graph_edges_extract)
     :param coord: central point
     :param dist: radius
     :return: list of edges, each element a [u,v,k, geometry] object
     """
-    gdf = ox.graph_to_gdfs(graph, nodes=False, fill_edge_geometry=True)
-    graph_edges = gdf[["geometry", "u", "v", "key"]].values.tolist()
 
     edges_with_distances = [
         (
             graph_edge,
-            ox.Point(tuple(coord)).distance(graph_edge[0])
+            ox.Point(tuple(coord)).distance(graph_edge[3])
         )
         for graph_edge in graph_edges
     ]
 
     edges_with_distances = sorted(edges_with_distances, key=lambda x: x[1])
 
-    edges_within_dist = [[u, v, k, geometry] for [[geometry, u, v, k], d] in edges_with_distances if d < dist]
+    edges_within_dist = [[u, v, k, geometry] for [[u, v, k, geometry], d] in edges_with_distances if d < dist]
 
     return edges_within_dist
 
@@ -74,17 +83,17 @@ def discretise_edge(edge):
     return [[edge, a] for a in alphas]
 
 
-def get_truncated_discrete_edges(graph, coord, sigma2_GPS):
+def get_truncated_discrete_edges(graph_edges, coord, sigma2_GPS):
     """
     Samples N possible positions on graph for a given GPS ping
-    :param graph: simplified graph
+    :param graph_edges: simplified graph converted to edge list (with graph_edges_extract)
     :param coord: conformal with graph (i.e. UTM)
     :param sigma2_GPS: isotropic variance of GPS noise (in metres if UTM)
     :return: list [edge, alpha] of unique edge [u, v, k, geometry] (order of u,v dictates direction)
                 and alpha in [0,1] indicating proportion along edge from u to v
     """
 
-    close_edges = get_edges_within_dist(graph, coord, dist_retain)
+    close_edges = get_edges_within_dist(graph_edges, coord, dist_retain)
 
     discritised_edges = []
 
@@ -112,8 +121,11 @@ if __name__ == '__main__':
     single_index = 0
     poly_single = raw_data['POLYLINE_UTM'][single_index]
 
+    # Extract edge list
+    graph_edges = graph_edges_extract(graph)
+
     # Discretise edges close to start point of polyline
-    dis_edges = get_truncated_discrete_edges(graph, poly_single[0], sigma2_GPS)
+    dis_edges = get_truncated_discrete_edges(graph_edges, poly_single[0], sigma2_GPS)
 
     # Coords of discretised edges
     dis_edge_coords = np.asarray([edge_interpolate(edge, alpha) for edge, alpha in dis_edges])
