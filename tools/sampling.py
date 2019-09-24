@@ -11,6 +11,7 @@ import data.utils
 import tools.edges
 from tools.graph import load_graph, plot_graph
 import data.preprocess
+import geopandas as gpd
 
 
 def gaussian_weights(points, obs_point):

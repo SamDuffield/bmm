@@ -45,7 +45,6 @@ def sample_speed():
     return sample_TGaus_speed(v_mu, v_sigma, v_max)
 
 
-
 def plot_TGaus(mu, sigma, vmax):
     """
     Plots Gaussian truncated to [0, vmax]
@@ -123,7 +122,15 @@ def propagate_x(graph_edges, edge_and_speed, delta_x):
 
 
 def propagate_particles(graph_edges, particles_xv, obs_y, delta_x, delta_y):
-
+    """
+    Propagates particles forward and reweights them according to new observation.
+    :param graph_edges: simplified graph converted to edge list (with tools.edges.graph_edges_extract)
+    :param particles_xv: N elements, [[[edge_0, alpha_0, speed_0], [edge_1, alpha_1, speed_1], ... ], weights]
+    :param obs_y:
+    :param delta_x:
+    :param delta_y:
+    :return:
+    """
     prop_particles = []
 
     n = len(particles_xv)
@@ -156,7 +163,7 @@ def propagate_particles(graph_edges, particles_xv, obs_y, delta_x, delta_y):
     return prop_particles
 
 
-def plot_graph_with_weighted_samples(graph, polyline=None, samples=None, speeds=True):
+def plot_graph_with_weighted_samples(graph, polyline=None, samples=None):
     """
     Wrapper for plot_graph. Adds weighted sampled points to graph.
     :param graph: road network
@@ -179,15 +186,12 @@ def plot_graph_with_weighted_samples(graph, polyline=None, samples=None, speeds=
         points_xy = np.asarray([tools.edges.edge_interpolate(edge, alpha) for edge, alpha in samples])
 
         # Min opacity
-        opa_min = 0.4
+        opa_min = 0.2
         alphas = opa_min + (1-opa_min)*weights
         rgba_colors = np.zeros((len(weights), 4))
         rgba_colors[:, 0] = 1.0
         rgba_colors[:, 1] = 0.6
         rgba_colors[:, 3] = alphas
-
-
-
         ax.scatter(points_xy[:, 0], points_xy[:, 1], c=rgba_colors)
 
     return fig, ax
@@ -213,7 +217,7 @@ if __name__ == '__main__':
     M_obs = len(poly_single)
 
     # Sample size
-    N_samps = 100
+    N_samps = 10
 
     # Observation time increment (s)
     delta_obs = 15
@@ -242,7 +246,3 @@ if __name__ == '__main__':
     # Plot first propagation
     plot_graph_with_weighted_samples(graph, poly_single, xv_samples[1])
     plt.show(block=True)
-
-
-
-

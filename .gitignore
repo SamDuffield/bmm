@@ -110,3 +110,6 @@ venv.bak/
 # Data source files
 /data/data_source
 /tools/graph_source
+
+# Depreciated scripts
+/archive/
