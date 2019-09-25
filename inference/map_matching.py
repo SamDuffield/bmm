@@ -7,17 +7,27 @@
 
 import numpy as np
 import data
-from tools.graph import load_graph, plot_graph
+from tools.graph import load_graph
 import tools.edges
 import tools.sampling
 from scipy.stats import truncnorm
 import matplotlib.pyplot as plt
 import osmnx as ox
+import pandas as pd
+
+# Relative probability of u-turn at intersection
+u_turn_downscale = 0.2
+
+# Speed prior hyperparameters (all links a priori iid)
+v_mu = 9
+v_sigma = 5
+v_max = v_mu * 2.5
+
 
 
 def sample_TGaus_speed(mu, sigma, vmax, size=1):
     """
-    Sample a speed from univariate Gaussian truncated to [0,vmax].
+    Sample a speed from univariate Gaussian truncated to [0, vmax].
     All quantities in m/s.
     :param mu: mean of (pre-truncated) Gaussian
     :param sigma: standard deviation of (pre-truncated Gaussian)
@@ -38,29 +48,7 @@ def sample_speed():
     Hyperparameters defined inside function.
     :return: speed, float
     """
-    # Speed prior hyperparameters (all links a priori iid)
-    v_mu = 9
-    v_sigma = 5
-    v_max = v_mu*2.5
     return sample_TGaus_speed(v_mu, v_sigma, v_max)
-
-
-def plot_TGaus(mu, sigma, vmax):
-    """
-    Plots Gaussian truncated to [0, vmax]
-    :param mu: mean of (pre-truncated) Gaussian
-    :param sigma: standard deviation of (pre-truncated Gaussian)
-    :param vmax: upper truncation
-    :return: fig, ax
-    """
-    fig, ax = plt.subplots(1, 1)
-
-    rv = truncnorm(-mu/sigma, (vmax-mu)/sigma, scale=sigma)
-
-    x = np.linspace(-mu/sigma, (vmax-mu)/sigma, 100)
-    ax.plot(x*sigma + mu, rv.pdf(x))
-
-    return fig, ax
 
 
 def sample_next_edge(graph_edges, prev_edge):
@@ -69,29 +57,24 @@ def sample_next_edge(graph_edges, prev_edge):
     Assumes equally likely to pass onto all adjacent edges at intersection
     (except u_turn which is downscaled but not necessarily 0)
     :param graph_edges: simplified graph converted to edge list (with tools.edges.graph_edges_extract)
-    :param prev_edge: edge just traversed, [u, v, k, geometry]
-    :return: sampled new edge, [u, v, k, geometry]
+    :param prev_edge: edge just traversed, pandas.Series
+    :return: sampled new edge, pandas.Series
     """
-    adj_v_edges = [edge for edge in graph_edges if edge[0] == prev_edge[1]]
+    adj_v_edges = graph_edges[graph_edges['u'] == prev_edge['v']].reset_index(drop=True)
 
     n_adj = len(adj_v_edges)
 
-    u_turn_downscale = 0.2
-
     weights = np.ones(n_adj) / n_adj
 
-    u_turn_possible = False
-    for i, edge in enumerate(adj_v_edges):
-        if edge[1] == prev_edge[0]:
-            u_turn_possible = True
-            weights[i] *= u_turn_downscale
+    u_turn_possible = prev_edge['u'] in adj_v_edges['v'].to_list()
 
     if u_turn_possible:
+        weights[adj_v_edges['v']==prev_edge['u']] = 0.2 / n_adj
         weights /= sum(weights)
 
     sampled_index = np.random.choice(n_adj, p=weights)
 
-    return adj_v_edges[sampled_index]
+    return adj_v_edges.iloc[sampled_index]
 
 
 def propagate_x(graph_edges, edge_and_speed, delta_x):
@@ -99,115 +82,70 @@ def propagate_x(graph_edges, edge_and_speed, delta_x):
     Increment vehicle forward one time step (discretisation time step not observation)
     If propagation reaches the end of the edge (alpha = 1) sample a new edge to traverse to and new speed for that edge.
     :param graph_edges: simplified graph converted to edge list (with tools.edges.graph_edges_extract)
-    :param edge_and_speed: [edge, alpha, speed]
+    :param edge_and_speed: pandas.Series with u, v, key, geometry, alpha, distance_to_obs, speed
     :param delta_x: time discretisation (not observation time interval!)
-    :return: [propagated edge, propagated_alpha, propagated_speed]
+    :return: propagated edge_and_speed
     """
-    edge, alpha, speed = edge_and_speed
+    edge_length = edge_and_speed['geometry'].length
 
-    edge_length = edge[3].length
+    alpha_metre = edge_length * edge_and_speed['alpha']
 
-    alpha_metre = edge_length * alpha
-
-    alpha_metre_prop = alpha_metre + speed*delta_x
+    alpha_metre_prop = alpha_metre + edge_and_speed['speed']*delta_x
 
     alpha_prop = alpha_metre_prop / edge_length
 
+    out_edge_and_speed = edge_and_speed.copy()
+    out_edge_and_speed['t'] = edge_and_speed['t'] + delta_x
+
     if alpha_prop < 1:
-        return [edge, alpha_prop, speed]
+        out_edge_and_speed['alpha'] = alpha_prop
+        out_edge_and_speed['distance_to_obs'] = None
     else:
-        next_edge = sample_next_edge(graph_edges, edge)
-        new_speed = sample_speed()
-        return [next_edge, 0., new_speed]
+        out_edge_and_speed[['u', 'v', 'key', 'geometry']]\
+            = sample_next_edge(graph_edges, edge_and_speed[['u', 'v', 'key', 'geometry']])
+        out_edge_and_speed['alpha'] = 0
+        out_edge_and_speed['distance_to_obs'] = None
+        out_edge_and_speed['speed'] = sample_speed()
+
+    return out_edge_and_speed
 
 
-def propagate_particles(graph_edges, particles_xv, obs_y, delta_x, delta_y):
-    """
-    Propagates particles forward and reweights them according to new observation.
-    :param graph_edges: simplified graph converted to edge list (with tools.edges.graph_edges_extract)
-    :param particles_xv: N elements, [[[edge_0, alpha_0, speed_0], [edge_1, alpha_1, speed_1], ... ], weights]
-    :param obs_y:
-    :param delta_x:
-    :param delta_y:
-    :return:
-    """
-    prop_particles = []
+def sample_x_y0y1(graph_edges, y_0_y_1, delta_x, delta_y):
 
-    n = len(particles_xv)
+    hit_ball = False
+    while not hit_ball:
+        # Sample x_0
+        xv_df = tools.sampling.sample_x0(graph_edges, y_0_y_1[0], 1)
+        xv_df.insert(loc=0, column='t', value=[0])
+        xv_df['speed'] = sample_speed()
 
-    old_weights = [particle[1] for particle in particles_xv]
+        i = 0
+        while xv_df['t'][i] < delta_y:
+            xv_df = xv_df.append(propagate_x(graph_edges, xv_df.iloc[i], delta_x)).reset_index(drop=True)
+            i += 1
 
-    sum_weights = 0
-    for i in range(n):
-        hit_ball = False
-        while not hit_ball:
-            sampled_old_xv_ind = np.random.choice(n, p=old_weights)
-            xv = particles_xv[sampled_old_xv_ind][0]
-            t = 0
-            while t < delta_y:
-                xv = propagate_x(graph_edges, xv, delta_x)
-                t += delta_x
+        xv_obs_time = xv_df.iloc[-1]
+        xv_xy = tools.edges.edge_interpolate(xv_obs_time['geometry'], xv_obs_time['alpha'])
+        xv_dist_obs = ox.euclidean_dist_vec(y_0_y_1[1][1], y_0_y_1[1][0], xv_xy[1], xv_xy[0])
 
-            xv_xy = tools.edges.edge_interpolate(xv[0], xv[1])
+        if xv_dist_obs < tools.edges.dist_retain:
+            xv_df.at[xv_df.shape[0]-1, 'distance_to_obs'] = xv_dist_obs
+            hit_ball = True
 
-            xv_dist_obs = ox.euclidean_dist_vec(obs_y[1], obs_y[0], xv_xy[1], xv_xy[0])
-
-            if xv_dist_obs < tools.edges.dist_retain:
-                weight = np.exp(-0.5 / tools.edges.sigma2_GPS * xv_dist_obs ** 2)
-                sum_weights += weight
-                prop_particles += [[xv, weight]]
-                hit_ball = True
-
-    prop_particles = [[e, w/sum_weights] for e, w in prop_particles]
-
-    return prop_particles
-
-
-def plot_graph_with_weighted_samples(graph, polyline=None, samples=None):
-    """
-    Wrapper for plot_graph. Adds weighted sampled points to graph.
-    :param graph: road network
-    :param polyline: observed coordinates
-    :param samples: sampled points
-    :return: fig, ax of plotted road network (plus polyline and samples)
-    """
-
-    # Initiate graph
-    fig, ax = plot_graph(graph, polyline)
-
-    if samples is not None:
-        if speeds:
-            samples = [[xv[:-1], w] for xv, w in samples]
-
-        weights = np.array([w for xv, w in samples])
-        samples = [xv for xv, w in samples]
-
-        # Extract xy coordinates of samples
-        points_xy = np.asarray([tools.edges.edge_interpolate(edge, alpha) for edge, alpha in samples])
-
-        # Min opacity
-        opa_min = 0.2
-        alphas = opa_min + (1-opa_min)*weights
-        rgba_colors = np.zeros((len(weights), 4))
-        rgba_colors[:, 0] = 1.0
-        rgba_colors[:, 1] = 0.6
-        rgba_colors[:, 3] = alphas
-        ax.scatter(points_xy[:, 0], points_xy[:, 1], c=rgba_colors)
-
-    return fig, ax
+    return xv_df
 
 
 if __name__ == '__main__':
     # Source data paths
     _, process_data_path = data.utils.source_data()
 
-    # Load networkx graph
+    # Load networkx graph and edges gdf
     graph = load_graph()
-    graph_edges = tools.edges.graph_edges_extract(graph)
+    edges_gdf = tools.edges.graph_edges_gdf(graph)
 
-    # Load small taxi data set (i.e. only 15 minutes)
+    # Load taxi data
     data_path = data.utils.choose_data()
-    raw_data = data.utils.read_data(data_path)
+    raw_data = data.utils.read_data(data_path, 100).get_chunk()
 
     # Select single polyline
     single_index = 0
@@ -227,22 +165,20 @@ if __name__ == '__main__':
     N_time_dis = 5
     delta_x = delta_obs/N_time_dis
 
-    # Initiate sample storage, preallocate?
-    xv_samples = []
+    # Sample particles from q((x_t0:t1)|(y_t0, y_t1))
+    xv_particles = [sample_x_y0y1(edges_gdf, poly_single[:2], delta_x, delta_obs) for i in range(N_samps)]
 
-    # Sample x_t0|y_t0
-    xv_samples += [tools.sampling.sample_x0(graph_edges, poly_single[0], N_samps)]
+    # Plot
+    tools.edges.plot_graph_with_weighted_points(graph, poly_single, pd.concat(xv_particles))
+    # tools.edges.plot_graph_with_weighted_points(graph, poly_single, xv_particles[1])
 
-    # Sample initial speeds and set initial weights
-    xv_samples[0] = [[[edge, alpha, sample_speed()], 1/N_samps]
-                     for edge, alpha in xv_samples[0]]
+    # Weight particles
+    weights = [np.ones(N_samps) / N_samps]
+    weights += [np.array([np.exp(-0.5 / tools.edges.sigma2_GPS * df['distance_to_obs'].to_list()[-1])**2
+                          for df in xv_particles])]
+    weights[1] /= sum(weights[1])
 
-    # Plot initial
-    plot_graph_with_weighted_samples(graph, poly_single, xv_samples[0])
 
-    # Propagate edges and reweight
-    xv_samples += [propagate_particles(graph_edges, xv_samples[0], poly_single[1], delta_x, delta_obs)]
 
-    # Plot first propagation
-    plot_graph_with_weighted_samples(graph, poly_single, xv_samples[1])
+
     plt.show(block=True)

@@ -17,7 +17,7 @@ import geopandas as gpd
 increment_dist = 3
 
 # GPS noise variance (isotropic)
-sigma2_GPS = 20 ** 2
+sigma2_GPS = 5 ** 2
 
 # Cut off distance from a point
 dist_retain = np.sqrt(sigma2_GPS) * 3
@@ -56,10 +56,10 @@ def get_edges_within_dist(graph_edges, coord, dist):
     """
     graph_edges_dist = graph_edges.copy()
 
-    graph_edges_dist['distance_to_coord'] = graph_edges['geometry'].apply(
+    graph_edges_dist['distance_to_obs'] = graph_edges['geometry'].apply(
         lambda geom: ox.Point(tuple(coord)).distance(geom))
 
-    edges_within_dist = graph_edges_dist[graph_edges_dist['distance_to_coord'] < dist]
+    edges_within_dist = graph_edges_dist[graph_edges_dist['distance_to_obs'] < dist]
 
     return edges_within_dist
 
@@ -71,10 +71,8 @@ def discretise_edge(geom):
     :param edge: [u, v, k, geometry]
     :return: list of [edge, alpha] at each discretisation point
     """
-
     ds = np.arange(increment_dist/2, geom.length, increment_dist)
     alphas = ds / geom.length
-
     return alphas
 
 
@@ -89,6 +87,7 @@ def get_truncated_discrete_edges(graph_edges, coord):
 
     close_edges = get_edges_within_dist(graph_edges, coord, dist_retain)
     close_edges['alpha'] = close_edges['geometry'].apply(discretise_edge)
+    close_edges = close_edges.drop(columns='distance_to_obs')
 
     # Elongate dataframe and remove points outside truncation
     discretised_edges = []
@@ -98,13 +97,24 @@ def get_truncated_discrete_edges(graph_edges, coord):
             dist = ox.euclidean_dist_vec(coord[1], coord[0], xy[1], xy[0])
             if dist < dist_retain:
                 add_row = row.copy()
-                add_row['distance_to_coord'] = dist
                 add_row['alpha'] = a
+                add_row['distance_to_obs'] = dist
                 discretised_edges.append(add_row)
 
-    discretised_edges = gpd.GeoDataFrame(discretised_edges)
+    discretised_edges = gpd.GeoDataFrame(discretised_edges, crs=close_edges.crs)
 
     return discretised_edges
+
+
+def cartesianise(points):
+    """
+    Converts a gdf of edge, alpha coordinates into a numpy array of xy coordinates
+    :param points: points to plot (gdf with geometry and alpha columns)
+    :return: numpy array, of xy coordinates
+    """
+    points_xy = points.apply(lambda row: edge_interpolate(row['geometry'], row['alpha']), axis=1)
+    points_xy = np.asarray(points_xy.to_list())
+    return points_xy
 
 
 def plot_graph_with_weighted_points(graph, polyline=None, points=None, weights=None):
@@ -122,8 +132,7 @@ def plot_graph_with_weighted_points(graph, polyline=None, points=None, weights=N
 
     if points is not None:
         # Extract xy coordinates of samples
-        points_xy = points.apply(lambda row: edge_interpolate(row['geometry'], row['alpha']), axis=1)
-        points_xy = np.asarray(points_xy.to_list())
+        points_xy = cartesianise(points)
 
         # Set orange colour
         rgba_colors = np.zeros((len(points), 4))
@@ -132,14 +141,14 @@ def plot_graph_with_weighted_points(graph, polyline=None, points=None, weights=N
 
         # Weighted opacity (if inputted)
         if weights is None:
-            opa_base = 0.8
-            rgba_colors[:, 3] = opa_base
-        else:
-            # Min opacity
-            opa_min = 0.2
+            n = points_xy.shape[0]
+            weights = np.ones(n) / n
 
-            alphas = opa_min + (1 - opa_min) * weights
-            rgba_colors[:, 3] = alphas
+        # Min opacity
+        opa_min = 0.2
+
+        alphas = opa_min + (1 - opa_min) * weights
+        rgba_colors[:, 3] = alphas
 
         ax.scatter(points_xy[:, 0], points_xy[:, 1], c=rgba_colors)
 

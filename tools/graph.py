@@ -150,7 +150,7 @@ def load_graph(path=None):
 def get_bbox_from_graph(graph):
     """
     Extract bounding box (extreme coordinates of nodes) from graph
-    :param graph:
+    :param graph: networkx object
     :return: [north, south, east, west]
     """
     nodes, data = zip(*graph.nodes(data=True))
@@ -165,7 +165,7 @@ def get_bbox_from_graph(graph):
 def polyline_axis(polyline, axis):
     """
     Takes polyline and returns only latitudes or longitudes. (Skips any None coordinates)
-    :param polyline: Standard format
+    :param polyline: standard format
     :param axis: 0 for longitude, 1 for latitude
     :return: elements of polyline along single axis
     """
@@ -175,9 +175,9 @@ def polyline_axis(polyline, axis):
 def plot_graph(graph, polyline=None, edges_to_highlight=None):
     """
     Plot OSMnx graph, with optional polyline and highlighted edges.
-    :param graph:
-    :param polyline:
-    :param edges_to_highlight:
+    :param graph: networkx object
+    :param polyline: standard format
+    :param edges_to_highlight: edges to highlight in blue
     :return: fig, ax of plotted road network (plus polyline)
     """
     if edges_to_highlight is not None:
