@@ -14,17 +14,21 @@ import matplotlib.pyplot as plt
 import osmnx as ox
 import pandas as pd
 from scipy.stats import truncnorm
+from inference.prior_speed_exploration import sample_from_gamma_trunc_gauss_mix
 
 # Relative probability of u-turn at intersection
-u_turn_downscale = 0.2
+u_turn_downscale = 0.005
 
 # Speed prior hyperparameters (all links a priori iid)
 v_mean = 8.58
 v_std = 8.34
 v_max = 40
 
-# Weighting for conditional speed
-v_rho = 0.5
+# Weighting for conditional speed when staying on the same link
+v_rho_remain = 0.5
+
+# Weighting for conditional speed when moving to a new link
+v_rho_leave = 0.2
 
 
 def sample_marginal_speed():
@@ -34,10 +38,11 @@ def sample_marginal_speed():
     Hyperparameters defined at top of file (outside function).
     :return: speed (float)
     """
-    return truncnorm.rvs(a=-v_mean/v_std, b=(v_max-v_mean)/v_std, loc=v_mean, scale=v_std, size=1).item()
+    # return truncnorm.rvs(a=-v_mean/v_std, b=(v_max-v_mean)/v_std, loc=v_mean, scale=v_std, size=1).item()
+    return sample_from_gamma_trunc_gauss_mix(size=1)[0]
 
 
-def sample_conditional_speed(previous_link_speed):
+def sample_conditional_speed(previous_link_speed, v_rho):
     """
     Samples a vehicle speed given it's speed on previous link.
     Weighted average of previous speed and sample from marginal on new link
@@ -65,7 +70,7 @@ def sample_next_edge(graph_edges, prev_edge):
     u_turn_possible = prev_edge['u'] in adj_v_edges['v'].to_list()
 
     if u_turn_possible:
-        weights[adj_v_edges['v']==prev_edge['u']] = 0.2 / n_adj
+        weights[adj_v_edges['v'] == prev_edge['u']] = 0.2 / n_adj
         weights /= sum(weights)
 
     sampled_index = np.random.choice(n_adj, p=weights)
@@ -92,9 +97,10 @@ def propagate_x(graph_edges, edge_and_speed, delta_x):
         alpha_dash = 0
         out_edge_and_speed[['u', 'v', 'key', 'geometry']]\
             = sample_next_edge(graph_edges, edge_and_speed[['u', 'v', 'key', 'geometry']])
-        out_edge_and_speed['speed'] = sample_conditional_speed(edge_and_speed['speed'])
+        out_edge_and_speed['speed'] = sample_conditional_speed(edge_and_speed['speed'], v_rho_leave)
     else:
         alpha_dash = edge_and_speed['alpha']
+        out_edge_and_speed['speed'] = sample_conditional_speed(edge_and_speed['speed'], v_rho_remain)
 
     # Propagate alpha
     out_edge_and_speed['alpha'] = min(1,
@@ -148,12 +154,12 @@ def sample_xt_xtmin1_single(graph_edges, xv_particles, weights, y_ti, delta_x, d
     :param delta_y: observation time intervals
     :return: single gdf sampled extended path to new observation (within ball of new observation)
     """
-    N_particles = len(weights)
+    n_particles = len(weights)
 
     hit_ball = False
     while not hit_ball:
         # Sample x_[t0:ti-1]
-        sampled_index = np.random.choice(N_particles, p=weights)
+        sampled_index = np.random.choice(n_particles, p=weights)
 
         xv_df = xv_particles[sampled_index]
 

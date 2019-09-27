@@ -29,6 +29,35 @@ def polyline_to_euclidean_distance(polyline):
             for i in range(len(polyline) - 1)]
 
 
+def sample_from_gamma_trunc_gauss_mix(size=1, alpha=0.5):
+
+    # Truncated Gaussian params
+    # m = 5.6752928733061045
+    m = 10
+    s = 6.417047800957058
+    x_min = 0
+    x_max = 40
+
+    # Gamma params
+    a = 0.6401291812814294
+    b = -6.212828520411092e-27
+    c = 6.961833421347823
+
+    # Sample uniforms
+    unifs = np.random.uniform(size=size)
+
+    # Initiate
+    out_samps = np.zeros(size)
+
+    # Sample truncated Gaussians
+    out_samps[unifs <= alpha] = stats.truncnorm.rvs(a=-m/s, b=(x_max-m)/s, loc=m, scale=s, size=np.sum(unifs <= alpha))
+
+    # Sample Gammas
+    out_samps[unifs > alpha] = stats.gamma.rvs(a, b, c, size=np.sum(unifs > alpha))
+
+    return out_samps
+
+
 if __name__ == '__main__':
     # Source data paths
     _, process_data_path = data.utils.source_data()
@@ -57,13 +86,19 @@ if __name__ == '__main__':
     approx_speeds_trim = approx_speeds[approx_speeds < 40]
 
     # Plot histogram
-    plt.hist(approx_speeds_trim, bins=100, normed=True)
+    plt.hist(approx_speeds_trim, bins=100, density=True)
     linsp = np.linspace(0, 40, 300)
 
     # Fit Gaussian distribution
     m, s = stats.norm.fit(approx_speeds_trim)  # get mean and standard deviation
-    pdf_g = stats.norm.pdf(linsp, m, s)  # now get theoretical values in our interval
-    plt.plot(linsp, pdf_g, label="Norm")  # plot it
+    pdf_gaussian = stats.norm.pdf(linsp, m, s)  # now get theoretical values in our interval
+    plt.plot(linsp, pdf_gaussian, label="Norm")  # plot it
+
+    # Fit Gamma
+    ag, bg, cg = stats.gamma.fit(approx_speeds_trim)
+    pdf_gamma = stats.gamma.pdf(linsp, ag, bg, cg)
+    plt.plot(linsp, pdf_gamma, label="Gamma")
+    plt.ylim(0, 0.6)
 
     plt.show()
 
