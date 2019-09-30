@@ -17,7 +17,7 @@ import geopandas as gpd
 increment_dist = 3
 
 # GPS noise variance (isotropic)
-sigma2_GPS = 5 ** 2
+sigma2_GPS = 7 ** 2
 
 # Cut off distance from a point
 dist_retain = np.sqrt(sigma2_GPS) * 3
@@ -46,7 +46,7 @@ def graph_edges_gdf(graph):
     return edge_gdf
 
 
-def get_edges_within_dist(graph_edges, coord, dist):
+def get_edges_within_dist(graph_edges, coord, dist=dist_retain):
     """
     Given a point returns all edges that fall within a radius of dist.
     :param graph_edges: simplified graph edges (either gdf or list)
@@ -176,6 +176,6 @@ if __name__ == '__main__':
 
     # Plot
     fig, ax = plot_graph_with_weighted_points(graph, poly_single, points=dis_edges)
-    truncate_circle = plt.Circle(tuple(poly_single[0]), np.sqrt(sigma2_GPS) * 3, color='orange', fill=False)
+    truncate_circle = plt.Circle(tuple(poly_single[0]), dist_retain, color='orange', fill=False)
     ax.add_patch(truncate_circle)
     plt.show(block=True)
