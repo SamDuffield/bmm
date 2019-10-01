@@ -9,6 +9,7 @@ import data.utils
 from data.preprocess import bbox_ll
 import osmnx as ox
 import geopandas as gpd
+import networkx as nx
 import os
 import matplotlib.pyplot as plt
 import json
@@ -122,6 +123,23 @@ def extract_full_graph_from_osm(osm_path, osm_data_name="external"):
     return graph_full
 
 
+def remove_unconnected_islands(graph):
+    """
+    Removes road islands not connected to the main graph.
+    :param graph: networkx object
+    :return: trimmmed graph, networkx object
+    """
+
+    # Find largest island
+    largest_component = max(nx.weakly_connected_components(graph), key=len)
+
+    # Create a subgraph of G consisting only of this component:
+    G2 = graph.subgraph(largest_component)
+
+    return G2
+
+
+
 def save_graph(graph, path):
     """
     Saves graph as an OSM (XML) file
@@ -215,7 +233,7 @@ if __name__ == "__main__":
     #     e.g. http://download.geofabrik.de/europe/portugal.html -> raw directory index - > *.osm.pbf
     root = tkinter.Tk()
     osm_data = tkinter.messagebox.askquestion("OSM data",
-                                              "Do you have OSM data already downloaded (xml or pbf) to construct a"
+                                              "Do you have OSM data already downloaded (xml or pbf) to construct a "
                                               "graph from? (otherwise we'll just download the latest graph)")
     if osm_data == 'yes':
         # Get data location
@@ -230,10 +248,14 @@ if __name__ == "__main__":
         # Extract full graph (many nodes, each edge a straight line)
         full_graph = extract_full_graph_from_osm(osm_data_path, data_name)
 
+        # Remove islands
+        full_graph = remove_unconnected_islands(full_graph)
+
     else:
         root.destroy()
         # Download full graph (many nodes, each edge a straight line)
         full_graph = download_full_graph()
+
 
     # Save full graph
     graph_base_name = data.utils.project_title + '_graph_' + full_graph.name

@@ -54,6 +54,7 @@ def get_edges_within_dist(graph_edges, coord, dist=dist_retain):
     :param dist: radius
     :return: geopandas dataframe (gdf) of edges, columns: u, v, k, geometry, dist from coord
     """
+
     graph_edges_dist = graph_edges.copy()
 
     graph_edges_dist['distance_to_obs'] = graph_edges['geometry'].apply(
