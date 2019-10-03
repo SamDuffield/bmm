@@ -13,6 +13,7 @@ import pandas as pd
 import geopandas as gpd
 import numpy as np
 import osmnx as ox
+import networkx as nx
 import matplotlib.pyplot as plt
 
 # Observation time interval
@@ -21,9 +22,19 @@ time_bet_obs = 15
 # Maximum possible speed in m/s
 v_max = 20
 
+# Maximum distance travelled between observations
+d_obs_max = v_max * time_bet_obs
+
 
 def trim_graph_polyline(graph, polyline, distance):
-
+    """
+    Trims graph to only nodes within a distance of polyline.
+    Choose large distance to avoid discarding long edges.
+    :param graph: networkx object
+    :param polyline: list of coordinates
+    :param distance: distance beyond which to discard nodes
+    :return: subgraph
+    """
     graph_coords = [[node, data['x'], data['y']] for node, data in graph.nodes(data=True)]
     df = pd.DataFrame(graph_coords, columns=['node', 'x', 'y']).set_index('node')
 
@@ -148,8 +159,61 @@ def path_sample(sub_graph, polyline, sub_graph_edges=None):
         edge_m, prob_edge_m = sample_close_edge(sub_graph_edges, polyline[m], prob=True)
 
 
+def possible_paths(graph, polyline):
+
+    x0 = polyline[0]
+    x1 = polyline[1]
+
+    x0x1_subgraph = induce_subgraph_within_distance(graph, polyline[:2])
+    x0x1_subgraph_edges = tools.edges.graph_edges_gdf(x0x1_subgraph)
+
+    x0_near_edges = tools.edges.get_edges_within_dist(x0x1_subgraph_edges, x0)
+    x1_near_edges = tools.edges.get_edges_within_dist(x0x1_subgraph_edges, x1)
+
+    routes = []
+
+    for v in x0_near_edges['v']:
+        for u in x1_near_edges['u']:
+            routes += [simp_path for simp_path in nx.all_simple_paths(x0x1_subgraph, v, u, d_obs_max)]
+
+    return routes
 
 
+def sample_trajectory(sub_graph, polyline, sub_graph_edges=None, max_iters=100):
+
+    if sub_graph_edges is None:
+        sub_graph_edges = tools.edges.graph_edges_gdf(sub_graph)
+
+    for i in range(max_iters):
+        x = tools.sampling.sample_x0(sub_graph_edges, polyline[0], 1)
+        x_prev = x.iloc[0]
+
+        for j in range(1, len(polyline)):
+            y_j = polyline[j]
+            route_found = False
+            while not route_found:
+                # Sample x_j
+                x_j = tools.sampling.sample_x0(sub_graph_edges, polyline[j], 1).iloc[0]
+
+                if x_prev['u'] == x_j['u'] and x_prev['v'] == x_j['v'] and x_prev['k'] == x_j['k']:
+                    x = x.append(x_j)
+                    x_prev = x_j
+                    route_found = True
+                else:
+                    yjmin1_yj_subgraph = induce_subgraph_within_distance(sub_graph, polyline[j-1:j+1])
+
+                    # Get all paths from x_prev[v] to x_j[u]
+                    all_paths = [path for path
+                                 in nx.all_simple_paths(yjmin1_yj_subgraph, x_prev['v'], x_j['u'], d_obs_max)]
+
+
+
+                    if len(all_paths) == 0:
+                        route_found = False
+                    else:
+
+
+    return routes
 
 
 
@@ -165,10 +229,10 @@ if __name__ == '__main__':
 
     # Load taxi data
     data_path = data.utils.choose_data()
-    raw_data = data.utils.read_data(data_path, 100).get_chunk()
+    raw_data = data.utils.read_data(data_path)
 
     # Select single polyline
-    single_index = 0
+    single_index = 6
     poly_single = raw_data['POLYLINE_UTM'][single_index]
 
     # Number of observations
@@ -179,6 +243,9 @@ if __name__ == '__main__':
 
     # Induce subgraph around polyline
     subgraph_poly = induce_subgraph_within_distance(graph, poly_single)
+
+    # Subgraph edges
+    subgraph_poly_edges = tools.edges.graph_edges_gdf(subgraph_poly)
 
     # Plot subgraph
     tools.edges.plot_graph(subgraph_poly, poly_single)
