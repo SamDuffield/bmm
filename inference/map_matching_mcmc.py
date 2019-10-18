@@ -1,5 +1,5 @@
 ################################################################################
-# Module: map_matching.py
+# Module: map_matching_mcmc.py
 # Description: Infer route taken by vehicle given sparse observations.
 #
 # Web: https://github.com/SamDuffield/bayesian-traffic
