@@ -177,6 +177,6 @@ if __name__ == '__main__':
 
     # Plot
     fig, ax = plot_graph_with_weighted_points(graph, poly_single, points=dis_edges)
-    truncate_circle = plt.Circle(tuple(poly_single[3]), dist_retain, color='orange', fill=False)
+    truncate_circle = plt.Circle(tuple(poly_single[0]), dist_retain, color='orange', fill=False)
     ax.add_patch(truncate_circle)
     plt.show(block=True)

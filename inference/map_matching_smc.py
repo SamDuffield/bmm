@@ -13,43 +13,49 @@ import tools.sampling
 import matplotlib.pyplot as plt
 import osmnx as ox
 import pandas as pd
-from scipy.stats import truncnorm
-from inference.prior_speed_exploration import sample_from_gamma_trunc_gauss_mix
 
 # Relative probability of u-turn at intersection
-u_turn_downscale = 0.005
+u_turn_downscale = 0.02
 
 # Speed prior hyperparameters (all links a priori iid)
 v_mean = 8.58
 v_std = 8.34
 v_max = 40
 
-# Weighting for conditional speed when staying on the same link
-v_rho_remain = 0.5
+# Convert to underlying normal parameters (for lognormal distribution)
+v_log_mean = np.log(v_mean / np.sqrt(1 + (v_std / v_mean) ** 2))
+v_log_std = np.log(1 + (v_std / v_mean) ** 2)
 
-# Weighting for conditional speed when moving to a new link
-v_rho_leave = 0.2
+# Conditional speed proposal variance
+prop_v_std = 3
 
 
-def sample_marginal_speed():
+def sample_speed_given_x_t_y_t1(x_t, y_t1, delta_y, size=None):
     """
-    Samples a vehicle speed from prior. Assumes all speeds iid across links.
-    Assumes truncated Gaussian distribution.
-    Hyperparameters defined at top of file (outside function).
-    :return: speed (float)
+    Sample proposal speed conditional on current and next observed positions. q(v_t_t1| x_t, y_t1)
+    Speed is assumed constant between observations.
+    :param x_t: current position pd.df or pd.Series with geometry and alpha columns
+    :param y_t1: next observed position, cartesian.
+    :param delta_y: time between observations (seconds)
+    :param size: number of samples to return, default is 1 (returns float or np.array if size != None)
+    :return: sampled speed(s) (float or np.array if size != None)
     """
-    # return truncnorm.rvs(a=-v_mean/v_std, b=(v_max-v_mean)/v_std, loc=v_mean, scale=v_std, size=1).item()
-    return sample_from_gamma_trunc_gauss_mix(size=1)[0]
+    # Convert x to cartesian
+    x_t_cartesian = tools.edges.edge_interpolate(x_t['geometry'], x_t['alpha'])
 
+    # Distance between x and y
+    x_t_y_t_distance = ox.euclidean_dist_vec(x_t_cartesian[0], x_t_cartesian[1], y_t1[0], y_t1[1])
 
-def sample_conditional_speed(previous_link_speed, v_rho):
-    """
-    Samples a vehicle speed given it's speed on previous link.
-    Weighted average of previous speed and sample from marginal on new link
-    Hyperparameters defined at top of file (outside function).
-    :return: speed (float)
-    """
-    return previous_link_speed * v_rho + (1-v_rho) * sample_marginal_speed()
+    # Distance as mean of lognormal distribution (variance defined outside function)
+    prop_v_mean = x_t_y_t_distance / delta_y
+
+    # Convert to log parameters
+    phi = (prop_v_std ** 2 + prop_v_mean ** 2) ** 0.5
+    prop_v_log_mean = np.log(prop_v_mean ** 2 / phi)
+    prop_v_log_std = (np.log(phi ** 2 / prop_v_mean ** 2)) ** 0.5
+
+    # Return sample (capped at v_max from prior))
+    return np.minimum(np.random.lognormal(prop_v_log_mean, prop_v_log_std, size), v_max)
 
 
 def sample_next_edge(graph_edges, prev_edge):
@@ -78,133 +84,91 @@ def sample_next_edge(graph_edges, prev_edge):
     return adj_v_edges.iloc[sampled_index]
 
 
-def propagate_x(graph_edges, edge_and_speed, delta_x):
+def propagate_x(graph_edges, edge, delta_x, speed=None):
     """
     Increment vehicle forward one time step (discretisation time step not observation)
     If propagation reaches the end of the edge (alpha = 1) sample a new edge to traverse to and new speed for that edge.
     :param graph_edges: simplified graph converted to edge list (with tools.edges.graph_edges_extract)
-    :param edge_and_speed: pandas.Series with u, v, key, geometry, alpha, distance_to_obs, speed
+    :param edge: pandas.Series with u, v, key, geometry, alpha, distance_to_obs, speed (if speed is None,
+    otherwise speed column will be replaced by speed input in new returned series)
     :param delta_x: time discretisation (not observation time interval!)
+    :param speed: inputted speed
     :return: propagated edge_and_speed
     """
     # Initiate output
-    out_edge_and_speed = edge_and_speed.copy()
-    out_edge_and_speed['t'] = edge_and_speed['t'] + delta_x
+    out_edge_and_speed = edge.copy()
+    out_edge_and_speed['t'] = edge['t'] + delta_x
     out_edge_and_speed['distance_to_obs'] = None
 
+    if speed is not None:
+        out_edge_and_speed['speed'] = speed
+
     # Check if reached intersection
-    if edge_and_speed['alpha'] == 1:
+    if edge['alpha'] == 1:
         alpha_dash = 0
         out_edge_and_speed[['u', 'v', 'key', 'geometry']]\
-            = sample_next_edge(graph_edges, edge_and_speed[['u', 'v', 'key', 'geometry']])
-        out_edge_and_speed['speed'] = sample_conditional_speed(edge_and_speed['speed'], v_rho_leave)
+            = sample_next_edge(graph_edges, edge[['u', 'v', 'key', 'geometry']])
     else:
-        alpha_dash = edge_and_speed['alpha']
-        out_edge_and_speed['speed'] = sample_conditional_speed(edge_and_speed['speed'], v_rho_remain)
+        alpha_dash = edge['alpha']
 
     # Propagate alpha
     out_edge_and_speed['alpha'] = min(1,
                                       alpha_dash
-                                      + delta_x * edge_and_speed['speed'] / edge_and_speed['geometry'].length)
+                                      + delta_x * out_edge_and_speed['speed'] / edge['geometry'].length)
 
     return out_edge_and_speed
 
 
-def sample_x_y0y1(graph_edges, y_0_y_1, delta_x, delta_y):
-    """
-    Sample x_[t0:t1] given first two observations.
-    Samples x_t0, then propagates to t1 and returns path only if x_t1 is within dist.retain of y_t1.
-    :param graph_edges: simplified graph converted to edge list (with tools.edges.graph_edges_extract)
-    :param y_0_y_1: first two observations (list of arrays)
-    :param delta_x: x time discretisation
-    :param delta_y: observation time intervals
-    :return: gdf for a single sample of x[t0:t1] (truncated to ball around y_t1)
-    """
-    hit_ball = False
-    while not hit_ball:
-        # Sample x_0
-        xv_df = tools.sampling.sample_x0(graph_edges, y_0_y_1[0], 1)
-        xv_df.insert(loc=0, column='t', value=[0])
-        xv_df['speed'] = sample_marginal_speed()
+def sample_x0_n_lookahead_y0_n_lookahead(graph_edges, y, n_lookahead, delta_x, delta_y, n_propose_max=100):
 
+    for iter_count in range(n_propose_max):
+        # Sample x_0 from p(x_0|y_0)
+        xv_df = tools.sampling.sample_x0(graph_edges, y[0], 1)
+        xv_df.insert(loc=0, column='t', value=[0])
+
+        # Speed 0 at time 0
+        xv_df['speed'] = 0
+
+        # Sample v_(0,1] from q(v_(0,1] | x_0, y_1)
+        speed = sample_speed_given_x_t_y_t1(xv_df.iloc[-1][['geometry', 'alpha']], y[1], delta_y)
+
+        # Sample x_(0,1] from p(x_(0,1] | x_0, v_(0,1])
         i = 0
         while xv_df['t'][i] < delta_y:
-            xv_df = xv_df.append(propagate_x(graph_edges, xv_df.iloc[i], delta_x)).reset_index(drop=True)
+            xv_df = xv_df.append(propagate_x(graph_edges, xv_df.iloc[i], delta_x, speed)).reset_index(drop=True)
             i += 1
 
+        # Measure distance between x_1 and y_1
         xv_obs_time = xv_df.iloc[-1]
         xv_xy = tools.edges.edge_interpolate(xv_obs_time['geometry'], xv_obs_time['alpha'])
-        xv_dist_obs = ox.euclidean_dist_vec(y_0_y_1[1][1], y_0_y_1[1][0], xv_xy[1], xv_xy[0])
+        xv_dist_obs = ox.euclidean_dist_vec(y[1][1], y[1][0], xv_xy[1], xv_xy[0])
+        xv_df.at[xv_df.shape[0] - 1, 'distance_to_obs'] = xv_dist_obs
 
-        if xv_dist_obs < tools.edges.dist_retain:
-            xv_df.at[xv_df.shape[0]-1, 'distance_to_obs'] = xv_dist_obs
-            hit_ball = True
+        # Start again if x_1 outside truncation of y_1
+        if xv_dist_obs > tools.edges.dist_retain:
+            continue
 
-    return xv_df
+        # Sample v_(1,2] from q(v_(1,2] | x_1, y_2)
+        speed = sample_speed_given_x_t_y_t1(xv_df.iloc[-1][['geometry', 'alpha']], y[2], delta_y)
 
-
-def sample_xt_xtmin1_single(graph_edges, xv_particles, weights, y_ti, delta_x, delta_y):
-    """
-    Sample a particle from previous observation time according to given weights, extend path to new observation.
-    :param graph_edges: simplified graph converted to edge list (with tools.edges.graph_edges_extract)
-    :param xv_particles: list of gdf particles from previous obsrvation time
-    :param weights: weights at previous observation time
-    :param y_ti: new observation
-    :param delta_x: x time discretisation
-    :param delta_y: observation time intervals
-    :return: single gdf sampled extended path to new observation (within ball of new observation)
-    """
-    n_particles = len(weights)
-
-    hit_ball = False
-    while not hit_ball:
-        # Sample x_[t0:ti-1]
-        sampled_index = np.random.choice(n_particles, p=weights)
-
-        xv_df = xv_particles[sampled_index]
-
-        i = i_stat = xv_df.shape[0] - 1
-        while xv_df['t'][i] < (xv_df['t'][i_stat] + delta_y):
-            xv_df = xv_df.append(propagate_x(graph_edges, xv_df.iloc[i], delta_x)).reset_index(drop=True)
+        # Sample x_(1,2] from p(x_(1,2] | x_1, v_(1,2])
+        while xv_df['t'][i] < delta_y*2:
+            xv_df = xv_df.append(propagate_x(graph_edges, xv_df.iloc[i], delta_x, speed)).reset_index(drop=True)
             i += 1
 
+        # Measure distance between x_2 and y_2
         xv_obs_time = xv_df.iloc[-1]
         xv_xy = tools.edges.edge_interpolate(xv_obs_time['geometry'], xv_obs_time['alpha'])
-        xv_dist_obs = ox.euclidean_dist_vec(y_ti[1], y_ti[0], xv_xy[1], xv_xy[0])
+        xv_dist_obs = ox.euclidean_dist_vec(y[2][1], y[2][0], xv_xy[1], xv_xy[0])
+        xv_df.at[xv_df.shape[0] - 1, 'distance_to_obs'] = xv_dist_obs
 
-        if xv_dist_obs < tools.edges.dist_retain:
-            xv_df.at[xv_df.shape[0]-1, 'distance_to_obs'] = xv_dist_obs
-            hit_ball = True
+        # Start again if x_2 outside truncation of y_2
+        if xv_dist_obs > tools.edges.dist_retain:
+            continue
+        else:
+            return xv_df, iter_count + 1
 
-    return xv_df
-
-
-def sample_xt_xtmin1_multi(graph_edges, xv_particles, weights, y_ti, delta_x, delta_y):
-    """
-    Iterate sample_xt_xtmin1_single to produce N samples
-    :param graph_edges:
-    :param xv_particles:
-    :param weights:
-    :param y_ti:
-    :param delta_x:
-    :param delta_y:
-    :return: list of N gdfs all appended with extended path
-    """
-    return [sample_xt_xtmin1_single(graph_edges, xv_particles, weights, y_ti, delta_x, delta_y)
-            for _ in range(len(weights))]
-
-
-def weight_particles(gdf_list):
-    """
-    Given list of particles return Gaussian weight on how close they are to most recent observation.
-    Assumes bottom entry of distance_to_obs column is non-empty for each particles gdf.
-    :param gdf_list: list of gdfs - each one a particle
-    :return: np.array weights
-    """
-    weights = np.array([np.exp(-0.5 / tools.edges.sigma2_GPS * df['distance_to_obs'].to_list()[-1])**2
-                          for df in gdf_list])
-    weights /= np.sum(weights)
-    return weights
+    return None, iter_count + 1
 
 
 if __name__ == '__main__':
@@ -227,7 +191,7 @@ if __name__ == '__main__':
     M_obs = len(poly_single)
 
     # Sample size
-    N_samps = 10
+    N_samps = 5
 
     # Observation time increment (s)
     delta_obs = 15
@@ -237,20 +201,17 @@ if __name__ == '__main__':
     N_time_dis = 5
     delta_x = delta_obs/N_time_dis
 
-    # Sample particles from q((x_t0:t1)|(y_t0, y_t1))
-    xv_particles = [sample_x_y0y1(edges_gdf, poly_single[:2], delta_x, delta_obs) for i in range(N_samps)]
+    # Lookahead size (sample from p(x_n | y_0:(n+N_lookahead))
+    N_lookahead = 2
 
-    # Weight particles
-    weights = [np.ones(N_samps) / N_samps]
-    weights += [weight_particles(xv_particles)]
+    # Single sample from p(x_0:N_lookahead, y_0:N_lookahead)
+    xv_single, n_iters = sample_x0_n_lookahead_y0_n_lookahead(edges_gdf, poly_single, N_lookahead, delta_x, delta_obs)
 
-    for m in range(2, M_obs):
-        xv_particles = sample_xt_xtmin1_multi(edges_gdf, xv_particles, weights[-1], poly_single[m], delta_x, delta_obs)
-        weights += [weight_particles(xv_particles)]
+    # Print df and samples required
+    print(xv_single)
+    print(n_iters)
 
-
-    # Plot
-    tools.edges.plot_graph_with_weighted_points(graph, poly_single, pd.concat(xv_particles))
-    # tools.edges.plot_graph_with_weighted_points(graph, poly_single, xv_particles[0])
+    # Plot sample
+    tools.edges.plot_graph_with_weighted_points(graph, poly_single, xv_single)
 
     plt.show(block=True)
