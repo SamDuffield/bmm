@@ -84,39 +84,47 @@ def sample_next_edge(graph_edges, prev_edge):
     return adj_v_edges.iloc[sampled_index]
 
 
-def propagate_x(graph_edges, edge, delta_x, speed=None):
+def propagate_x(graph_edges, edges_df, delta_x, speed=None):
     """
     Increment vehicle forward one time step (discretisation time step not observation)
     If propagation reaches the end of the edge (alpha = 1) sample a new edge to traverse to and new speed for that edge.
     :param graph_edges: simplified graph converted to edge list (with tools.edges.graph_edges_extract)
-    :param edge: pandas.Series with u, v, key, geometry, alpha, distance_to_obs, speed (if speed is None,
-    otherwise speed column will be replaced by speed input in new returned series)
+    :param edges_df: gdf with u, v, key, geometry, alpha, distance_to_obs, speed
     :param delta_x: time discretisation (not observation time interval!)
-    :param speed: inputted speed
-    :return: propagated edge_and_speed
+    :param speed: inputted speed (if speed is None, takes speed of last row in edges_df)
+    :return: edges_df with propagation appended to bottom of dataframe
     """
-    # Initiate output
-    out_edge_and_speed = edge.copy()
-    out_edge_and_speed['t'] = edge['t'] + delta_x
-    out_edge_and_speed['distance_to_obs'] = None
+    # Extract last edge from dataframe
+    prev_edge = edges_df.iloc[-1].copy()
+    prev_edge['distance_to_obs'] = None
 
     if speed is not None:
-        out_edge_and_speed['speed'] = speed
+        prev_edge['speed'] = speed
 
-    # Check if reached intersection
-    if edge['alpha'] == 1:
-        alpha_dash = 0
-        out_edge_and_speed[['u', 'v', 'key', 'geometry']]\
-            = sample_next_edge(graph_edges, edge[['u', 'v', 'key', 'geometry']])
-    else:
-        alpha_dash = edge['alpha']
+    # Total distance travelled between observations (constant speed)
+    distance_left_to_travel = delta_x * speed
 
-    # Propagate alpha
-    out_edge_and_speed['alpha'] = min(1,
-                                      alpha_dash
-                                      + delta_x * out_edge_and_speed['speed'] / edge['geometry'].length)
+    # Distance tracker
+    while distance_left_to_travel > 0:
+        distance_left_on_edge = (1 - prev_edge['alpha']) * prev_edge['geometry'].length
 
-    return out_edge_and_speed
+        if distance_left_on_edge < distance_left_to_travel:
+            time_to_reach_end_of_edge = distance_left_on_edge / speed
+            prev_edge['alpha'] = 1
+            prev_edge['t'] += time_to_reach_end_of_edge
+            edges_df = edges_df.append(prev_edge)
+            prev_edge[['u', 'v', 'key', 'geometry']] =\
+                sample_next_edge(graph_edges, prev_edge[['u', 'v', 'key', 'geometry']])
+            prev_edge['alpha'] = 0
+
+        else:
+            prev_edge['t'] += distance_left_to_travel / speed
+            prev_edge['alpha'] += distance_left_to_travel / prev_edge['geometry'].length
+            edges_df = edges_df.append(prev_edge)
+
+        distance_left_to_travel -= distance_left_on_edge
+
+    return edges_df.reset_index(drop=True)
 
 
 def sample_x0_n_lookahead_y0_n_lookahead(graph_edges, y, n_lookahead, delta_x, delta_y, n_propose_max=100):
@@ -135,7 +143,7 @@ def sample_x0_n_lookahead_y0_n_lookahead(graph_edges, y, n_lookahead, delta_x, d
         # Sample x_(0,1] from p(x_(0,1] | x_0, v_(0,1])
         i = 0
         while xv_df['t'][i] < delta_y:
-            xv_df = xv_df.append(propagate_x(graph_edges, xv_df.iloc[i], delta_x, speed)).reset_index(drop=True)
+            xv_df = propagate_x(graph_edges, xv_df, delta_x, speed)
             i += 1
 
         # Measure distance between x_1 and y_1
@@ -153,7 +161,7 @@ def sample_x0_n_lookahead_y0_n_lookahead(graph_edges, y, n_lookahead, delta_x, d
 
         # Sample x_(1,2] from p(x_(1,2] | x_1, v_(1,2])
         while xv_df['t'][i] < delta_y*2:
-            xv_df = xv_df.append(propagate_x(graph_edges, xv_df.iloc[i], delta_x, speed)).reset_index(drop=True)
+            xv_df = propagate_x(graph_edges, xv_df, delta_x, speed)
             i += 1
 
         # Measure distance between x_2 and y_2
