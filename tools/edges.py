@@ -151,7 +151,11 @@ def plot_graph_with_weighted_points(graph, polyline=None, points=None, weights=N
         alphas = opa_min + (1 - opa_min) * weights
         rgba_colors[:, 3] = alphas
 
-        ax.scatter(points_xy[:, 0], points_xy[:, 1], c=rgba_colors)
+        # Highlight points at observation time
+        not_at_obs = points['alpha'] == 1
+
+        # Add points to plot
+        ax.scatter(points_xy[:, 0], points_xy[:, 1], c=rgba_colors, linewidths=[0.5 if a else 3 for a in not_at_obs])
 
     return fig, ax
 
