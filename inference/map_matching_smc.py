@@ -151,12 +151,12 @@ def sample_xv(graph_edges, xv0_df, y1, delta_x, delta_y):
     xv_dist_obs = ox.euclidean_dist_vec(y1[1], y1[0], xv_xy[1], xv_xy[0])
     xv0_df.at[xv0_df.shape[0] - 1, 'distance_to_obs'] = xv_dist_obs
 
-    return xv0_df
+    return xv0_df.copy()
 
 
 def sample_xv_0_n_lookahead(graph_edges, y, n_lookahead, delta_x, delta_y, n_propose_max=100):
     """
-    Sample from p(x_0:n_lookahead, v_0:n_lookahead|y_:n_lookahead).
+    Sample from p(x_0:n_lookahead, v_0:n_lookahead|y_0:n_lookahead).
     :param graph_edges: simplified graph converted to edge list (with tools.edges.graph_edges_extract)
     :param y: observed polyline
     :param n_lookahead: number of observation times to look forward
@@ -192,6 +192,80 @@ def sample_xv_0_n_lookahead(graph_edges, y, n_lookahead, delta_x, delta_y, n_pro
     return None, n_propose_max
 
 
+def sample_xv_n_lookahead_given_xv_prev(graph_edges, xv_df, yn_onwards, n_lookahead, delta_x, delta_y, n_propose_max=100):
+    """
+    Sample from p(x_n:n+n_lookahead, v_n:n+n_lookahead|x_n-1, y_n:n_lookahead).
+    :param graph_edges: simplified graph converted to edge list (with tools.edges.graph_edges_extract)
+    :param xv_df: previous path (x_0:n-1)
+    :param yn_onwards: end of observed polyline - must start one observation step after last entry in xv_df
+    :param n_lookahead: number of observation times to look forward
+    :param delta_x: time discretisation
+    :param delta_y: observation interval
+    :param n_propose_max: maximum possible number of samples to generate before breaking
+    :return: gdf with edges and speeds of propagated xv_df through n_lookahead observation truncations
+    """
+    for iter_count in range(n_propose_max):
+        # Initiate output
+        xv_df_out = xv_df.copy()
+
+        # Initiate variable checking route falls within observation truncation
+        hitball = True
+
+        for n_forward in range(n_lookahead + 1):
+            # Sample v_01 from p(v_01|x_0, y_1)
+            # and x_01 from p(x_01|x_0, v_01)
+            xv_df_out = sample_xv(graph_edges, xv_df_out, yn_onwards[n_forward], delta_x, delta_y)
+
+            # Start again if x_1 outside truncation of y_1
+            if xv_df_out.iloc[-1]['distance_to_obs'] > tools.edges.dist_retain:
+                hitball = False
+                break
+
+        if hitball is True:
+            return xv_df_out, iter_count + 1
+
+    return xv_df, n_propose_max
+
+
+def sample_full_path(graph_edges, y, n_lookahead, delta_x, delta_y, n_propose_max=100):
+    """
+    Sample from p(x_0:M, v_0:M|y_0:M).
+    :param graph_edges: simplified graph converted to edge list (with tools.edges.graph_edges_extract)
+    :param y: observed polyline
+    :param n_lookahead: number of observation times to look forward
+    :param delta_x: time discretisation
+    :param delta_y: observation interval
+    :param n_propose_max: maximum possible number of samples to generate before breaking
+    :return: gdf with edges and speeds of propagated xv_df through n_lookahead observation truncations
+    """
+    # Number of observations
+    M = len(y)
+
+    # Sample x0|y0:2
+    xv_df, iterations_n = sample_xv_0_n_lookahead(graph_edges, y,  min(M, n_lookahead),
+                                                  delta_x, delta_y, n_propose_max)
+
+    if iterations_n == n_propose_max:
+        raise ValueError("Reached max iterations")
+
+    for m in range(1, max(1, M-n_lookahead)):
+
+        ind_keep = int(np.where(abs(xv_df['t'] - (m - 1) * delta_y) < 0.01)[0]) + 1
+
+        xv_df = xv_df.iloc[0:ind_keep].copy()
+
+        xv_df, iterations_n = sample_xv_n_lookahead_given_xv_prev(graph_edges, xv_df, y[m:], min(M-m, n_lookahead),
+                                                                  delta_x, delta_y, n_propose_max)
+
+        if iterations_n == n_propose_max:
+            # raise ValueError("Reached max iterations")
+            print("Reached max iterations")
+            print(m, M)
+            return xv_df
+
+    return xv_df
+
+
 if __name__ == '__main__':
     # Source data paths
     _, process_data_path = data.utils.source_data()
@@ -205,7 +279,7 @@ if __name__ == '__main__':
     raw_data = data.utils.read_data(data_path, 100).get_chunk()
 
     # Select single polyline
-    single_index = 0
+    single_index = 4
     poly_single = raw_data['POLYLINE_UTM'][single_index]
 
     # Number of observations
@@ -225,14 +299,19 @@ if __name__ == '__main__':
     # Lookahead size (sample from p(x_n | y_0:(n+N_lookahead))
     N_lookahead = 2
 
-    # Single sample from p(x_0:N_lookahead, y_0:N_lookahead)
-    xv_single, n_iters = sample_xv_0_n_lookahead(edges_gdf, poly_single, N_lookahead, delta_x_dis, delta_obs)
+    # # Single sample from p(x_0:N_lookahead, y_0:N_lookahead)
+    # xv_single, n_iters = sample_xv_0_n_lookahead(edges_gdf, poly_single, N_lookahead, delta_x_dis, delta_obs)
+    #
+    # # Print df and samples required
+    # print(xv_single)
+    # print(n_iters)
+    #
+    # # Plot sample
+    # tools.edges.plot_graph_with_weighted_points(graph, poly_single, xv_single)
 
-    # Print df and samples required
-    print(xv_single)
-    print(n_iters)
+    # Single sample of full path
+    xv_full = sample_full_path(edges_gdf, poly_single, N_lookahead, delta_x_dis, delta_obs)
 
-    # Plot sample
-    tools.edges.plot_graph_with_weighted_points(graph, poly_single, xv_single)
-
+    # Plot sampled full path
+    tools.edges.plot_graph_with_weighted_points(graph, poly_single, xv_full)
     plt.show(block=True)
