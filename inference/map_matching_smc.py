@@ -126,6 +126,53 @@ def propagate_x(graph_edges, edges_df, delta_x, speed=None):
     return edges_df.reset_index(drop=True)
 
 
+def propagate_x_given_y(graph_edges, edges_df, y, delta_x, speed=None):
+
+    # Extract last edge from dataframe
+    prev_edge = edges_df.iloc[-1:].copy()
+    prev_edge['distance_to_obs'] = None
+
+    if speed is not None:
+        prev_edge['speed'] = speed
+
+    # Total distance travelled between observations (constant speed)
+    distance_left_to_travel = delta_x * speed
+
+    # Initiate list of possible paths
+    paths = [prev_edge]
+
+    # Distance tracker
+    while distance_left_to_travel > 0:
+        for path in paths:
+            path_prev_edge = path.iloc[-1]
+
+            distance_left_on_path_edge = (1 - path_prev_edge['alpha']) * path_prev_edge['geometry'].length
+
+            if distance_left_on_path_edge < distance_left_to_travel:
+                time_to_reach_end_of_edge = distance_left_on_path_edge / speed
+                prev_edge['alpha'] = 1
+                prev_edge['t'] += time_to_reach_end_of_edge
+                edges_df = edges_df.append(prev_edge)
+                prev_edge[['u', 'v', 'key', 'geometry']] =\
+                    sample_next_edge(graph_edges, prev_edge[['u', 'v', 'key', 'geometry']])
+                prev_edge['alpha'] = 0
+
+            else:
+                prev_edge['t'] += distance_left_to_travel / speed
+                prev_edge['alpha'] += distance_left_to_travel / prev_edge['geometry'].length
+                edges_df = edges_df.append(prev_edge)
+
+        distance_left_to_travel -= distance_left_on_edge
+
+    return edges_df.reset_index(drop=True)
+
+
+
+
+
+
+
+
 def sample_xv(graph_edges, xv0_df, y1, delta_x, delta_y):
     """
     Propagates forward vehicle for one observation interval.
@@ -279,7 +326,7 @@ if __name__ == '__main__':
     raw_data = data.utils.read_data(data_path, 100).get_chunk()
 
     # Select single polyline
-    single_index = 4
+    single_index = 0
     poly_single = raw_data['POLYLINE_UTM'][single_index]
 
     # Number of observations
