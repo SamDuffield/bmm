@@ -83,16 +83,82 @@ def sample_next_edge(graph_edges, prev_edge):
     return adj_v_edges.iloc[sampled_index]
 
 
-def propagate_x(graph_edges, edges_df, delta_x, speed=None):
+def propagate_x(graph_edges, edges_df, distance_to_travel):
     """
-    Increment vehicle forward one time step (discretisation time step not observation).
-    If propagation reaches the end of the edge (alpha = 1) sample a new edge to traverse to and new speed for that edge.
+    Propagate vehicle forward for given distance - returning for all possible choices at intersections.
+    U-turn only on dead-ends.
     :param graph_edges: simplified graph converted to edge list (with tools.edges.graph_edges_extract)
-    :param edges_df: gdf with u, v, key, geometry, alpha, distance_to_obs, speed
-    :param delta_x: time discretisation (not observation time interval!)
-    :param speed: inputted speed (if speed is None, takes speed of last row in edges_df)
-    :return: edges_df with propagation appended to bottom of dataframe
+    :param edges_df: gdf with u, v, key, geometry, alpha, distance_to_obs, speed (last speed taken as speed of vehicle)
+    :param distance_to_travel: distance to propagate vehicle
+    :return: list of gdfs - one for each possible series of choices at intersections encountered
     """
+    prev_edge = edges_df.iloc[-1].copy()
+    prev_edge['distance_to_obs'] = None
+
+    distance_left_on_edge = (1 - prev_edge['alpha']) * prev_edge['geometry'].length
+
+    if distance_left_on_edge > distance_to_travel:
+        # Case where propagation remains on edge (doesn't reach intersection)
+        time_to_reach_end_of_distance = distance_to_travel / prev_edge['speed']
+
+        prev_edge['alpha'] += distance_to_travel / prev_edge['geometry'].length
+        prev_edge['t'] += time_to_reach_end_of_distance
+
+        if edges_df.iloc[-1]['distance_to_obs'] is None:
+            # Adjust last entry of df
+            edges_df.iloc[-1] = prev_edge
+        else:
+            # Last entry was at observation time (so needs to be kept) so append new row
+            edges_df = edges_df.append(prev_edge)
+
+        return [edges_df.reset_index(drop=True)]
+
+    else:
+        # Case where propagation crosses intersection
+        distance_to_travel -= distance_left_on_edge
+        time_to_reach_end_of_edge = distance_left_on_edge / prev_edge['speed']
+
+        prev_edge['alpha'] = 1
+        prev_edge['t'] += time_to_reach_end_of_edge
+
+        if edges_df.iloc[-1]['distance_to_obs'] is None:
+            # Adjust last entry of df
+            edges_df.iloc[-1] = prev_edge
+        else:
+            # Last entry was at observation time (so needs to be kept) so append new row
+            edges_df = edges_df.append(prev_edge)
+
+        # New edges from intersection
+        intersection_edges = graph_edges[graph_edges['u'] == prev_edge['v']].reset_index(drop=True)
+
+        if intersection_edges.ndim == 0:
+            # Dead end or only one option
+            new_edge = prev_edge.copy()
+            new_edge['alpha'] = 0
+            new_edge[['u', 'v', 'key', 'geometry']] = intersection_edges.iloc[0]
+            edges_df = edges_df.append(new_edge)
+            return propagate_x(graph_edges, edges_df, distance_to_travel)
+        else:
+            # Initiate output list
+            out_dfs = []
+
+            for _, row in intersection_edges.iterrows():
+                # Don't allow u-turn
+                if row['v'] != prev_edge['u']:
+                    new_edges_df = edges_df.copy()
+
+                    new_edge = prev_edge.copy()
+                    new_edge['alpha'] = 0
+                    new_edge[['u', 'v', 'key', 'geometry']] = row
+                    new_edges_df = new_edges_df.append(new_edge).reset_index(drop=True)
+
+                    out_dfs += propagate_x(graph_edges, new_edges_df, distance_to_travel)
+
+            return out_dfs
+
+
+def propagate_x_given_y(graph_edges, edges_df, y_single, delta_y, speed=None):
+
     # Extract last edge from dataframe
     prev_edge = edges_df.iloc[-1].copy()
     prev_edge['distance_to_obs'] = None
@@ -100,86 +166,48 @@ def propagate_x(graph_edges, edges_df, delta_x, speed=None):
     if speed is not None:
         prev_edge['speed'] = speed
 
+    # Initiate propagation
+    edges_df = edges_df.append(prev_edge)
+
     # Total distance travelled between observations (constant speed)
-    distance_left_to_travel = delta_x * speed
+    distance_left_to_travel = delta_y * speed
 
-    # Distance tracker
-    while distance_left_to_travel > 0:
-        distance_left_on_edge = (1 - prev_edge['alpha']) * prev_edge['geometry'].length
+    # Propogate across all possible choices at intersections
+    possible_props = propagate_x(graph_edges, edges_df, distance_left_to_travel)
 
-        if distance_left_on_edge < distance_left_to_travel:
-            time_to_reach_end_of_edge = distance_left_on_edge / speed
-            prev_edge['alpha'] = 1
-            prev_edge['t'] += time_to_reach_end_of_edge
-            edges_df = edges_df.append(prev_edge)
-            prev_edge[['u', 'v', 'key', 'geometry']] =\
-                sample_next_edge(graph_edges, prev_edge[['u', 'v', 'key', 'geometry']])
-            prev_edge['alpha'] = 0
+    distances_to_y = []
+    within_r_of_y = []
+    for df in possible_props:
+        xv_obs_time = df.iloc[-1]
+        xv_xy = tools.edges.edge_interpolate(xv_obs_time['geometry'], xv_obs_time['alpha'])
+        distance_to_y = ox.euclidean_dist_vec(y_single[1], y_single[0], xv_xy[1], xv_xy[0])
+        distances_to_y += [distance_to_y]
 
+        within_r_of_y += [distance_to_y < tools.edges.dist_retain]
+
+    if not any(within_r_of_y):
+        return None
+    else:
+        distances_to_y = [d for d, bool in zip(distances_to_y, within_r_of_y) if bool]
+        possible_props = [df for df, bool in zip(possible_props, within_r_of_y) if bool]
+
+        if len(possible_props) == 1:
+            ind = 0
         else:
-            prev_edge['t'] += distance_left_to_travel / speed
-            prev_edge['alpha'] += distance_left_to_travel / prev_edge['geometry'].length
-            edges_df = edges_df.append(prev_edge)
+            n_poss = len(possible_props)
+            ind = np.random.choice(n_poss)
 
-        distance_left_to_travel -= distance_left_on_edge
-
-    return edges_df.reset_index(drop=True)
-
-
-def propagate_x_given_y(graph_edges, edges_df, y, delta_x, speed=None):
-
-    # Extract last edge from dataframe
-    prev_edge = edges_df.iloc[-1:].copy()
-    prev_edge['distance_to_obs'] = None
-
-    if speed is not None:
-        prev_edge['speed'] = speed
-
-    # Total distance travelled between observations (constant speed)
-    distance_left_to_travel = delta_x * speed
-
-    # Initiate list of possible paths
-    paths = [prev_edge]
-
-    # Distance tracker
-    while distance_left_to_travel > 0:
-        for path in paths:
-            path_prev_edge = path.iloc[-1]
-
-            distance_left_on_path_edge = (1 - path_prev_edge['alpha']) * path_prev_edge['geometry'].length
-
-            if distance_left_on_path_edge < distance_left_to_travel:
-                time_to_reach_end_of_edge = distance_left_on_path_edge / speed
-                prev_edge['alpha'] = 1
-                prev_edge['t'] += time_to_reach_end_of_edge
-                edges_df = edges_df.append(prev_edge)
-                prev_edge[['u', 'v', 'key', 'geometry']] =\
-                    sample_next_edge(graph_edges, prev_edge[['u', 'v', 'key', 'geometry']])
-                prev_edge['alpha'] = 0
-
-            else:
-                prev_edge['t'] += distance_left_to_travel / speed
-                prev_edge['alpha'] += distance_left_to_travel / prev_edge['geometry'].length
-                edges_df = edges_df.append(prev_edge)
-
-        distance_left_to_travel -= distance_left_on_edge
-
-    return edges_df.reset_index(drop=True)
+        out_df = possible_props[ind]
+        out_df.iloc[-1, out_df.columns.get_loc('distance_to_obs')] = distances_to_y[ind]
+        return out_df
 
 
-
-
-
-
-
-
-def sample_xv(graph_edges, xv0_df, y1, delta_x, delta_y):
+def sample_xv(graph_edges, xv0_df, y1, delta_y):
     """
     Propagates forward vehicle for one observation interval.
     :param graph_edges: simplified graph converted to edge list (with tools.edges.graph_edges_extract)
     :param xv0_df: gdf of previous edges and speeds
     :param y1: next observation
-    :param delta_x: time discretisation of route
     :param delta_y: observation interval
     :return: xv0_df with newly sampled edges and speed appended
     """
@@ -187,27 +215,17 @@ def sample_xv(graph_edges, xv0_df, y1, delta_x, delta_y):
     speed = sample_speed_given_x_t_y_t1(xv0_df.iloc[-1][['geometry', 'alpha']], y1, delta_y)
 
     # Sample x_(0,1] from p(x_(0,1] | x_0, v_(0,1])
-    t = 0
-    while t < delta_y:
-        xv0_df = propagate_x(graph_edges, xv0_df, delta_x, speed)
-        t += delta_x
+    xv0_df = propagate_x_given_y(graph_edges, xv0_df, y1, delta_y, speed)
 
-    # Measure distance between x_1 and y_1
-    xv_obs_time = xv0_df.iloc[-1]
-    xv_xy = tools.edges.edge_interpolate(xv_obs_time['geometry'], xv_obs_time['alpha'])
-    xv_dist_obs = ox.euclidean_dist_vec(y1[1], y1[0], xv_xy[1], xv_xy[0])
-    xv0_df.at[xv0_df.shape[0] - 1, 'distance_to_obs'] = xv_dist_obs
-
-    return xv0_df.copy()
+    return xv0_df
 
 
-def sample_xv_0_n_lookahead(graph_edges, y, n_lookahead, delta_x, delta_y, n_propose_max=100):
+def sample_xv_0_n_lookahead(graph_edges, y, n_lookahead, delta_y, n_propose_max=100):
     """
     Sample from p(x_0:n_lookahead, v_0:n_lookahead|y_0:n_lookahead).
     :param graph_edges: simplified graph converted to edge list (with tools.edges.graph_edges_extract)
     :param y: observed polyline
     :param n_lookahead: number of observation times to look forward
-    :param delta_x: time discretisation
     :param delta_y: observation interval
     :param n_propose_max: maximum possible number of samples to generate before breaking
     :return: gdf with edges and speeds that pass through n_lookahead observation truncations
@@ -226,10 +244,10 @@ def sample_xv_0_n_lookahead(graph_edges, y, n_lookahead, delta_x, delta_y, n_pro
         for n_forward in range(n_lookahead):
             # Sample v_01 from p(v_01|x_0, y_1)
             # and x_01 from p(x_01|x_0, v_01)
-            xv_df = sample_xv(graph_edges, xv_df, y[n_forward + 1], delta_x, delta_y)
+            xv_df = sample_xv(graph_edges, xv_df, y[n_forward + 1],  delta_y)
 
             # Start again if x_1 outside truncation of y_1
-            if xv_df.iloc[-1]['distance_to_obs'] > tools.edges.dist_retain:
+            if xv_df is None:
                 hitball = False
                 break
 
@@ -239,14 +257,13 @@ def sample_xv_0_n_lookahead(graph_edges, y, n_lookahead, delta_x, delta_y, n_pro
     return None, n_propose_max
 
 
-def sample_xv_n_lookahead_given_xv_prev(graph_edges, xv_df, yn_onwards, n_lookahead, delta_x, delta_y, n_propose_max=100):
+def sample_xv_n_lookahead_given_xv_prev(graph_edges, xv_df, yn_onwards, n_lookahead, delta_y, n_propose_max=100):
     """
     Sample from p(x_n:n+n_lookahead, v_n:n+n_lookahead|x_n-1, y_n:n_lookahead).
     :param graph_edges: simplified graph converted to edge list (with tools.edges.graph_edges_extract)
     :param xv_df: previous path (x_0:n-1)
     :param yn_onwards: end of observed polyline - must start one observation step after last entry in xv_df
     :param n_lookahead: number of observation times to look forward
-    :param delta_x: time discretisation
     :param delta_y: observation interval
     :param n_propose_max: maximum possible number of samples to generate before breaking
     :return: gdf with edges and speeds of propagated xv_df through n_lookahead observation truncations
@@ -261,10 +278,10 @@ def sample_xv_n_lookahead_given_xv_prev(graph_edges, xv_df, yn_onwards, n_lookah
         for n_forward in range(n_lookahead + 1):
             # Sample v_01 from p(v_01|x_0, y_1)
             # and x_01 from p(x_01|x_0, v_01)
-            xv_df_out = sample_xv(graph_edges, xv_df_out, yn_onwards[n_forward], delta_x, delta_y)
+            xv_df_out = sample_xv(graph_edges, xv_df_out, yn_onwards[n_forward], delta_y)
 
             # Start again if x_1 outside truncation of y_1
-            if xv_df_out.iloc[-1]['distance_to_obs'] > tools.edges.dist_retain:
+            if xv_df_out is None:
                 hitball = False
                 break
 
@@ -274,13 +291,12 @@ def sample_xv_n_lookahead_given_xv_prev(graph_edges, xv_df, yn_onwards, n_lookah
     return xv_df, n_propose_max
 
 
-def sample_full_path(graph_edges, y, n_lookahead, delta_x, delta_y, n_propose_max=100):
+def sample_full_path(graph_edges, y, n_lookahead, delta_y, n_propose_max=100):
     """
     Sample from p(x_0:M, v_0:M|y_0:M).
     :param graph_edges: simplified graph converted to edge list (with tools.edges.graph_edges_extract)
     :param y: observed polyline
     :param n_lookahead: number of observation times to look forward
-    :param delta_x: time discretisation
     :param delta_y: observation interval
     :param n_propose_max: maximum possible number of samples to generate before breaking
     :return: gdf with edges and speeds of propagated xv_df through n_lookahead observation truncations
@@ -289,8 +305,7 @@ def sample_full_path(graph_edges, y, n_lookahead, delta_x, delta_y, n_propose_ma
     M = len(y)
 
     # Sample x0|y0:2
-    xv_df, iterations_n = sample_xv_0_n_lookahead(graph_edges, y,  min(M, n_lookahead),
-                                                  delta_x, delta_y, n_propose_max)
+    xv_df, iterations_n = sample_xv_0_n_lookahead(graph_edges, y,  min(M, n_lookahead), delta_y, n_propose_max)
 
     if iterations_n == n_propose_max:
         raise ValueError("Reached max iterations")
@@ -302,7 +317,7 @@ def sample_full_path(graph_edges, y, n_lookahead, delta_x, delta_y, n_propose_ma
         xv_df = xv_df.iloc[0:ind_keep].copy()
 
         xv_df, iterations_n = sample_xv_n_lookahead_given_xv_prev(graph_edges, xv_df, y[m:], min(M-m, n_lookahead),
-                                                                  delta_x, delta_y, n_propose_max)
+                                                                  delta_y, n_propose_max)
 
         if iterations_n == n_propose_max:
             # raise ValueError("Reached max iterations")
@@ -338,11 +353,6 @@ if __name__ == '__main__':
     # Observation time increment (s)
     delta_obs = 15
 
-    # Between observation discretisation
-    # Number of inference times per observation
-    N_time_dis = 1
-    delta_x_dis = delta_obs/N_time_dis
-
     # Lookahead size (sample from p(x_n | y_0:(n+N_lookahead))
     N_lookahead = 2
 
@@ -357,7 +367,7 @@ if __name__ == '__main__':
     # tools.edges.plot_graph_with_weighted_points(graph, poly_single, xv_single)
 
     # Single sample of full path
-    xv_full = sample_full_path(edges_gdf, poly_single, N_lookahead, delta_x_dis, delta_obs)
+    xv_full = sample_full_path(edges_gdf, poly_single[:10], N_lookahead, delta_obs)
 
     # Plot sampled full path
     tools.edges.plot_graph_with_weighted_points(graph, poly_single, xv_full)
