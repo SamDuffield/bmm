@@ -354,10 +354,10 @@ if __name__ == '__main__':
     delta_obs = 15
 
     # Lookahead size (sample from p(x_n | y_0:(n+N_lookahead))
-    N_lookahead = 2
+    N_lookahead = 3
 
     # # Single sample from p(x_0:N_lookahead, y_0:N_lookahead)
-    # xv_single, n_iters = sample_xv_0_n_lookahead(edges_gdf, poly_single, N_lookahead, delta_x_dis, delta_obs)
+    # xv_single, n_iters = sample_xv_0_n_lookahead(edges_gdf, poly_single, N_lookahead, delta_obs)
     #
     # # Print df and samples required
     # print(xv_single)
