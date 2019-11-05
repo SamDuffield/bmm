@@ -13,20 +13,10 @@ import tools.sampling
 import matplotlib.pyplot as plt
 import osmnx as ox
 
-# Relative probability of u-turn at intersection
-u_turn_downscale = 0.02
 
-# Speed prior hyperparameters (all links a priori iid)
-v_mean = 8.58
-v_std = 8.34
-v_max = 40
 
-# Convert to underlying normal parameters (for lognormal distribution)
-v_log_mean = np.log(v_mean / np.sqrt(1 + (v_std / v_mean) ** 2))
-v_log_std = np.log(1 + (v_std / v_mean) ** 2)
+dist_sample_cond_variance = 1000
 
-# Conditional speed proposal variance
-prop_v_std = 1
 
 
 def sample_speed_given_x_t_y_t1(x_t, y_t1, delta_y, size=None):
@@ -328,13 +318,129 @@ def sample_full_path(graph_edges, y, n_lookahead, delta_y, n_propose_max=100):
     return xv_df
 
 
+
+
+
+def sample_x0(y_0, N_sample):
+    """
+    Samples from truncated Gaussian centred around y0, constrained to the road network.
+    :param y_0: np.array, length 2, observation point (cartesian)
+    :param N_sample: int. number of samples
+    :return: list of np.arrays. length of list = N_sample, array rows = one for each time (1 in this case),
+        array columns = [t, u, v, k, alpha, d] (t and d both zero in this case)
+    """
+    global graph_edges
+
+    # Discretize nearby edges
+    dis_points = tools.edges.get_truncated_discrete_edges(graph_edges, y_0)
+
+    # Calculate likelihood weights
+    weights = np.exp(-0.5 / tools.edges.sigma2_GPS * dis_points['distance_to_obs'].to_numpy() ** 2)
+    weights /= np.sum(weights)
+
+    # Convert to np.array with columns t, u, v, k, alpha
+    dis_points_array = np.zeros((dis_points.shape[0], 6))
+    dis_points_array[:, 1:5] = dis_points[['u', 'v', 'key', 'alpha']].to_numpy()
+
+    # Sample indices according to weights
+    sampled_indices = np.random.choice(len(weights), N_sample, True, weights)
+
+    # Sampled points
+    sampled_points = [dis_points_array[i, :].reshape(1, 6) for i in sampled_indices]
+
+    return sampled_points
+
+
+def cartesianise_numpy(point_np):
+    """
+    Converts numpy array of u, v, k, alpha into cartesian coordinate.
+    :param point_np: np.array. u, v, k, alpha
+    :return: np.array, length 2 (cartesian)
+    """
+    global graph
+    point_geom = graph.get_edge_data(point_np[0], point_np[1], point_np[2])['geometry']
+    return np.asarray(tools.edges.edge_interpolate(point_geom, point_np[-1]))
+
+
+def sample_dist(mean, var=dist_sample_cond_variance, size=None):
+    """
+    Samples from Gamma distribution with parameters adjusted to give an inputted mean and variance.
+    :param mean: float, inputted mean
+    :param var: float, inputted variance
+    :return: float, random sample from Gamma
+    """
+    gamma_beta = mean / var
+    gamma_alpha = mean * gamma_beta
+
+    return np.random.gamma(gamma_alpha, 1/gamma_beta, size=size)
+
+
+def sample_dist_given_xnmin1_yn(old_point, new_observation):
+    """
+    Calculates distance between old point and new observations for input to sample_dist.
+    Returns sample form sample_dist
+    :param old_point: np.array. u, v, k, alpha
+    :param new_observation: np.array, length 2 (cartesian)
+    :return: float
+    """
+    cartesian_old_point = cartesianise_numpy(old_point)
+    old_p_new_o_dist = ox.euclidean_dist_vec(cartesian_old_point[0], cartesian_old_point[1],
+                                             new_observation[0], new_observation[1])
+
+    return sample_dist(old_p_new_o_dist)
+
+
+def sample_xn_given_dist_xnmin1_yn(old_point, new_observation):
+    
+
+
+
+
+def particle_filter(polyline, delta_y, n_samps):
+    global graph, graph_edges
+
+    # Number of observations
+    M = len(polyline)
+
+    # Sample from p(x_0|y_0)
+    xd_particles = sample_x0(polyline[0], n_samps)
+
+    # Set initial weights
+    weights = np.zeros((M, n_samps))
+    weights[0, :] = 1/n_samps
+
+    for m in range(1, M):
+        old_particles = xd_particles.copy()
+        xd_particles = []
+        for _ in range(n_samps):
+            # Resample
+            resample_index = np.random.choice(n_samps, 1, True, weights[m-1, :])[0]
+            old_particle = old_particles[resample_index].copy()
+
+            # Sample distance
+            new_dist = sample_dist_given_xnmin1_yn(old_particle[-1, 1:5], polyline[m, :])
+
+            # Sample route given distance
+            new_position = sample_xn_given_dist_xnmin1_yn(old_particle[-1, 1:5], polyline[m, :], new_dist)
+
+
+
+
+
+
+
+
+
+
+
+
 if __name__ == '__main__':
     # Source data paths
     _, process_data_path = data.utils.source_data()
 
     # Load networkx graph and edges gdf
     graph = load_graph()
-    edges_gdf = tools.edges.graph_edges_gdf(graph)
+    graph_edges = tools.edges.graph_edges_gdf(graph)
 
     # Load taxi data
     data_path = data.utils.choose_data()
@@ -343,9 +449,7 @@ if __name__ == '__main__':
     # Select single polyline
     single_index = 0
     poly_single = raw_data['POLYLINE_UTM'][single_index]
-
-    # Number of observations
-    M_obs = len(poly_single)
+    poly_single_array = np.asarray(poly_single)
 
     # Sample size
     N_samps = 5

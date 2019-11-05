@@ -89,10 +89,32 @@ if __name__ == '__main__':
     plt.legend()
 
     # Observation variance
-    obs_var = 20
+    obs_var = 1000
 
-    # Single observed distance
-    d_obs = 100
+    # Observed distances
+    d_num = 10
+    d_obs = np.linspace(1, d_max * (d_num - 1)/d_num, d_num)
+
+    # Plot p(d|d_obs) = Gamma with fixed mean and cov
+    plt.figure()
+    for d_o in d_obs:
+        bg_o = d_o / obs_var
+        ag_o = d_o * bg_o
+        pdf_gamma_o = stats.gamma.pdf(linsp, ag_o, loc=0, scale=1 / bg_o)
+        plt.plot(linsp, pdf_gamma_o)
+    plt.title('Gamma with varying means, fixed variance')
+    plt.ylim(0, 0.02)
+
+
+    # Plot p(d|d_obs) = logGaussian with fixed mean and cov
+    plt.figure()
+    for d_o in d_obs:
+        log_obs_var = np.log(1 + obs_var / d_o**2)
+        pdf_loggaussian_o = stats.lognorm.pdf(linsp, s=np.sqrt(log_obs_var), scale=d_o)
+        plt.plot(linsp, pdf_loggaussian_o)
+    plt.title('logGaussian with varying means, fixed variance')
+    plt.ylim(0, 0.02)
+
 
     # # Plot Gamma prior
     # plt.figure()
@@ -112,20 +134,14 @@ if __name__ == '__main__':
     # plt.figure()
     # plt.plot(linsp, pdf_post_gamma, label="Gamma Posterior")
 
-    # Plot logGaussian prior
-    plt.figure()
-    plt.plot(linsp, pdf_loggaussian, label="logGaussian Prior")
-
-    # Plot logGaussian likelihood
-    pdf_loggaussian_lik = stats.lognorm.pdf(linsp, s=np.sqrt(obs_var), scale=np.exp(d_obs))
-    pdf_loggaussian_lik *= np.max(pdf_loggaussian) / np.max(pdf_loggaussian_lik)
-    plt.plot(linsp, pdf_loggaussian_lik, label="logGaussian Likelihood")
-
-
-
-
-
-
+    # # Plot logGaussian prior
+    # plt.figure()
+    # plt.plot(linsp, pdf_loggaussian, label="logGaussian Prior")
+    #
+    # # Plot logGaussian likelihood
+    # pdf_loggaussian_lik = stats.lognorm.pdf(linsp, s=np.sqrt(obs_var), scale=np.exp(d_obs))
+    # pdf_loggaussian_lik *= np.max(pdf_loggaussian) / np.max(pdf_loggaussian_lik)
+    # plt.plot(linsp, pdf_loggaussian_lik, label="logGaussian Likelihood")
 
     plt.show(block=True)
 

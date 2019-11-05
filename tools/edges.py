@@ -118,6 +118,20 @@ def cartesianise(points):
     return points_xy
 
 
+def gaussian_weights(points, y_obs):
+    """
+    Calculates (normalised) weights, p(y|x).
+    :param points: list of [edge, alpha] points (edge = [u,v,k,geom])
+    :param y_obs: [x,y] observed coordinate
+    :return: np.array, normalised weights
+    """
+    points_xy = cartesianise(points)
+
+    un_weights = np.exp(-0.5 / sigma2_GPS * np.sum((points_xy - y_obs)**2, axis=1))
+
+    return un_weights / sum(un_weights)
+
+
 def plot_graph_with_weighted_points(graph, polyline=None, points=None, weights=None):
     """
     Wrapper for plot_graph. Adds weighted sampled points to graph.
