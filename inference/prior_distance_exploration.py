@@ -9,7 +9,6 @@ import numpy as np
 import data
 from tools.graph import load_graph
 import tools.edges
-import tools.sampling
 import matplotlib.pyplot as plt
 import osmnx as ox
 from scipy import stats

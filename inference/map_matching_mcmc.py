@@ -8,13 +8,11 @@
 import data
 from tools.graph import load_graph, remove_unconnected_islands
 import tools.edges
-import tools.sampling
+import archive.sampling
 import pandas as pd
-import geopandas as gpd
 import numpy as np
 import osmnx as ox
 import networkx as nx
-import matplotlib.pyplot as plt
 
 # Observation time interval
 time_bet_obs = 15
@@ -151,7 +149,7 @@ def path_sample(sub_graph, polyline, sub_graph_edges=None):
         sub_graph_edges = tools.edges.graph_edges_gdf(sub_graph)
 
     # Sample x0
-    x_gdf = tools.sampling.sample_x0(sub_graph_edges, polyline[0], 1)
+    x_gdf = archive.sampling.sample_x0(sub_graph_edges, polyline[0], 1)
 
     for m in range(1, len(polyline)):
         prev_u, prev_v = x_gdf.iloc[-1, :2].values
@@ -185,7 +183,7 @@ def sample_trajectory(sub_graph, polyline, sub_graph_edges=None, max_iters=100):
         sub_graph_edges = tools.edges.graph_edges_gdf(sub_graph)
 
     for i in range(max_iters):
-        x = tools.sampling.sample_x0(sub_graph_edges, polyline[0], 1)
+        x = archive.sampling.sample_x0(sub_graph_edges, polyline[0], 1)
         x_prev = x.iloc[0]
 
         for j in range(1, len(polyline)):
@@ -193,7 +191,7 @@ def sample_trajectory(sub_graph, polyline, sub_graph_edges=None, max_iters=100):
             route_found = False
             while not route_found:
                 # Sample x_j
-                x_j = tools.sampling.sample_x0(sub_graph_edges, polyline[j], 1).iloc[0]
+                x_j = archive.sampling.sample_x0(sub_graph_edges, polyline[j], 1).iloc[0]
 
                 if x_prev['u'] == x_j['u'] and x_prev['v'] == x_j['v'] and x_prev['k'] == x_j['k']:
                     x = x.append(x_j)
