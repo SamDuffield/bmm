@@ -7,7 +7,7 @@
 
 import numpy as np
 import data
-from tools.graph import load_graph
+from tools.graph import load_graph, plot_graph
 import tools.edges
 import matplotlib.pyplot as plt
 import osmnx as ox
@@ -86,6 +86,34 @@ def cartesianise_numpy(point_np):
     return np.asarray(tools.edges.edge_interpolate(edge_geom, point_np[-1]))
 
 
+def cartesianise_path(path, intersection_indicator=False):
+    """
+    Converts particle stored as edge, alpha into cartesian points.
+    :param path: np.array, shape=(T,7)
+        columns - t, u, v, k, alpha, n_inter, d
+    :param intersection_indicator: boolean
+        whether to also return np.array of length T with boolean idicating if point is an intersection
+    :return:
+        if not intersection_indicator:
+            np.array, shape=(T,2) cartesian points
+        elif intersection_indicator:
+            list of length 2
+                np.array, shape=(T,2) cartesian points
+                np.array, shape=(T) boolean, True if intersection (alpha == 1)
+    """
+
+    cart_points = np.zeros(shape=(path.shape[0], 2))
+
+    for i, point in enumerate(path):
+        cart_points[i, :] = cartesianise_numpy(point[1:5])
+
+    if not intersection_indicator:
+        return cart_points
+    else:
+        intersection_bool = np.array([point[4] == 1 for point in path])
+        return [cart_points, intersection_bool]
+
+
 def euclidean_distance(car_point_1, car_point_2, squared=False):
 
     square_dist = (car_point_1[0] - car_point_2[0]) ** 2 + (car_point_1[1] - car_point_2[1]) ** 2
@@ -98,7 +126,8 @@ def sample_dist(mean, var, size=None):
     Samples from Gamma distribution with parameters adjusted to give an inputted mean and variance.
     :param mean: float, inputted mean
     :param var: float, inputted variance
-    :return: float, random sample from Gamma
+    :param size: int, number of samples
+    :return: float, random sample from Gamma if size=None otherwise np.array of length size
     """
     gamma_beta = mean / var
     gamma_alpha = mean * gamma_beta
@@ -223,7 +252,7 @@ def propagate_x(old_particle_in, distance_to_travel, time_to_travel):
         out_particles = []
         for new_edge in intersection_edges:
             # Don't allow U-turn
-            if new_edge[1] != old_particle_1d[1] or n_inter == 1:
+            if new_edge[1] != old_particle_1d[1] or len(intersection_edges) == 1:
                 new_particle_1d = old_particle[-1:, :].copy()
                 new_particle_1d[0, 1:4] = new_edge
                 new_particle_1d[0, 4:6] = 0
@@ -328,6 +357,38 @@ def particle_filter(polyline, delta_y, n_samps):
     return xd_particles, weights
 
 
+def plot_particles(particles, polyline=None, weights=None):
+    """
+    Plot paths (output from particle filter).
+    :param particles: List of np.arrays representing paths
+    :param polyline:
+    :param weights:
+    :return:
+    """
+    global graph
+
+    if type(particles) is np.ndarray:
+        particles = [particles]
+
+    n_samps = len(particles)
+
+    fig, ax = plot_graph(graph, polyline=polyline)
+
+    min_alpha = 0.3
+
+    for i, path in enumerate(particles):
+        cart_path, inter_bool = cartesianise_path(path, True)
+        
+        path_weight = 1/n_samps if weights is None else weights[i]
+        alpha = min_alpha + (1 - min_alpha) * path_weight
+        
+        ax.scatter(cart_path[:, 0], cart_path[:, 1],
+                   linewidths=[0.5 if inter else 3 for inter in inter_bool],
+                   alpha=alpha, color='steelblue')
+        
+    return fig, ax
+
+
 if __name__ == '__main__':
     # Source data paths
     _, process_data_path = data.utils.source_data()
@@ -346,10 +407,13 @@ if __name__ == '__main__':
     poly_single_array = np.asarray(poly_single)
 
     # Sample size
-    N_samps = 500
+    N_samps = 50
 
     # Observation time increment (s)
     delta_obs = 15
 
     # Run particle filter
-    particles, weights = particle_filter(poly_single_array[:5, :], delta_obs, N_samps)
+    particles, weights = particle_filter(poly_single_array[:2, :], delta_obs, N_samps)
+
+    # Plot
+    plot_particles(particles, poly_single_array, weights=weights[-1, :])
