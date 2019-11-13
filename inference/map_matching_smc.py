@@ -23,7 +23,8 @@ dist_prior_mean = 108
 dist_prior_variance = 10700
 
 # Variance of distance given x_n-1 and y_n
-dist_cond_variance = 1000
+# dist_cond_variance = 1000
+dist_cond_variance = 100
 
 
 def sample_x0(y_0, n_sample):
@@ -286,19 +287,21 @@ def particle_filter(polyline, delta_y, n_samps):
     M = len(polyline)
 
     # Sample from p(x_0|y_0)
-    xd_particles = sample_x0(polyline[0], n_samps)
+    old_particles = sample_x0(polyline[0], n_samps)
+    xd_particles = []
 
     # Set initial weights
     weights = np.zeros((M, n_samps))
     weights[0, :] = 1/n_samps
 
     for m in range(1, M):
-        old_particles = xd_particles.copy()
         xd_particles = []
         for j in range(n_samps):
             # Resample
             resample_index = np.random.choice(n_samps, 1, True, weights[m-1, :])[0]
             old_particle = old_particles[resample_index].copy()
+            # old_particle = old_particles[j]
+            # old_particle[-1, :] = old_particles[resample_index][-1, :]
 
             # Sample distance
             new_dist = sample_dist_given_xnmin1_yn(old_particle[-1, 1:5].copy(), polyline[m, :])
@@ -383,8 +386,8 @@ def plot_particles(particles, polyline=None, weights=None):
         alpha = min_alpha + (1 - min_alpha) * path_weight
         
         ax.scatter(cart_path[:, 0], cart_path[:, 1],
-                   linewidths=[0.5 if inter else 3 for inter in inter_bool],
-                   alpha=alpha, color='steelblue')
+                   linewidths=[0.2 if inter else 3 for inter in inter_bool],
+                   alpha=alpha, color='orange')
         
     return fig, ax
 
@@ -407,7 +410,7 @@ if __name__ == '__main__':
     poly_single_array = np.asarray(poly_single)
 
     # Sample size
-    N_samps = 50
+    N_samps = 100
 
     # Observation time increment (s)
     delta_obs = 15
@@ -417,3 +420,4 @@ if __name__ == '__main__':
 
     # Plot
     plot_particles(particles, poly_single_array, weights=weights[-1, :])
+    plt.show(block=True)
