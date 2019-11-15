@@ -26,6 +26,32 @@ dist_prior_variance = 10700
 # dist_cond_variance = 1000
 dist_cond_variance = 100
 
+# Resample threshold
+ess_resample_threshold = 0.5
+
+
+def get_geometry(edge_array):
+    """
+    Extract geometry of an edge from global graph object. If geometry doesn't exist set to straight line.
+    :param edge_array: np.array or list, length 3
+        u, v, k
+    :return: geometry object
+    """
+    global graph
+
+    # Extract edge data, in particular the geometry
+    edge_data = graph.get_edge_data(edge_array[0], edge_array[1], edge_array[2])
+
+    # If no geometry attribute, manually add straight line
+    if 'geometry' in edge_data:
+        edge_geom = edge_data['geometry']
+    else:
+        point_u = Point((graph.nodes[edge_array[0]]['x'], graph.nodes[edge_array[0]]['y']))
+        point_v = Point((graph.nodes[edge_array[1]]['x'], graph.nodes[edge_array[1]]['y']))
+        edge_geom = LineString([point_u, point_v])
+
+    return edge_geom
+
 
 def sample_x0(y_0, n_sample):
     """
@@ -74,15 +100,8 @@ def cartesianise_numpy(point_np):
     :return: np.array, length 2 (cartesian)
     """
     global graph
-    point_data = graph.get_edge_data(point_np[0], point_np[1], point_np[2])
 
-    # If no geometry attribute, manually add straight line
-    if 'geometry' not in point_data:
-        point_u = Point((graph.nodes[point_np[0]]['x'], graph.nodes[point_np[0]]['y']))
-        point_v = Point((graph.nodes[point_np[1]]['x'], graph.nodes[point_np[1]]['y']))
-        edge_geom = LineString([point_u, point_v])
-    else:
-        edge_geom = point_data['geometry']
+    edge_geom = get_geometry(point_np[:3])
 
     return np.asarray(tools.edges.edge_interpolate(edge_geom, point_np[-1]))
 
@@ -213,16 +232,8 @@ def propagate_x(old_particle_in, distance_to_travel, time_to_travel):
     # Easier to work with 1D array than 2D for now
     old_particle_1d = old_particle[-1, :]
 
-    # Extract edge data, in particular the geometry
-    old_edge_data = graph.get_edge_data(old_particle_1d[1], old_particle_1d[2], old_particle_1d[3])
-
-    # If no geometry attribute, manually add straight line
-    if 'geometry' not in old_edge_data:
-        point_u = Point((graph.nodes[old_particle_1d[1]]['x'], graph.nodes[old_particle_1d[1]]['y']))
-        point_v = Point((graph.nodes[old_particle_1d[2]]['x'], graph.nodes[old_particle_1d[2]]['y']))
-        old_edge_geom = LineString([point_u, point_v])
-    else:
-        old_edge_geom = old_edge_data['geometry']
+    # Extract edge geometry
+    old_edge_geom = get_geometry(old_particle_1d[1:4])
 
     # Distance left on edge before intersection
     # Use NetworkX length rather than OSM length
@@ -287,21 +298,19 @@ def particle_filter(polyline, delta_y, n_samps):
     M = len(polyline)
 
     # Sample from p(x_0|y_0)
-    old_particles = sample_x0(polyline[0], n_samps)
-    xd_particles = []
+    xd_particles = sample_x0(polyline[0], n_samps)
 
     # Set initial weights
     weights = np.zeros((M, n_samps))
     weights[0, :] = 1/n_samps
 
     for m in range(1, M):
+        old_particles = xd_particles.copy()
         xd_particles = []
         for j in range(n_samps):
             # Resample
             resample_index = np.random.choice(n_samps, 1, True, weights[m-1, :])[0]
             old_particle = old_particles[resample_index].copy()
-            # old_particle = old_particles[j]
-            # old_particle[-1, :] = old_particles[resample_index][-1, :]
 
             # Sample distance
             new_dist = sample_dist_given_xnmin1_yn(old_particle[-1, 1:5].copy(), polyline[m, :])
@@ -356,6 +365,137 @@ def particle_filter(polyline, delta_y, n_samps):
 
             xd_particles += [old_particle]
         weights[m, :] /= sum(weights[m, :])
+
+    return xd_particles, weights
+
+
+def auxiliary_variable_particle_filter(polyline, delta_y, n_samps):
+    """
+    Runs auxiliary variable particle filter sampling vehicle paths given noisy observations.
+    :param polyline: np.array, shape=(M, 2)
+        M observations, cartesian coordinates
+    :param delta_y: float
+        inter-observation time, assumed constant
+    :param n_samps: int
+        number of samples to output
+    :return: [particles, weights]
+        particles: list of np.arrays, list length = n_samps, array shape=(num_t_steps, 7)
+            array columns = t, u, v, k, alpha, n_inter, d
+            each array represents a sampled vehicle path
+        weights: np.array, shape=(M, n_samps)
+            probability assigned to each particle at each time points
+    """
+    global graph, graph_edges
+
+    # Number of observations
+    M = len(polyline)
+
+    # Sample from p(x_0|y_0)
+    xd_particles = sample_x0(polyline[0], n_samps)
+
+    # Set initial weights
+    weights = np.zeros((M, n_samps))
+    weights[0, :] = 1/n_samps
+
+    # Initiate ESS
+    ess = np.zeros(M)
+    ess[0] = n_samps
+
+    for m in range(1, M):
+        old_particles = xd_particles.copy()
+        xd_particles = []
+        for j in range(n_samps):
+            if ess[m-1] < n_samps * ess_resample_threshold:
+                sample_index = np.random.choice(n_samps, 1, True, weights[m - 1, :])[0]
+            else:
+                sample_index = j
+
+            old_particle = old_particles[sample_index].copy()
+
+            # Sample distance
+            intermediate_dist = sample_dist_given_xnmin1_yn(old_particle[-1, 1:5].copy(), polyline[m, :])
+
+            # Possible routes
+            pos_routes = propagate_x(old_particle[-1:, :], intermediate_dist, delta_y)
+
+            # Choose a route
+            route_probs = np.zeros(len(pos_routes))
+            for i, route in enumerate(pos_routes):
+                # Distance to observation
+                last_pos = route[-1, :]
+                x_t_cart = cartesianise_numpy(last_pos[1:5])
+                distance_to_obs = euclidean_distance(x_t_cart, polyline[m, :], squared=True)
+
+                # Number of intersections and possibilities at each one
+                intersection_col = route[:, 5]
+                intersection_options = intersection_col[intersection_col > 0]
+
+                # Probability of travelling route given observation (unnormalised)
+                route_probs[i] = np.exp(-0.5 / tools.edges.sigma2_GPS * distance_to_obs) \
+                    / (2 * np.pi * tools.edges.sigma2_GPS) \
+                    * np.prod(1 / intersection_options)
+
+            # Probability of generating observation (for all routes)
+            prob_yn_given_xnmin1_int_d_n = sum(route_probs)
+
+            # Normalise route probabilities
+            route_probs_normalised = route_probs / prob_yn_given_xnmin1_int_d_n
+
+            # Sample a route
+            sampled_route_index = np.random.choice(len(pos_routes), 1, p=route_probs_normalised)[0]
+            sampled_route = pos_routes[sampled_route_index]
+
+            # Last edge of sampled route
+            last_edge = sampled_route[-1, 1:4]
+
+            # Discretise last edge of sampled route
+            last_edge_geom = get_geometry(last_edge)
+            last_edge_discretised_alphas = tools.edges.discretise_edge(last_edge_geom)
+
+            if sampled_route.shape[0] == 1:
+                last_edge_discretised_alphas =\
+                    last_edge_discretised_alphas[last_edge_discretised_alphas > old_particle[-1, 4]]
+            num_discretised = len(last_edge_discretised_alphas)
+
+            # Calculate distances and their probabilities
+            informed_ds = np.zeros(num_discretised)
+            informed_d_probs = np.zeros(num_discretised)
+            for i in range(num_discretised):
+                alpha_dis = last_edge_discretised_alphas[i]
+                if sampled_route.shape[0] == 1:
+                    informed_ds[i] = (alpha_dis - old_particle[-1, 4])*last_edge_geom.length
+                else:
+                    informed_ds[i] = sampled_route[-2, -1] + alpha_dis*last_edge_geom.length
+
+                cart_point = cartesianise_numpy(np.concatenate([last_edge, [alpha_dis]]))
+                dist_to_obs = euclidean_distance(cart_point, polyline[m, :], squared=True)
+
+                informed_d_probs[i] = np.exp(-0.5 / tools.edges.sigma2_GPS * dist_to_obs) \
+                    / (2 * np.pi * tools.edges.sigma2_GPS)\
+                    * prob_dist_prior(informed_ds[i])
+
+            # Probability of observation (for all informed distances, on edge)
+            prob_yn_given_xnmin1 = sum(informed_d_probs)
+
+            informed_d_probs_normalised = informed_d_probs / prob_yn_given_xnmin1
+
+            # Sample route informed distance
+            sampled_informed_d_index = np.random.choice(len(last_edge_discretised_alphas), 1,
+                                                        p=informed_d_probs_normalised)[0]
+
+            sampled_route[-1, 4] = last_edge_discretised_alphas[sampled_informed_d_index]
+            sampled_route[-1, -1] = informed_ds[sampled_informed_d_index]
+
+            # Append sampled route to particle
+            old_particle = np.append(old_particle, sampled_route, axis=0)
+
+            # Calculate weight (unnormalised)
+            weights[m, j] = prob_yn_given_xnmin1_int_d_n * prob_yn_given_xnmin1\
+                / informed_d_probs_normalised[sampled_informed_d_index]
+
+            xd_particles += [old_particle]
+        weights[m, :] /= sum(weights[m, :])
+        ess[m] = 1 / sum(weights[m, :] ** 2)
 
     return xd_particles, weights
 
@@ -415,9 +555,18 @@ if __name__ == '__main__':
     # Observation time increment (s)
     delta_obs = 15
 
-    # Run particle filter
-    particles, weights = particle_filter(poly_single_array[:2, :], delta_obs, N_samps)
+    # # Run particle filter
+    # particles, weights = particle_filter(poly_single_array[:4, :], delta_obs, N_samps)
+    #
+    # # Plot
+    # plot_particles(particles, poly_single_array, weights=weights[-1, :])
+
+    # Run auxiliary variable particle filter
+    av_particles, av_weights = auxiliary_variable_particle_filter(poly_single_array[:15, :], delta_obs, N_samps)
+    av_ess = np.array([1 / sum(w ** 2) for w in av_weights])
+    print(av_ess)
 
     # Plot
-    plot_particles(particles, poly_single_array, weights=weights[-1, :])
+    plot_particles(av_particles, poly_single_array, weights=av_weights[-1, :])
+
     plt.show(block=True)
