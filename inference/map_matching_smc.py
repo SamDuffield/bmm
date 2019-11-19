@@ -12,6 +12,7 @@ import tools.edges
 import matplotlib.pyplot as plt
 import osmnx as ox
 from scipy.special import gamma as gamma_func
+from scipy.special import gammainc as gammainc_func
 from shapely.geometry import Point
 from shapely.geometry import LineString
 
@@ -112,7 +113,7 @@ def cartesianise_path(path, intersection_indicator=False):
     :param path: np.array, shape=(T,7)
         columns - t, u, v, k, alpha, n_inter, d
     :param intersection_indicator: boolean
-        whether to also return np.array of length T with boolean idicating if point is an intersection
+        whether to also return np.array of length T with boolean indicating if point is an intersection
     :return:
         if not intersection_indicator:
             np.array, shape=(T,2) cartesian points
@@ -135,7 +136,13 @@ def cartesianise_path(path, intersection_indicator=False):
 
 
 def euclidean_distance(car_point_1, car_point_2, squared=False):
-
+    """
+    Gets euclidean distance between two cartesian points.
+    :param car_point_1: list of floats or np.array, [x, y] of first point
+    :param car_point_2: list of floats or np.array, [x, y] of second point
+    :param squared: boolean, whether to return distance squared or not
+    :return: float
+    """
     square_dist = (car_point_1[0] - car_point_2[0]) ** 2 + (car_point_1[1] - car_point_2[1]) ** 2
 
     return square_dist if squared else square_dist ** 0.5
@@ -157,16 +164,29 @@ def sample_dist(mean, var, size=None):
 
 def prob_dist(vals, mean, var):
     """
-    Evaulates Gamma pdf with parameters adjusted to give an inputted mean and variance.
+    Evaluates Gamma pdf with parameters adjusted to give an inputted mean and variance.
     :param vals: np.array, values to be evaluated
-    :param mean: inputted distribution mean
-    :param var: inputted distribution variance
+    :param mean: float, inputted distribution mean
+    :param var: float, inputted distribution variance
     :return: np.array, same length as vals, Gamma pdf evaulations
     """
     gamma_beta = mean / var
     gamma_alpha = mean * gamma_beta
 
     return gamma_beta ** gamma_beta / gamma_func(gamma_alpha) * vals ** (gamma_alpha - 1) * np.exp(-gamma_beta * vals)
+
+
+def cdf_prob_dist(d_upper, mean, var):
+    """
+    Evaluates Gamma cdf with parameters adjusted to give an inputted mean and variance. I.e. P(dist < d_upper)
+    :param d_upper: float, upper bound
+    :param mean: float, inputted distribution mean
+    :param var: float, inputted distribution variance
+    :return: np.array, same length as vals, Gamma pdf evaulations
+    """
+    gamma_beta = mean / var
+    gamma_alpha = mean * gamma_beta
+    return gammainc_func(gamma_alpha, gamma_beta * d_upper)
 
 
 def prob_dist_prior(distance):
@@ -187,8 +207,7 @@ def sample_dist_given_xnmin1_yn(old_point, new_observation):
     :return: float
     """
     cartesian_old_point = cartesianise_numpy(old_point)
-    old_p_new_o_dist = ox.euclidean_dist_vec(cartesian_old_point[0], cartesian_old_point[1],
-                                             new_observation[0], new_observation[1])
+    old_p_new_o_dist = euclidean_distance(cartesian_old_point, new_observation)
 
     return sample_dist(old_p_new_o_dist, dist_cond_variance)
 
@@ -203,13 +222,27 @@ def prob_dist_given_xnmin1_yn(distance, old_point, new_observation):
     :return: float or np.array same length as distance, conditional pdf evaluations
     """
     cartesian_old_point = cartesianise_numpy(old_point)
-    old_p_new_o_dist = ox.euclidean_dist_vec(cartesian_old_point[0], cartesian_old_point[1],
-                                             new_observation[0], new_observation[1])
+    old_p_new_o_dist = euclidean_distance(cartesian_old_point, new_observation)
 
     return prob_dist(distance, old_p_new_o_dist, dist_cond_variance)
 
 
-def propagate_x(old_particle_in, distance_to_travel, time_to_travel):
+def cdf_prob_dist_given_xnmin1_yn(d_upper, old_point, new_observation):
+    """
+    Evaluate probability of
+    :param d_upper: float or np.array, upper bound
+    :param old_point: np.array. u, v, k, alpha
+    :param new_observation: np.array, length 2 (cartesian)
+    :return:
+    """
+    cartesian_old_point = cartesianise_numpy(old_point)
+    old_p_new_o_dist = ox.euclidean_dist_vec(cartesian_old_point[0], cartesian_old_point[1],
+                                             new_observation[0], new_observation[1])
+
+    return cdf_prob_dist(d_upper, old_p_new_o_dist, dist_cond_variance)
+
+
+def propagate_x(old_particle_in, distance_to_travel, time_to_travel=0, return_intermediate_routes=False):
     """
     Propagates vehicle a given travel distance from a given start position.
     Returns list of possible routes of given distance including all choices at intersections
@@ -219,7 +252,9 @@ def propagate_x(old_particle_in, distance_to_travel, time_to_travel):
     :param distance_to_travel: float
         distance to travel until next observation in metres
     :param time_to_travel: float
-        inter-observation time in seconds
+        inter-observation time in seconds, only required to update t column
+    :param return_intermediate_routes: boolean
+        whether to return a route each time an intersection is encountered
     :return: list of np.arrays, shape=(num_t_steps, 7)
         describes possible routes taken between observations
         num_t_steps = 2 + number intersections encountered (different for each array)
@@ -271,12 +306,14 @@ def propagate_x(old_particle_in, distance_to_travel, time_to_travel):
 
                 new_particle = np.append(old_particle, new_particle_1d, axis=0)
 
+                if return_intermediate_routes:
+                    out_particles += [old_particle]
                 out_particles += propagate_x(new_particle, distance_to_travel, time_to_travel)
 
         return out_particles
 
 
-def particle_filter(polyline, delta_y, n_samps):
+def naive_particle_filter(polyline, delta_y, n_samps):
     """
     Runs particle filter sampling vehicle paths given noisy observations.
     :param polyline: np.array, shape=(M, 2)
@@ -369,6 +406,46 @@ def particle_filter(polyline, delta_y, n_samps):
     return xd_particles, weights
 
 
+def route_probs(routes, new_observation):
+
+    route_probs_out = np.zeros(len(routes))
+    for i, route in enumerate(routes):
+        # Distance of last edge to observation
+        last_pos = route[-1, :]
+        last_edge_geom = get_geometry(last_pos[1:4])
+        distance_to_obs = Point(new_observation).distance(last_edge_geom)
+
+        # Number of intersections and possibilities at each one
+        intersection_col = route[:, 5]
+        intersection_options = intersection_col[intersection_col > 0]
+
+        # Probability of travelling route given observation (unnormalised)
+        route_probs_out[i] = np.exp(-0.5 / tools.edges.sigma2_GPS * distance_to_obs) \
+            / (2 * np.pi * tools.edges.sigma2_GPS) \
+            * np.prod(1 / intersection_options)
+
+    return route_probs_out
+
+
+def get_last_edge_d_bounds(route):
+
+    d_min = 0 if route.shape[0] == 1 else route[-2, -1]
+
+    last_edge_geom = get_geometry(route[-1, 1:4])
+    d_max = d_min + last_edge_geom.length
+
+    return d_min, d_max
+
+
+def extend_routes(routes, extension_distance):
+
+    extended_routes = []
+    for route in routes:
+        extended_routes += propagate_x(route, extension_distance - 0.0001, return_intermediate_routes=True)
+
+    return extended_routes
+
+
 def auxiliary_variable_particle_filter(polyline, delta_y, n_samps):
     """
     Runs auxiliary variable particle filter sampling vehicle paths given noisy observations.
@@ -405,108 +482,61 @@ def auxiliary_variable_particle_filter(polyline, delta_y, n_samps):
         old_particles = xd_particles.copy()
         xd_particles = []
         for j in range(n_samps):
+            # Resample if ESS below threshold
             if ess[m-1] < n_samps * ess_resample_threshold:
                 sample_index = np.random.choice(n_samps, 1, True, weights[m - 1, :])[0]
             else:
                 sample_index = j
-
             old_particle = old_particles[sample_index].copy()
 
-            # Sample distance
+            # Sample auxiliary distance variable
             intermediate_dist = sample_dist_given_xnmin1_yn(old_particle[-1, 1:5].copy(), polyline[m, :])
 
             # Possible routes
             pos_routes = propagate_x(old_particle[-1:, :], intermediate_dist, delta_y)
 
-            # Choose a route
-            route_probs = np.zeros(len(pos_routes))
-            for i, route in enumerate(pos_routes):
-                # Distance to observation
-                last_pos = route[-1, :]
-                x_t_cart = cartesianise_numpy(last_pos[1:5])
-                distance_to_obs = euclidean_distance(x_t_cart, polyline[m, :], squared=True)
+            if len(pos_routes) == 1:
+                sampled_route = pos_routes[0]
+            else:
+                # Calculate probabilities of chosing routes
+                route_sample_probs = route_probs(pos_routes, polyline[m, :])
 
-                # Number of intersections and possibilities at each one
-                intersection_col = route[:, 5]
-                intersection_options = intersection_col[intersection_col > 0]
+                # Probability of generating observation (for all routes) given auxiliary distance variable
+                prob_yn_given_xnmin1_int_d_n = sum(route_sample_probs)
 
-                # Probability of travelling route given observation (unnormalised)
-                route_probs[i] = np.exp(-0.5 / tools.edges.sigma2_GPS * distance_to_obs) \
-                    / (2 * np.pi * tools.edges.sigma2_GPS) \
-                    * np.prod(1 / intersection_options)
+                # Normalise route probabilities
+                route_sample_probs_normalised = route_sample_probs / prob_yn_given_xnmin1_int_d_n
 
-            # Probability of generating observation (for all routes)
-            prob_yn_given_xnmin1_int_d_n = sum(route_probs)
+                # Sample a route
+                sampled_route_index = np.random.choice(len(pos_routes), 1, p=route_sample_probs_normalised)[0]
+                sampled_route = pos_routes[sampled_route_index]
 
-            # Normalise route probabilities
-            route_probs_normalised = route_probs / prob_yn_given_xnmin1_int_d_n
+            # Get distances to enter and exit last edge of chosen route
+            d_min, d_max = get_last_edge_d_bounds(sampled_route)
 
-            # Sample a route
-            sampled_route_index = np.random.choice(len(pos_routes), 1, p=route_probs_normalised)[0]
-            sampled_route = pos_routes[sampled_route_index]
+            # Get routes up to d_min
+            pos_routes_d_min = propagate_x(old_particle[-1:, :], d_min, delta_y)
 
-            # Last edge of sampled route
-            last_edge = sampled_route[-1, 1:4]
+            # Extend routes
+            extended_routes = extend_routes(pos_routes_d_min, d_max - d_min)
 
-            # Discretise last edge of sampled route
-            last_edge_geom = get_geometry(last_edge)
-            last_edge_discretised_alphas = tools.edges.discretise_edge(last_edge_geom)
+            # Probability of sampling extended routes
+            extended_route_probs = route_probs(extended_routes, polyline[m, :])
 
-            if sampled_route.shape[0] == 1:
-                last_edge_discretised_alphas =\
-                    last_edge_discretised_alphas[last_edge_discretised_alphas > old_particle[-1, 4]]
-            num_discretised = len(last_edge_discretised_alphas)
+            # Extended route end distances
+            extended_routes_end_ds = np.unique([route[-1, -1] for route in extended_routes])
 
-            # Calculate distances and their probabilities
-            informed_ds = np.zeros(num_discretised)
-            informed_d_probs = np.zeros(num_discretised)
-            for i in range(num_discretised):
-                alpha_dis = last_edge_discretised_alphas[i]
-                if sampled_route.shape[0] == 1:
-                    informed_ds[i] = (alpha_dis - old_particle[-1, 4])*last_edge_geom.length
-                else:
-                    informed_ds[i] = sampled_route[-2, -1] + alpha_dis*last_edge_geom.length
 
-                cart_point = cartesianise_numpy(np.concatenate([last_edge, [alpha_dis]]))
-                dist_to_obs = euclidean_distance(cart_point, polyline[m, :], squared=True)
 
-                informed_d_probs[i] = np.exp(-0.5 / tools.edges.sigma2_GPS * dist_to_obs) \
-                    / (2 * np.pi * tools.edges.sigma2_GPS)\
-                    * prob_dist_prior(informed_ds[i])
-
-            # Probability of observation (for all informed distances, on edge)
-            prob_yn_given_xnmin1 = sum(informed_d_probs)
-
-            informed_d_probs_normalised = informed_d_probs / prob_yn_given_xnmin1
-
-            # Sample route informed distance
-            sampled_informed_d_index = np.random.choice(len(last_edge_discretised_alphas), 1,
-                                                        p=informed_d_probs_normalised)[0]
-
-            sampled_route[-1, 4] = last_edge_discretised_alphas[sampled_informed_d_index]
-            sampled_route[-1, -1] = informed_ds[sampled_informed_d_index]
-
-            # Append sampled route to particle
-            old_particle = np.append(old_particle, sampled_route, axis=0)
-
-            # Calculate weight (unnormalised)
-            weights[m, j] = prob_yn_given_xnmin1_int_d_n * prob_yn_given_xnmin1\
-                / informed_d_probs_normalised[sampled_informed_d_index]
-
-            xd_particles += [old_particle]
-        weights[m, :] /= sum(weights[m, :])
-        ess[m] = 1 / sum(weights[m, :] ** 2)
-
-    return xd_particles, weights
 
 
 def plot_particles(particles, polyline=None, weights=None):
     """
     Plot paths (output from particle filter).
     :param particles: List of np.arrays representing paths
-    :param polyline:
-    :param weights:
-    :return:
+    :param polyline: np.array, shape=(M,2) for M trajectory observations
+    :param weights: np.array, same length as the list particles
+    :return: fig, ax, graph with polyline and sampled trajectories
     """
     global graph
 
@@ -555,14 +585,16 @@ if __name__ == '__main__':
     # Observation time increment (s)
     delta_obs = 15
 
-    # # Run particle filter
-    # particles, weights = particle_filter(poly_single_array[:4, :], delta_obs, N_samps)
-    #
-    # # Plot
-    # plot_particles(particles, poly_single_array, weights=weights[-1, :])
+    # Run particle filter
+    particles, weights = naive_particle_filter(poly_single_array[:4, :], delta_obs, N_samps)
+    ess = np.array([1 / sum(w ** 2) for w in weights])
+    print(ess)
+
+    # Plot
+    plot_particles(particles, poly_single_array, weights=weights[-1, :])
 
     # Run auxiliary variable particle filter
-    av_particles, av_weights = auxiliary_variable_particle_filter(poly_single_array[:15, :], delta_obs, N_samps)
+    av_particles, av_weights = auxiliary_variable_particle_filter(poly_single_array[:5, :], delta_obs, N_samps)
     av_ess = np.array([1 / sum(w ** 2) for w in av_weights])
     print(av_ess)
 
