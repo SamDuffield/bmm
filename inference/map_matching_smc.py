@@ -31,7 +31,7 @@ dist_cond_variance = 100
 ess_resample_threshold = 1
 
 # Auxiliary observation variance
-sigma2_aux_GPS = 2 ** 2
+sigma2_aux_GPS = tools.edges.sigma2_GPS
 
 
 def get_geometry(edge_array):
@@ -433,39 +433,16 @@ def route_probs(routes, new_observation):
     return route_probs_out
 
 
-def extended_route_probs(routes, old_point, new_observation, d_min):
-    route_probs_out = np.zeros(len(routes))
-    for i, route in enumerate(routes):
-        # Distance of last edge to observation
-        last_pos = route[-1, :]
-        last_edge_geom = get_geometry(last_pos[1:4])
-        distance_to_obs = Point(new_observation).distance(last_edge_geom)
-
-        # Number of intersections and possibilities at each one
-        intersection_col = route[:, 5]
-        intersection_options = intersection_col[intersection_col > 0]
-
-        # Probability of travelling route given observation (unnormalised)
-        route_probs_out[i] = np.exp(-0.5 / sigma2_aux_GPS * distance_to_obs) \
-            / (2 * np.pi * sigma2_aux_GPS) \
-            * np.prod(1 / intersection_options)
-
-        # Probability of selecting auxiliary distance within route bounds
-        if route.shape[0] > 1:
-            d_min = max(d_min, route[-2, -1])
-
-        route_probs_out[i] *= (cdf_prob_dist_given_xnmin1_yn(last_pos[-1], old_point, new_observation)
-                               - cdf_prob_dist_given_xnmin1_yn(d_min, old_point, new_observation))
-
-    return route_probs_out
-
-
 def get_last_edge_d_bounds(route):
 
-    d_min = 0 if route.shape[0] == 1 else route[-2, -1]
-
     last_edge_geom = get_geometry(route[-1, 1:4])
-    d_max = d_min + last_edge_geom.length
+
+    if route.shape[0] == 1:
+        d_min = 0
+        d_max = (1 - route[-1, 4]) * last_edge_geom.length
+    else:
+        d_min = route[-2, -1]
+        d_max = d_min + last_edge_geom.length
 
     return d_min, d_max
 
@@ -477,6 +454,32 @@ def extend_routes(routes, extension_distance):
         extended_routes += propagate_x(route, extension_distance - 0.0001, return_intermediate_routes=True)
 
     return extended_routes
+
+
+def extended_route_probs(routes, old_point, new_observation, d_min):
+    route_probs_out = np.zeros(len(routes))
+    for i, route in enumerate(routes):
+        # Distance of last edge to observation
+        last_pos = route[-1, :]
+        last_edge_geom = get_geometry(last_pos[1:4])
+        distance_to_obs = Point(new_observation).distance(last_edge_geom)
+
+        # Number of intersections and possibilities at each one
+        intersection_col = route[:-1, 5]
+        intersection_options = intersection_col[intersection_col > 0]
+
+        # Probability of travelling route given observation (unnormalised)
+        route_probs_out[i] = np.exp(-0.5 / sigma2_aux_GPS * distance_to_obs) \
+            / (2 * np.pi * sigma2_aux_GPS) \
+            * np.prod(1 / intersection_options)
+
+        # Probability of selecting auxiliary distance within route bounds
+        d_min_temp = max(d_min, route[-2, -1]) if route.shape[0] > 1 else d_min
+
+        route_probs_out[i] *= (cdf_prob_dist_given_xnmin1_yn(last_pos[-1], old_point, new_observation)
+                               - cdf_prob_dist_given_xnmin1_yn(d_min_temp, old_point, new_observation))
+
+    return route_probs_out
 
 
 def auxiliary_variable_particle_filter(polyline, delta_y, n_samps):
@@ -525,10 +528,14 @@ def auxiliary_variable_particle_filter(polyline, delta_y, n_samps):
             old_particle = old_particles[sample_index].copy()
 
             # Sample auxiliary distance variable
-            intermediate_dist = sample_dist_given_xnmin1_yn(old_particle[-1, 1:5].copy(), polyline[m, :])
+            intermediate_dist = sample_dist_given_xnmin1_yn(old_particle[-1, 1:5], polyline[m, :])
+
+            # Initiate possible routes
+            old_particle_end = old_particle[-1:, :].copy()
+            old_particle_end[-1, -1] = 0
 
             # Possible routes
-            pos_routes = propagate_x(old_particle[-1:, :], intermediate_dist, delta_y)
+            pos_routes = propagate_x(old_particle_end, intermediate_dist, delta_y)
 
             if len(pos_routes) == 1:
                 sampled_route = pos_routes[0]
@@ -551,7 +558,7 @@ def auxiliary_variable_particle_filter(polyline, delta_y, n_samps):
             d_min, d_max = get_last_edge_d_bounds(sampled_route)
 
             # Get routes up to d_min
-            pos_routes_d_min = propagate_x(old_particle[-1:, :], d_min, delta_y)
+            pos_routes_d_min = propagate_x(old_particle_end, d_min, delta_y)
 
             # Extend routes
             extended_routes = extend_routes(pos_routes_d_min, d_max - d_min)
@@ -687,11 +694,10 @@ if __name__ == '__main__':
     plot_particles(particles, poly_single_array, weights=weights[-1, :])
 
     # Run auxiliary variable particle filter
-    av_particles, av_weights = auxiliary_variable_particle_filter(poly_single_array[:4, :], delta_obs, N_samps)
+    av_particles, av_weights = auxiliary_variable_particle_filter(poly_single_array[:5, :], delta_obs, N_samps)
     av_ess = np.array([1 / sum(w ** 2) for w in av_weights])
     print(av_ess)
 
     # Plot
     plot_particles(av_particles, poly_single_array, weights=av_weights[-1, :])
-
     plt.show(block=True)
