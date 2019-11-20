@@ -28,7 +28,10 @@ dist_prior_variance = 10700
 dist_cond_variance = 100
 
 # Resample threshold
-ess_resample_threshold = 0.5
+ess_resample_threshold = 1
+
+# Auxiliary observation variance
+sigma2_aux_GPS = 2 ** 2
 
 
 def get_geometry(edge_array):
@@ -406,8 +409,11 @@ def naive_particle_filter(polyline, delta_y, n_samps):
     return xd_particles, weights
 
 
-def route_probs(routes, new_observation):
+def distance_edge_to_point(edge, point):
+    edge_geom = get_geometry(edge)
+    return Point(point).distance(edge_geom)
 
+def route_probs(routes, new_observation):
     route_probs_out = np.zeros(len(routes))
     for i, route in enumerate(routes):
         # Distance of last edge to observation
@@ -420,9 +426,36 @@ def route_probs(routes, new_observation):
         intersection_options = intersection_col[intersection_col > 0]
 
         # Probability of travelling route given observation (unnormalised)
-        route_probs_out[i] = np.exp(-0.5 / tools.edges.sigma2_GPS * distance_to_obs) \
-            / (2 * np.pi * tools.edges.sigma2_GPS) \
+        route_probs_out[i] = np.exp(-0.5 / sigma2_aux_GPS * distance_to_obs) \
+            / (2 * np.pi * sigma2_aux_GPS) \
             * np.prod(1 / intersection_options)
+
+    return route_probs_out
+
+
+def extended_route_probs(routes, old_point, new_observation, d_min):
+    route_probs_out = np.zeros(len(routes))
+    for i, route in enumerate(routes):
+        # Distance of last edge to observation
+        last_pos = route[-1, :]
+        last_edge_geom = get_geometry(last_pos[1:4])
+        distance_to_obs = Point(new_observation).distance(last_edge_geom)
+
+        # Number of intersections and possibilities at each one
+        intersection_col = route[:, 5]
+        intersection_options = intersection_col[intersection_col > 0]
+
+        # Probability of travelling route given observation (unnormalised)
+        route_probs_out[i] = np.exp(-0.5 / sigma2_aux_GPS * distance_to_obs) \
+            / (2 * np.pi * sigma2_aux_GPS) \
+            * np.prod(1 / intersection_options)
+
+        # Probability of selecting auxiliary distance within route bounds
+        if route.shape[0] > 1:
+            d_min = max(d_min, route[-2, -1])
+
+        route_probs_out[i] *= (cdf_prob_dist_given_xnmin1_yn(last_pos[-1], old_point, new_observation)
+                               - cdf_prob_dist_given_xnmin1_yn(d_min, old_point, new_observation))
 
     return route_probs_out
 
@@ -485,8 +518,10 @@ def auxiliary_variable_particle_filter(polyline, delta_y, n_samps):
             # Resample if ESS below threshold
             if ess[m-1] < n_samps * ess_resample_threshold:
                 sample_index = np.random.choice(n_samps, 1, True, weights[m - 1, :])[0]
+                temp_weight = 1 / n_samps
             else:
                 sample_index = j
+                temp_weight = weights[m - 1, j]
             old_particle = old_particles[sample_index].copy()
 
             # Sample auxiliary distance variable
@@ -497,15 +532,16 @@ def auxiliary_variable_particle_filter(polyline, delta_y, n_samps):
 
             if len(pos_routes) == 1:
                 sampled_route = pos_routes[0]
+
             else:
                 # Calculate probabilities of chosing routes
                 route_sample_probs = route_probs(pos_routes, polyline[m, :])
 
                 # Probability of generating observation (for all routes) given auxiliary distance variable
-                prob_yn_given_xnmin1_int_d_n = sum(route_sample_probs)
+                prob_yn_given_xnmin1_int_dn = sum(route_sample_probs)
 
                 # Normalise route probabilities
-                route_sample_probs_normalised = route_sample_probs / prob_yn_given_xnmin1_int_d_n
+                route_sample_probs_normalised = route_sample_probs / prob_yn_given_xnmin1_int_dn
 
                 # Sample a route
                 sampled_route_index = np.random.choice(len(pos_routes), 1, p=route_sample_probs_normalised)[0]
@@ -520,14 +556,71 @@ def auxiliary_variable_particle_filter(polyline, delta_y, n_samps):
             # Extend routes
             extended_routes = extend_routes(pos_routes_d_min, d_max - d_min)
 
-            # Probability of sampling extended routes
-            extended_route_probs = route_probs(extended_routes, polyline[m, :])
+            # Marginal probability of sampling each extended route
+            extended_route_marg_probs = extended_route_probs(extended_routes,
+                                                             old_particle[-1, 1:5], polyline[m, :], d_min)
 
-            # Extended route end distances
-            extended_routes_end_ds = np.unique([route[-1, -1] for route in extended_routes])
+            # Marginal probability of sampling the chosen route
+            distance_to_obs = distance_edge_to_point(sampled_route[-1, 1:4], polyline[m, :])
+            sampled_route_prob = np.exp(-0.5 / sigma2_aux_GPS * distance_to_obs) \
+                / (2 * np.pi * sigma2_aux_GPS)
 
+            prob_q_xn_given_xnmin1_yn = sampled_route_prob\
+                * (cdf_prob_dist_given_xnmin1_yn(d_max, old_particle[-1, 1:5], polyline[m, :])
+                    - cdf_prob_dist_given_xnmin1_yn(d_min, old_particle[-1, 1:5], polyline[m, :]))\
+                / sum(extended_route_marg_probs)
 
+            # Last edge of sampled route
+            last_edge = sampled_route[-1, 1:4]
 
+            # Discretise last edge of sampled route
+            last_edge_geom = get_geometry(last_edge)
+            last_edge_discretised_alphas = tools.edges.discretise_edge(last_edge_geom)
+
+            if sampled_route.shape[0] == 1:
+                last_edge_discretised_alphas = \
+                    last_edge_discretised_alphas[last_edge_discretised_alphas > old_particle[-1, 4]]
+            num_discretised = len(last_edge_discretised_alphas)
+
+            # Calculate distances and their probabilities
+            informed_ds = np.zeros(num_discretised)
+            informed_d_probs = np.zeros(num_discretised)
+            for i in range(num_discretised):
+                alpha_dis = last_edge_discretised_alphas[i]
+                if sampled_route.shape[0] == 1:
+                    informed_ds[i] = (alpha_dis - old_particle[-1, 4]) * last_edge_geom.length
+                else:
+                    informed_ds[i] = sampled_route[-2, -1] + alpha_dis * last_edge_geom.length
+
+                cart_point = cartesianise_numpy(np.concatenate([last_edge, [alpha_dis]]))
+                dist_to_obs = euclidean_distance(cart_point, polyline[m, :], squared=True)
+
+                informed_d_probs[i] = np.exp(-0.5 / tools.edges.sigma2_GPS * dist_to_obs) \
+                    / (2 * np.pi * tools.edges.sigma2_GPS) \
+                    * prob_dist_prior(informed_ds[i])
+
+            # Probability of observation (for all informed distances, on edge)
+            prob_yn_given_xnmin1 = sum(informed_d_probs)
+
+            informed_d_probs_normalised = informed_d_probs / prob_yn_given_xnmin1
+
+            # Sample route informed distance
+            sampled_informed_d_index = np.random.choice(len(last_edge_discretised_alphas), 1,
+                                                        p=informed_d_probs_normalised)[0]
+
+            sampled_route[-1, 4] = last_edge_discretised_alphas[sampled_informed_d_index]
+            sampled_route[-1, -1] = informed_ds[sampled_informed_d_index]
+
+            # Append sampled route to particle
+            old_particle = np.append(old_particle, sampled_route, axis=0)
+
+            # Calculate weight (unnormalised)
+            weights[m, j] = prob_q_xn_given_xnmin1_yn * prob_yn_given_xnmin1 * temp_weight
+
+            xd_particles += [old_particle]
+        weights[m, :] /= sum(weights[m, :])
+        ess[m] = 1 / sum(weights[m, :] ** 2)
+    return xd_particles, weights
 
 
 def plot_particles(particles, polyline=None, weights=None):
@@ -594,7 +687,7 @@ if __name__ == '__main__':
     plot_particles(particles, poly_single_array, weights=weights[-1, :])
 
     # Run auxiliary variable particle filter
-    av_particles, av_weights = auxiliary_variable_particle_filter(poly_single_array[:5, :], delta_obs, N_samps)
+    av_particles, av_weights = auxiliary_variable_particle_filter(poly_single_array[:4, :], delta_obs, N_samps)
     av_ess = np.array([1 / sum(w ** 2) for w in av_weights])
     print(av_ess)
 
