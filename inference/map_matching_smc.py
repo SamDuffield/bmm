@@ -15,7 +15,7 @@ from scipy.special import gamma as gamma_func
 from scipy.special import gammainc as gammainc_func
 from shapely.geometry import Point
 from shapely.geometry import LineString
-
+import typing
 
 # Prior mean for distance
 dist_prior_mean = 108
@@ -31,7 +31,7 @@ dist_cond_variance = 100
 ess_resample_threshold = 1
 
 # Auxiliary observation variance
-sigma2_aux_GPS = tools.edges.sigma2_GPS
+sigma2_aux_GPS = 1 #tools.edges.sigma2_GPS
 
 
 def get_geometry(edge_array):
@@ -97,17 +97,15 @@ def sample_x0(y_0, n_sample):
     return sampled_points
 
 
-def cartesianise_numpy(point_np):
+def cartesianise_numpy(point_np) -> np.ndarray:
     """
     Converts numpy array of u, v, k, alpha into cartesian coordinate.
     :param point_np: np.array. u, v, k, alpha
     :return: np.array, length 2 (cartesian)
     """
-    global graph
-
     edge_geom = get_geometry(point_np[:3])
 
-    return np.asarray(tools.edges.edge_interpolate(edge_geom, point_np[-1]))
+    return tools.edges.edge_interpolate(edge_geom, point_np[-1])
 
 
 def cartesianise_path(path, intersection_indicator=False):
@@ -685,18 +683,21 @@ if __name__ == '__main__':
     # Observation time increment (s)
     delta_obs = 15
 
-    # Run particle filter
-    particles, weights = naive_particle_filter(poly_single_array[:4, :], delta_obs, N_samps)
-    ess = np.array([1 / sum(w ** 2) for w in weights])
-    print(ess)
-
-    # Plot
-    plot_particles(particles, poly_single_array, weights=weights[-1, :])
+    # # Run particle filter
+    # particles, weights = naive_particle_filter(poly_single_array[:4, :], delta_obs, N_samps)
+    # ess = np.array([1 / sum(w ** 2) for w in weights])
+    # print(ess)
+    #
+    # # Plot
+    # plot_particles(particles, poly_single_array, weights=weights[-1, :])
 
     # Run auxiliary variable particle filter
-    av_particles, av_weights = auxiliary_variable_particle_filter(poly_single_array[:5, :], delta_obs, N_samps)
+    av_particles, av_weights = auxiliary_variable_particle_filter(poly_single_array[:10, :], delta_obs, N_samps)
     av_ess = np.array([1 / sum(w ** 2) for w in av_weights])
     print(av_ess)
+
+    ##############
+    # poly_single_array[:15, :] breaks
 
     # Plot
     plot_particles(av_particles, poly_single_array, weights=av_weights[-1, :])
