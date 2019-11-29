@@ -1,6 +1,7 @@
 ################################################################################
-# Module: map_matching_mcmc.py
-# Description: Infer route taken by vehicle given sparse observations.
+# Module: map_matching_smc.py
+# Description: Infer route taken by vehicle given sparse observations
+#              through the use of SMC/particle filtering.
 #
 # Web: https://github.com/SamDuffield/bayesian-traffic
 ################################################################################
@@ -31,7 +32,7 @@ dist_cond_variance = 100
 ess_resample_threshold = 1
 
 # Auxiliary observation variance
-sigma2_aux_GPS = 1 #tools.edges.sigma2_GPS
+sigma2_aux_GPS = tools.edges.sigma2_GPS
 
 
 def get_geometry(edge_array):
@@ -411,6 +412,7 @@ def distance_edge_to_point(edge, point):
     edge_geom = get_geometry(edge)
     return Point(point).distance(edge_geom)
 
+
 def route_probs(routes, new_observation):
     route_probs_out = np.zeros(len(routes))
     for i, route in enumerate(routes):
@@ -647,16 +649,37 @@ def plot_particles(particles, polyline=None, weights=None):
 
     min_alpha = 0.3
 
+    xlim = [None, None]
+    ylim = [None, None]
+
     for i, path in enumerate(particles):
         cart_path, inter_bool = cartesianise_path(path, True)
-        
+
+        xlim[0] = np.min(cart_path[:, 0]) if i == 0 else min(xlim[0], np.min(cart_path[:, 0]))
+        xlim[1] = np.max(cart_path[:, 0]) if i == 0 else max(xlim[1], np.max(cart_path[:, 0]))
+        ylim[0] = np.min(cart_path[:, 1]) if i == 0 else min(ylim[0], np.min(cart_path[:, 1]))
+        ylim[1] = np.max(cart_path[:, 1]) if i == 0 else max(ylim[1], np.max(cart_path[:, 1]))
+
         path_weight = 1/n_samps if weights is None else weights[i]
         alpha = min_alpha + (1 - min_alpha) * path_weight
         
         ax.scatter(cart_path[:, 0], cart_path[:, 1],
                    linewidths=[0.2 if inter else 3 for inter in inter_bool],
                    alpha=alpha, color='orange')
-        
+
+    exp_coef = 0.25
+
+    x_range = xlim[1] - xlim[0]
+    xlim[0] -= x_range * exp_coef
+    xlim[1] += x_range * exp_coef
+
+    y_range = ylim[1] - ylim[0]
+    ylim[0] -= y_range * exp_coef
+    ylim[1] += y_range * exp_coef
+
+    ax.set_xlim(xlim[0], xlim[1])
+    ax.set_ylim(ylim[0], ylim[1])
+
     return fig, ax
 
 
@@ -673,7 +696,7 @@ if __name__ == '__main__':
     raw_data = data.utils.read_data(data_path, 100).get_chunk()
 
     # Select single polyline
-    single_index = 0
+    single_index = np.random.choice(100, 1)[0]
     poly_single = raw_data['POLYLINE_UTM'][single_index]
     poly_single_array = np.asarray(poly_single)
 
@@ -696,9 +719,13 @@ if __name__ == '__main__':
     av_ess = np.array([1 / sum(w ** 2) for w in av_weights])
     print(av_ess)
 
-    ##############
-    # poly_single_array[:15, :] breaks
-
     # Plot
     plot_particles(av_particles, poly_single_array, weights=av_weights[-1, :])
     plt.show(block=True)
+
+    ##############
+    # poly_single_array[:13, :] breaks single_index = 0
+    # single_index = 5 success story
+    # single_index = 7 long trip, inc u-turn
+    # single_index = 18 long trip, good varied congestion example
+
