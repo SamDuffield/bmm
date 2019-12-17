@@ -315,99 +315,6 @@ def propagate_x(old_particle_in, distance_to_travel, time_to_travel=0, return_in
         return out_particles
 
 
-def naive_particle_filter(polyline, delta_y, n_samps):
-    """
-    Runs particle filter sampling vehicle paths given noisy observations.
-    :param polyline: np.array, shape=(M, 2)
-        M observations, cartesian coordinates
-    :param delta_y: float
-        inter-observation time, assumed constant
-    :param n_samps: int
-        number of samples to output
-    :return: [particles, weights]
-        particles: list of np.arrays, list length = n_samps, array shape=(num_t_steps, 7)
-            array columns = t, u, v, k, alpha, n_inter, d
-            each array represents a sampled vehicle path
-        weights: np.array, shape=(M, n_samps)
-            probability assigned to each particle at each time points
-    """
-    global graph, graph_edges
-
-    # Number of observations
-    M = len(polyline)
-
-    # Sample from p(x_0|y_0)
-    xd_particles = sample_x0(polyline[0], n_samps)
-
-    # Set initial weights
-    weights = np.zeros((M, n_samps))
-    weights[0, :] = 1/n_samps
-
-    for m in range(1, M):
-        old_particles = xd_particles.copy()
-        xd_particles = []
-        for j in range(n_samps):
-            # Resample
-            resample_index = np.random.choice(n_samps, 1, True, weights[m-1, :])[0]
-            old_particle = old_particles[resample_index].copy()
-
-            # Sample distance
-            new_dist = sample_dist_given_xnmin1_yn(old_particle[-1, 1:5].copy(), polyline[m, :])
-
-            # Possible routes
-            pos_routes = propagate_x(old_particle[-1:, :], new_dist, delta_y)
-
-            # Only one possible route
-            if len(pos_routes) == 1:
-                # Append route to particle
-                old_particle = np.append(old_particle, pos_routes[0], axis=0)
-
-                # Calculate weight (unnormalised)
-                x_t_cart = cartesianise_numpy(pos_routes[0][-1, 1:5])
-                distance_to_obs = euclidean_distance(x_t_cart, polyline[m, :], squared=True)
-                weights[m, j] = weights[m - 1, j] * prob_dist_prior(new_dist) \
-                    / prob_dist_given_xnmin1_yn(new_dist, old_particle[-1, 1:5], polyline[m, :]) \
-                    * np.exp(-0.5 / tools.edges.sigma2_GPS * distance_to_obs) / (2 * np.pi * tools.edges.sigma2_GPS)
-
-            else:
-                route_probs = np.zeros(len(pos_routes))
-                for i, route in enumerate(pos_routes):
-                    # Distance to observation
-                    last_pos = route[-1, :]
-                    x_t_cart = cartesianise_numpy(last_pos[1:5])
-                    distance_to_obs = euclidean_distance(x_t_cart, polyline[m, :], squared=True)
-
-                    # Number of intersections and possibilities at each one
-                    intersection_col = route[:, 5]
-                    intersection_options = intersection_col[intersection_col > 0]
-
-                    # Probability of travelling route given observation (unnormalised)
-                    route_probs[i] = np.exp(-0.5 / tools.edges.sigma2_GPS * distance_to_obs) \
-                        / (2 * np.pi * tools.edges.sigma2_GPS) \
-                        * np.prod(1 / intersection_options)
-
-                # Probability of generating observation (for all routes)
-                prob_yn_given_xnmin1_d_n = sum(route_probs)
-
-                # Normalise route probabilities
-                route_probs_normalised = route_probs / prob_yn_given_xnmin1_d_n
-
-                # Sample a route
-                sampled_route_index = np.random.choice(len(pos_routes), 1, p=route_probs_normalised)[0]
-
-                # Append sampled route to particle
-                old_particle = np.append(old_particle, pos_routes[sampled_route_index], axis=0)
-
-                # Calculate weight (unnormalised)
-                weights[m, j] = prob_dist_prior(new_dist) * prob_yn_given_xnmin1_d_n\
-                    / prob_dist_given_xnmin1_yn(new_dist, old_particle[-1, 1:5], polyline[m, :])
-
-            xd_particles += [old_particle]
-        weights[m, :] /= sum(weights[m, :])
-
-    return xd_particles, weights
-
-
 def distance_edge_to_point(edge, point):
     edge_geom = get_geometry(edge)
     return Point(point).distance(edge_geom)
@@ -696,7 +603,8 @@ if __name__ == '__main__':
     raw_data = data.utils.read_data(data_path, 100).get_chunk()
 
     # Select single polyline
-    single_index = np.random.choice(100, 1)[0]
+    # single_index = np.random.choice(100, 1)[0]
+    single_index = 0
     poly_single = raw_data['POLYLINE_UTM'][single_index]
     poly_single_array = np.asarray(poly_single)
 
@@ -705,14 +613,6 @@ if __name__ == '__main__':
 
     # Observation time increment (s)
     delta_obs = 15
-
-    # # Run particle filter
-    # particles, weights = naive_particle_filter(poly_single_array[:4, :], delta_obs, N_samps)
-    # ess = np.array([1 / sum(w ** 2) for w in weights])
-    # print(ess)
-    #
-    # # Plot
-    # plot_particles(particles, poly_single_array, weights=weights[-1, :])
 
     # Run auxiliary variable particle filter
     av_particles, av_weights = auxiliary_variable_particle_filter(poly_single_array[:10, :], delta_obs, N_samps)
