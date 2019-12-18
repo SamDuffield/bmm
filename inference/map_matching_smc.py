@@ -16,7 +16,6 @@ from scipy.special import gamma as gamma_func
 from scipy.special import gammainc as gammainc_func
 from shapely.geometry import Point
 from shapely.geometry import LineString
-import typing
 
 # Prior mean for distance
 dist_prior_mean = 108
@@ -574,15 +573,15 @@ def plot_particles(particles, polyline=None, weights=None):
                    linewidths=[0.2 if inter else 3 for inter in inter_bool],
                    alpha=alpha, color='orange')
 
-    exp_coef = 0.25
+    expand_coef = 0.25
 
     x_range = xlim[1] - xlim[0]
-    xlim[0] -= x_range * exp_coef
-    xlim[1] += x_range * exp_coef
+    xlim[0] -= x_range * expand_coef
+    xlim[1] += x_range * expand_coef
 
     y_range = ylim[1] - ylim[0]
-    ylim[0] -= y_range * exp_coef
-    ylim[1] += y_range * exp_coef
+    ylim[0] -= y_range * expand_coef
+    ylim[1] += y_range * expand_coef
 
     ax.set_xlim(xlim[0], xlim[1])
     ax.set_ylim(ylim[0], ylim[1])
