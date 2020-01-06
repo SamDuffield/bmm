@@ -544,7 +544,7 @@ def plot_particles(particles, polyline=None, weights=None):
     :param weights: np.array, same length as the list particles
     :return: fig, ax, graph with polyline and sampled trajectories
     """
-    global graph
+    # global graph
 
     if type(particles) is np.ndarray:
         particles = [particles]
@@ -566,9 +566,9 @@ def plot_particles(particles, polyline=None, weights=None):
         ylim[0] = np.min(cart_path[:, 1]) if i == 0 else min(ylim[0], np.min(cart_path[:, 1]))
         ylim[1] = np.max(cart_path[:, 1]) if i == 0 else max(ylim[1], np.max(cart_path[:, 1]))
 
-        path_weight = 1/n_samps if weights is None else weights[i]
+        path_weight = 1 / n_samps if weights is None else weights[i]
         alpha = min_alpha + (1 - min_alpha) * path_weight
-        
+
         ax.scatter(cart_path[:, 0], cart_path[:, 1],
                    linewidths=[0.2 if inter else 3 for inter in inter_bool],
                    alpha=alpha, color='orange')
@@ -587,6 +587,15 @@ def plot_particles(particles, polyline=None, weights=None):
     ax.set_ylim(ylim[0], ylim[1])
 
     return fig, ax
+
+
+
+
+
+
+
+
+
 
 
 if __name__ == '__main__':
