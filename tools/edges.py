@@ -65,29 +65,31 @@ def get_edges_within_dist(graph_edges, coord, dist=dist_retain):
     return edges_within_dist
 
 
-def discretise_edge(geom):
+def discretise_edge(geom, edge_refinement):
     """
     Given edge return, series of [edge, alpha] points at determined discretisation increments along edge.
     alpha is proportion of edge traversed.
     :param edge: [u, v, k, geometry]
+    :param edge_refinement: float, discretisation increment of edges (metres)
     :return: list of [edge, alpha] at each discretisation point
     """
-    ds = np.arange(increment_dist/2, geom.length, increment_dist)
+    ds = np.arange(increment_dist/2, geom.length, edge_refinement)
     alphas = ds / geom.length
     return alphas
 
 
-def get_truncated_discrete_edges(graph_edges, coord):
+def get_truncated_discrete_edges(graph_edges, coord, edge_refinement):
     """
     Discretises edges within dist_retain of coord
     :param graph_edges: simplified graph edges, gdf
     :param coord: conformal with graph (i.e. UTM)
+    :param edge_refinement: float, discretisation increment of edges (metres)
     :return: list [edge, alpha] of edge [u, v, k, geometry] (order of u,v dictates direction)
                 and alpha in [0,1] indicating proportion along edge from u to v
     """
 
     close_edges = get_edges_within_dist(graph_edges, coord, dist_retain)
-    close_edges['alpha'] = close_edges['geometry'].apply(discretise_edge)
+    close_edges['alpha'] = close_edges['geometry'].apply(discretise_edge, edge_refinement=edge_refinement)
     close_edges = close_edges.drop(columns='distance_to_obs')
 
     # Elongate dataframe and remove points outside truncation

@@ -531,9 +531,7 @@ def auxiliary_variable_particle_filter(polyline, delta_y, n_samps):
             weights[m, j] = prob_q_xn_given_xnmin1_yn * prob_yn_given_xnmin1 * temp_weight
 
             xd_particles += [old_particle]
-        weights[m, :] /= sum(weights[m, :])
-        ess[m] = 1 / sum(weights[m, :] ** 2)
-    return xd_particles, weights
+
 
 
 def plot_particles(particles, polyline=None, weights=None):

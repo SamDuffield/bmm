@@ -69,7 +69,9 @@ if __name__ == '__main__':
 
     # Fit Gamma manually
     mean_dist = np.mean(euclidean_dists)
+    print(mean_dist)
     var_dist = np.var(euclidean_dists)
+    print(var_dist)
     bg = mean_dist / var_dist
     ag = mean_dist * bg
     pdf_gamma = stats.gamma.pdf(linsp, ag, loc=0, scale=1/bg)
@@ -78,41 +80,41 @@ if __name__ == '__main__':
     # Log data
     log_euclidean_dists = np.log(euclidean_dists)
 
-    # Fit Gaussian to log data (logGaussian to raw data)
-    mean_log_dist = np.mean(log_euclidean_dists)
-    var_log_dist = np.var(log_euclidean_dists)
-    pdf_loggaussian = stats.lognorm.pdf(linsp, s=np.sqrt(var_log_dist), scale=np.exp(mean_log_dist))
-    plt.plot(linsp, pdf_loggaussian, label="Fitted logGaussian")
+    # # Fit Gaussian to log data (logGaussian to raw data)
+    # mean_log_dist = np.mean(log_euclidean_dists)
+    # var_log_dist = np.var(log_euclidean_dists)
+    # pdf_loggaussian = stats.lognorm.pdf(linsp, s=np.sqrt(var_log_dist), scale=np.exp(mean_log_dist))
+    # plt.plot(linsp, pdf_loggaussian, label="Fitted logGaussian")
 
     # Add legend
     plt.legend()
 
-    # Observation variance
-    obs_var = 1000
+    # # Observation variance
+    # obs_var = 1000
+    #
+    # # Observed distances
+    # d_num = 10
+    # d_obs = np.linspace(1, d_max * (d_num - 1)/d_num, d_num)
+    #
+    # # Plot p(d|d_obs) = Gamma with fixed mean and cov
+    # plt.figure()
+    # for d_o in d_obs:
+    #     bg_o = d_o / obs_var
+    #     ag_o = d_o * bg_o
+    #     pdf_gamma_o = stats.gamma.pdf(linsp, ag_o, loc=0, scale=1 / bg_o)
+    #     plt.plot(linsp, pdf_gamma_o)
+    # plt.title('Gamma with varying means, fixed variance')
+    # plt.ylim(0, 0.02)
 
-    # Observed distances
-    d_num = 10
-    d_obs = np.linspace(1, d_max * (d_num - 1)/d_num, d_num)
 
-    # Plot p(d|d_obs) = Gamma with fixed mean and cov
-    plt.figure()
-    for d_o in d_obs:
-        bg_o = d_o / obs_var
-        ag_o = d_o * bg_o
-        pdf_gamma_o = stats.gamma.pdf(linsp, ag_o, loc=0, scale=1 / bg_o)
-        plt.plot(linsp, pdf_gamma_o)
-    plt.title('Gamma with varying means, fixed variance')
-    plt.ylim(0, 0.02)
-
-
-    # Plot p(d|d_obs) = logGaussian with fixed mean and cov
-    plt.figure()
-    for d_o in d_obs:
-        log_obs_var = np.log(1 + obs_var / d_o**2)
-        pdf_loggaussian_o = stats.lognorm.pdf(linsp, s=np.sqrt(log_obs_var), scale=d_o)
-        plt.plot(linsp, pdf_loggaussian_o)
-    plt.title('logGaussian with varying means, fixed variance')
-    plt.ylim(0, 0.02)
+    # # Plot p(d|d_obs) = logGaussian with fixed mean and cov
+    # plt.figure()
+    # for d_o in d_obs:
+    #     log_obs_var = np.log(1 + obs_var / d_o**2)
+    #     pdf_loggaussian_o = stats.lognorm.pdf(linsp, s=np.sqrt(log_obs_var), scale=d_o)
+    #     plt.plot(linsp, pdf_loggaussian_o)
+    # plt.title('logGaussian with varying means, fixed variance')
+    # plt.ylim(0, 0.02)
 
 
     # # Plot Gamma prior
