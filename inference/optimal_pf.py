@@ -217,6 +217,8 @@ def optimal_particle_filter(polyline, n_samps, delta_y, d_refine, d_max):
     ess = np.zeros(M)
     ess[0] = n_samps
 
+    print("Assimilated observation {}/{} with ESS of {:0.2f} ({} samples)".format(1, M, ess[0], n_samps))
+
     for m in range(1, M):
         # Store particles (to be resampled)
         old_particles = xd_particles.copy()
@@ -317,7 +319,234 @@ def optimal_particle_filter(polyline, n_samps, delta_y, d_refine, d_max):
         # Update ESS
         ess[m] = 1 / sum(weights[m, :] ** 2)
 
-        print("Assimilated observation {}/{} with ESS of {} ({})".format(m+1, M, ess[m], n_samps))
+        print("Assimilated observation {}/{} with ESS of {:0.2f} ({} samples)".format(m+1, M, ess[m], n_samps))
+
+    return xd_particles, weights
+
+
+def first_occurence(twod_array, oned_array):
+    for i, obj in enumerate(twod_array):
+        if np.all(obj == oned_array):
+            return i
+    raise ValueError("Couldn't find occurence")
+
+
+def fixed_lag_resample_all(particles, current_weights, lag):
+
+    observation_times_full = particles[0][:, 0]
+    observation_times = observation_times_full[(observation_times_full != 0)
+                                               | (np.arange(len(observation_times_full)) == 0)]
+
+    m = len(observation_times)
+    n_samps = len(particles)
+
+    max_fixed_time = observation_times[max(m - lag - 2, 0)]
+    max_fixed_time_next = observation_times[max(m - lag - 1, 0)]
+
+    fixed_particles = []
+    newer_particles = []
+    out_particles = []
+    max_fix_next_indices = []
+    for particle in particles:
+        max_fix_index = np.where(particle[:, 0] == max_fixed_time)[0][0]
+        max_fix_next_indices += [(np.where(particle[:, 0] == max_fixed_time_next)[0][0]) - max_fix_index + 1]
+        fixed_particles += [particle[:(max_fix_index + 1), :]]
+        newer_particles += [particle[max_fix_index:, :]]
+
+    for i in range(n_samps):
+        resample_prob = np.zeros(n_samps)
+        fixed_last_edge = fixed_particles[i][-1, 1:4]
+
+        newer_particles_adjusted = newer_particles.copy()
+
+        for j in range(n_samps):
+            if j == i:
+                resample_prob[j] = current_weights[j] \
+                                * distance_prior(newer_particles_adjusted[j][max_fix_next_indices[j], -1])
+            else:
+                edges_next = newer_particles[j][:max_fix_next_indices[j], 1:4]
+
+                if fixed_last_edge.tolist() in edges_next.tolist():
+                    # New potential route - calculate new route and distance
+                    first_occur_edge_index = first_occurence(edges_next, fixed_last_edge)
+
+                    # New route
+                    newer_particles_adjusted[j] = newer_particles[j][(first_occur_edge_index + 1):]
+
+                    # Update distance
+                    # Fixed alpha
+                    fixed_alpha = fixed_particles[i][-1, 4]
+
+                    # New alpha
+                    new_alpha = newer_particles[j][0, 4]
+
+                    # Distance between
+                    dist_fixed_new = (fixed_alpha - new_alpha) * get_geometry(fixed_last_edge)
+
+
+                    resample_prob = 1
+
+                else:
+                    resample_prob[j] = 0
+
+
+
+
+
+
+
+
+def optimal_particle_filter_fixed_lag(polyline, n_samps, delta_y, d_refine, d_max, lag):
+    """
+    Runs optimal particle filter for sampling vehicle paths given noisy observations.
+    This particle filter is expensive but serves as the gold standard in terms of accuracy for a given sample size.
+    :param polyline: np.array, shape=(M, 2)
+        M observations, cartesian coordinates
+    :param n_samps: int
+        number of samples to output
+    :param delta_y: float
+        inter-observation time, assumed constant
+    :param d_refine: float
+        discretisation increment of edges (metres)
+    :param d_max: float
+        maximum distance possible to travel in delta_y
+    :param lag: int
+        lag before which to stop resampling
+    :return: (particles, weights)
+        particles: list of np.arrays, list length = n_samps, array shape=(num_t_steps, 7)
+            array columns = t, u, v, k, alpha, n_inter, d
+            each array represents a sampled vehicle path
+        weights: np.array, shape=(M, n_samps)
+            probability assigned to each particle at each time points
+    """
+    global graph, graph_edges
+
+    # Number of observations
+    M = len(polyline)
+
+    # Sample from p(x_0|y_0)
+    xd_particles = sample_x0(polyline[0], n_samps, d_refine)
+
+    # Set initial weights
+    weights = np.zeros((M, n_samps))
+    weights[0, :] = 1/n_samps
+
+    # Initiate ESS
+    ess = np.zeros(M)
+    ess[0] = n_samps
+
+    print("Assimilated observation {}/{} with ESS of {:0.2f} ({} samples)".format(1, M, ess[0], n_samps))
+
+    for m in range(1, M):
+        # Fixed lag resampling
+        if m > 1:                                       # Add resampling criterion?
+            resampled_particles = fixed_lag_resample_all(xd_particles, weights[m - 1], lag)
+            xd_particles = []
+        else:
+            # Store particles
+            resampled_particles = xd_particles.copy()
+            xd_particles = []
+
+
+        for j in range(n_samps):
+
+
+            # Resample if ESS below threshold
+            if ess[m-1] < n_samps * ess_resample_threshold:
+                sample_index = np.random.choice(n_samps, 1, True, weights[m - 1, :])[0]
+                temp_weight = 1 / n_samps
+            else:
+                sample_index = j
+                temp_weight = weights[m - 1, j]
+            old_particle = resampled_particles[sample_index].copy()
+
+            # Get all possible routes (no t column)
+            possible_routes = get_all_possible_routes(old_particle[-1:, 1:].copy(), d_max)
+
+            # Discretise d
+            d_discrete = np.arange(0, d_max, d_refine)
+
+            dis_routes_list = []
+            for i, route in enumerate(possible_routes):
+                # Minimum distance travelled to be in route
+                route_d_min = 0 if route.shape[0] == 1 else route[-2, -1]
+
+                # Maximum distance travelled to be in route
+                route_d_max = route[-1, -1]
+
+                # Possible discrete distance for route
+                route_ds = d_discrete[(route_d_min <= d_discrete) & (d_discrete < route_d_max)]
+
+                if len(route_ds) > 0:
+                    # Matrix with columns:
+                    # route_index
+                    # alpha
+                    # distance travelled (in observation time)
+                    # product of 1 / n_i where n_i is the number of possible edges at each intersection i traversed
+                    # squared distance to new observation
+
+                    # Initiatilisation, route index and distance
+                    dis_route_matrix = np.zeros((len(route_ds), 5))
+                    dis_route_matrix[:, 0] = i
+                    dis_route_matrix[:, 2] = route_ds
+
+                    # Product of 1 / number of intersection choices
+                    intersection_col = route[:, -2]
+                    dis_route_matrix[:, 3] = np.prod(1 / intersection_col[intersection_col > 1])
+
+                    # Get last edge geometry
+                    last_edge_geom = get_geometry(route[-1])
+
+                    # Convert distances to alphas
+                    dis_route_matrix[:, 1] = alphas = \
+                        route_ds / last_edge_geom.length + old_particle[-1, 4]\
+                        if route.shape[0] == 1 else \
+                        (route_ds - route_d_min) / last_edge_geom.length
+
+                    # Cartesianise points
+                    dis_route_cart_points = np.array([tools.edges.edge_interpolate(last_edge_geom, alpha)
+                                                      for alpha in alphas])
+
+                    # Squared distance to observation
+                    dis_route_matrix[:, 4] = np.sum((dis_route_cart_points - polyline[m]) ** 2, axis=1)
+
+                    dis_routes_list += [dis_route_matrix]
+
+            # Concatenate list into large array
+            dis_routes = np.concatenate(dis_routes_list)
+
+            # Calculate probabilities
+            sample_probs = distance_prior(dis_routes[:, 2])\
+                * dis_routes[:, 3]\
+                * np.exp(- 0.5 / tools.edges.sigma2_GPS * dis_routes[:, 4])
+
+            # Normalising constant = p(y_m | x_m-1^j)
+            sample_probs_norm_const = sum(sample_probs)
+
+            # Sample an edge and distance
+            sampled_dis_route_index = np.random.choice(len(dis_routes), 1, p=sample_probs/sample_probs_norm_const)[0]
+            sampled_dis_route = dis_routes[sampled_dis_route_index]
+
+            # Append sampled route to old particle
+            sampled_route = possible_routes[int(sampled_dis_route[0])]
+            new_route_append = np.zeros((len(sampled_route), 7))
+            new_route_append[-1, 0] = old_particle[-1, 0] + delta_y
+            new_route_append[:, 1:] = sampled_route
+            new_route_append[-1, 4] = sampled_dis_route[1]
+            new_route_append[-1, 6] = sampled_dis_route[2]
+
+            xd_particles += [np.append(old_particle, new_route_append, axis=0)]
+
+            # Calculate weight (unnormalised)
+            weights[m, j] = sample_probs_norm_const
+
+        # Normalise weights
+        weights[m, :] /= sum(weights[m, :])
+
+        # Update ESS
+        ess[m] = 1 / sum(weights[m, :] ** 2)
+
+        print("Assimilated observation {}/{} with ESS of {:0.2f} ({} samples)".format(m+1, M, ess[m], n_samps))
 
     return xd_particles, weights
 
@@ -445,7 +674,7 @@ if __name__ == '__main__':
     distance_max = 500
 
     # Run auxiliary variable particle filter
-    particles, weights = optimal_particle_filter(poly_single[:3, :], N_samps,
+    particles, weights = optimal_particle_filter(poly_single[:5, :], N_samps,
                                                  delta_obs, edge_refinement_dist, distance_max)
     ess = np.array([1 / sum(w ** 2) for w in weights])
 
