@@ -340,8 +340,8 @@ def fixed_lag_resample_all(particles, current_weights, lag):
     m = len(observation_times)
     n_samps = len(particles)
 
-    max_fixed_time = observation_times[max(m - lag - 2, 0)]
-    max_fixed_time_next = observation_times[max(m - lag - 1, 0)]
+    max_fixed_time = observation_times[max(m - lag - 1, 0)]
+    max_fixed_time_next = observation_times[max(m - lag, 0)]
 
     fixed_particles = []
     newer_particles = []
@@ -356,6 +356,7 @@ def fixed_lag_resample_all(particles, current_weights, lag):
     for i in range(n_samps):
         resample_prob = np.zeros(n_samps)
         fixed_last_edge = fixed_particles[i][-1, 1:4]
+        fixed_last_edge_geom = get_geometry(fixed_last_edge)
 
         newer_particles_adjusted = newer_particles.copy()
 
@@ -364,30 +365,36 @@ def fixed_lag_resample_all(particles, current_weights, lag):
                 resample_prob[j] = current_weights[j] \
                                 * distance_prior(newer_particles_adjusted[j][max_fix_next_indices[j], -1])
             else:
-                edges_next = newer_particles[j][:max_fix_next_indices[j], 1:4]
+                other_particle_edges_until_observation = newer_particles[j][:max_fix_next_indices[j], 1:4]
 
-                if fixed_last_edge.tolist() in edges_next.tolist():
-                    # New potential route - calculate new route and distance
-                    first_occur_edge_index = first_occurence(edges_next, fixed_last_edge)
+                if fixed_last_edge.tolist() in other_particle_edges_until_observation.tolist():
+                    # Check if other route stays on same edge for entire observation time
+                    # and doesn't overtake fixed position
+                    if np.all(fixed_last_edge, other_particle_edges_until_observation[-1]) and \
+                            (other_particle_edges_until_observation[-1][4] < fixed_particles[i][4]):
+                        resample_prob[j] = 0
+                        continue
 
-                    # New route
-                    newer_particles_adjusted[j] = newer_particles[j][(first_occur_edge_index + 1):]
+                    # First occurence of fixed edge on other particle
+                    first_occur_edge_other_particle_index = first_occurence(other_particle_edges_until_observation,
+                                                                            fixed_last_edge)
+                    first_occur_edge_other_particle = other_particle_edges_until_observation[first_occur_edge_other_particle_index]
 
-                    # Update distance
-                    # Fixed alpha
-                    fixed_alpha = fixed_particles[i][-1, 4]
+                    if first_occur_edge_other_particle[0] == 0:
+                        newer_particles_adjusted[j] = newer_particles[j][first_occur_edge_other_particle_index:].copy()
+                        newer_particles_adjusted[j][:(max_fix_next_indices[j] - 1), -1] += (1 - fixed_particles[i][-1, 4]) * fixed_last_edge_geom - newer_particles[j][first_occur_edge_other_particle_index, -1]
+                    else:
+                        newer_particles_adjusted[j] = newer_particles[j][(first_occur_edge_other_particle_index + 1):].copy()
+                        newer_particles_adjusted[j][:max_fix_next_indices[j], -1] += (newer_particles[j][first_occur_edge_other_particle_index, 4] - fixed_particles[i][-1, 4]) * fixed_last_edge_geom
 
-                    # New alpha
-                    new_alpha = newer_particles[j][0, 4]
-
-                    # Distance between
-                    dist_fixed_new = (fixed_alpha - new_alpha) * get_geometry(fixed_last_edge)
-
-
-                    resample_prob = 1
+                    resample_prob = current_weights[j] * distance_prior(newer_particles_adjusted[j][max_fix_next_indices[j], -1])
 
                 else:
                     resample_prob[j] = 0
+
+        resample_prob /= sum(resample_prob)
+
+        out_particles += [newer_particles_adjusted[np.random.choice(n_samps, 1, p=resample_prob)]]
 
 
 
@@ -665,7 +672,7 @@ if __name__ == '__main__':
     edge_refinement_dist = 1
 
     # Sample size
-    N_samps = 100
+    N_samps = 10
 
     # Observation time increment (s)
     delta_obs = 15
