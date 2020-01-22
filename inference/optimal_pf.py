@@ -217,6 +217,9 @@ def optimal_particle_filter(polyline, n_samps, delta_y, d_refine, d_max):
     ess = np.zeros(M)
     ess[0] = n_samps
 
+    # Discretise d
+    d_discrete = np.arange(0.001, d_max, d_refine)
+
     print("Assimilated observation {}/{} with ESS of {:0.2f} ({} samples)".format(1, M, ess[0], n_samps))
 
     for m in range(1, M):
@@ -235,9 +238,6 @@ def optimal_particle_filter(polyline, n_samps, delta_y, d_refine, d_max):
 
             # Get all possible routes (no t column)
             possible_routes = get_all_possible_routes(old_particle[-1:, 1:].copy(), d_max)
-
-            # Discretise d
-            d_discrete = np.arange(0, d_max, d_refine)
 
             dis_routes_list = []
             for i, route in enumerate(possible_routes):
@@ -341,6 +341,7 @@ def fixed_lag_resample_all(particles, current_weights, lag):
 
     # Standard resampling if not reached lag yet
     if m <= lag:
+    # if True:
         resampled_indices = np.random.choice(n_samps, n_samps, replace=True, p=current_weights)
         return [particles[i] for i in resampled_indices]
 
@@ -395,6 +396,7 @@ def fixed_lag_resample_all(particles, current_weights, lag):
                     else:
                         newer_particles_adjusted += [newer_particles[j][(first_occur_edge_other_particle_index + 1):].copy()]
                         next_obs_index = max_fix_next_indices[j] - first_occur_edge_other_particle_index - 1
+                        newer_particles_adjusted[j][0, 0] = max_fixed_time_next
                         newer_particles_adjusted[j][:(next_obs_index + 1), -1] += (newer_particles[j][first_occur_edge_other_particle_index, 4]
                                                                                             - fixed_particles[i][-1, 4]) * fixed_edge_length
                         resample_prob[j] = current_weights[j] * distance_prior(
@@ -456,6 +458,9 @@ def optimal_particle_filter_fixed_lag(polyline, n_samps, delta_y, d_refine, d_ma
     ess = np.zeros(M)
     ess[0] = n_samps
 
+    # Discretise d
+    d_discrete = np.arange(0.01, d_max, d_refine)
+
     print("Assimilated observation {}/{} with ESS of {:0.2f} ({} samples)".format(1, M, ess[0], n_samps))
 
     for m in range(1, M):
@@ -466,9 +471,6 @@ def optimal_particle_filter_fixed_lag(polyline, n_samps, delta_y, d_refine, d_ma
 
             # Get all possible routes (no t column)
             possible_routes = get_all_possible_routes(old_particle[-1:, 1:].copy(), d_max)
-
-            # Discretise d
-            d_discrete = np.arange(0, d_max, d_refine)
 
             dis_routes_list = []
             for i, route in enumerate(possible_routes):
@@ -545,7 +547,7 @@ def optimal_particle_filter_fixed_lag(polyline, n_samps, delta_y, d_refine, d_ma
             weights[m, j] = sample_probs_norm_const
 
         # Normalise weights
-        weights[m, :] /= sum(weights[m, :])
+        weights[m] /= sum(weights[m])
 
         # Update ESS
         ess[m] = 1 / sum(weights[m, :] ** 2)
@@ -672,7 +674,7 @@ if __name__ == '__main__':
     edge_refinement_dist = 1
 
     # Sample size
-    N_samps = 100
+    N_samps = 10
 
     # Observation time increment (s)
     delta_obs = 15
@@ -692,7 +694,7 @@ if __name__ == '__main__':
     fixed_lag = 2
 
     # Run optimal particle filter with fixed lag
-    particles, weights = optimal_particle_filter_fixed_lag(poly_single[:5, :], N_samps,
+    particles, weights = optimal_particle_filter_fixed_lag(poly_single, N_samps,
                                                  delta_obs, edge_refinement_dist, distance_max, fixed_lag)
     ess = np.array([1 / sum(w ** 2) for w in weights])
 
@@ -700,4 +702,3 @@ if __name__ == '__main__':
     plot_particles(particles, poly_single, weights=weights[-1, :])
 
     plt.show(block=True)
-
