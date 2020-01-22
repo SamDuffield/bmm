@@ -60,6 +60,9 @@ def pdf_gamma_mv(vals, mean, var):
     gamma_beta = mean / var
     gamma_alpha = mean * gamma_beta
 
+    if any(np.atleast_1d(vals) <= 0):
+        raise ValueError("Gamma pdf takes only positive values")
+
     return gamma_beta ** gamma_beta / gamma_func(gamma_alpha) * vals ** (gamma_alpha - 1) * np.exp(-gamma_beta * vals)
 
 
@@ -144,6 +147,8 @@ def get_all_possible_routes(in_route, max_distance_to_travel):
         # Propagate and return
         start_edge_and_position[3] += max_distance_to_travel / start_edge_geom.length
         start_edge_and_position[5] += max_distance_to_travel
+        if start_edge_and_position[3] > 1:
+            print('alpha > 1')
         return [in_route]
     else:
         # Reach intersection at end of edge
@@ -386,13 +391,18 @@ def fixed_lag_resample_all(particles, current_weights, lag):
                     first_occur_edge_other_particle_index = first_occurence(other_particle_edges_until_observation,
                                                                             fixed_last_edge)
 
+                    # Intersection (at end of common edge)
                     if newer_particles[j][first_occur_edge_other_particle_index, 0] == 0:
                         newer_particles_adjusted += [newer_particles[j][first_occur_edge_other_particle_index:].copy()]
                         next_obs_index = max_fix_next_indices[j] - first_occur_edge_other_particle_index
                         newer_particles_adjusted[j][:(next_obs_index + 1), -1] += \
                             (1 - fixed_particles[i][-1, 4]) * fixed_edge_length\
                             - newer_particles[j][first_occur_edge_other_particle_index, -1]
+                        ############################################
+
                         resample_prob[j] = current_weights[j] * distance_prior(newer_particles_adjusted[j][next_obs_index, -1])
+
+                    # Observation before intersection
                     else:
                         newer_particles_adjusted += [newer_particles[j][(first_occur_edge_other_particle_index + 1):].copy()]
                         next_obs_index = max_fix_next_indices[j] - first_occur_edge_other_particle_index - 1
@@ -401,6 +411,7 @@ def fixed_lag_resample_all(particles, current_weights, lag):
                                                                                             - fixed_particles[i][-1, 4]) * fixed_edge_length
                         resample_prob[j] = current_weights[j] * distance_prior(
                             newer_particles_adjusted[j][next_obs_index, -1])
+
 
                 else:
                     newer_particles_adjusted += [None]
@@ -694,7 +705,7 @@ if __name__ == '__main__':
     fixed_lag = 2
 
     # Run optimal particle filter with fixed lag
-    particles, weights = optimal_particle_filter_fixed_lag(poly_single, N_samps,
+    particles, weights = optimal_particle_filter_fixed_lag(poly_single[:5], N_samps,
                                                  delta_obs, edge_refinement_dist, distance_max, fixed_lag)
     ess = np.array([1 / sum(w ** 2) for w in weights])
 
