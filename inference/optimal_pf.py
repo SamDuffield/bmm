@@ -147,8 +147,6 @@ def get_all_possible_routes(in_route, max_distance_to_travel):
         # Propagate and return
         start_edge_and_position[3] += max_distance_to_travel / start_edge_geom.length
         start_edge_and_position[5] += max_distance_to_travel
-        if start_edge_and_position[3] > 1:
-            print('alpha > 1')
         return [in_route]
     else:
         # Reach intersection at end of edge
@@ -346,7 +344,6 @@ def fixed_lag_resample_all(particles, current_weights, lag):
 
     # Standard resampling if not reached lag yet
     if m <= lag:
-    # if True:
         resampled_indices = np.random.choice(n_samps, n_samps, replace=True, p=current_weights)
         return [particles[i] for i in resampled_indices]
 
@@ -360,8 +357,8 @@ def fixed_lag_resample_all(particles, current_weights, lag):
     for particle in particles:
         max_fix_index = np.where(particle[:, 0] == max_fixed_time)[0][0]
         max_fix_next_indices += [(np.where(particle[:, 0] == max_fixed_time_next)[0][0]) - max_fix_index]
-        fixed_particles += [particle[:(max_fix_index + 1), :]]
-        newer_particles += [particle[max_fix_index:, :]]
+        fixed_particles += [particle[:(max_fix_index + 1), :].copy()]
+        newer_particles += [particle[max_fix_index:, :].copy()]
 
     for i in range(n_samps):
         resample_prob = np.zeros(n_samps)
@@ -372,15 +369,15 @@ def fixed_lag_resample_all(particles, current_weights, lag):
         newer_particles_adjusted = []
 
         for j in range(n_samps):
-            if j == i:
+            if j == i or np.all(fixed_particles[i][-1, :-1] == newer_particles[j][0, :-1]):
                 newer_particles_adjusted += [newer_particles[j][1:]]
                 resample_prob[j] = current_weights[j]\
                     * distance_prior(newer_particles[j][max_fix_next_indices[j], -1])
             else:
                 other_particle_edges_until_observation = newer_particles[j][:(max_fix_next_indices[j] + 1), 1:4]
                 if fixed_last_edge.tolist() in other_particle_edges_until_observation.tolist():
-                    # Check if other route stays on same edge for entire observation time
-                    # and doesn't overtake fixed position
+
+                    # Check if other route doesn't overtake fixed position
                     if np.array_equal(fixed_last_edge, other_particle_edges_until_observation[-1]) and \
                             (newer_particles[j][max_fix_next_indices[j], 4] < fixed_particles[i][-1, 4]):
                         newer_particles_adjusted += [None]
@@ -392,26 +389,32 @@ def fixed_lag_resample_all(particles, current_weights, lag):
                                                                             fixed_last_edge)
 
                     # Intersection (at end of common edge)
-                    if newer_particles[j][first_occur_edge_other_particle_index, 0] == 0:
+                    if newer_particles[j][first_occur_edge_other_particle_index, 4] == 1:
                         newer_particles_adjusted += [newer_particles[j][first_occur_edge_other_particle_index:].copy()]
                         next_obs_index = max_fix_next_indices[j] - first_occur_edge_other_particle_index
                         newer_particles_adjusted[j][:(next_obs_index + 1), -1] += \
                             (1 - fixed_particles[i][-1, 4]) * fixed_edge_length\
                             - newer_particles[j][first_occur_edge_other_particle_index, -1]
                         ############################################
+                        if any(newer_particles_adjusted[j][:(next_obs_index + 1), 4] > 1):
+                            print("alpha > 1")
 
                         resample_prob[j] = current_weights[j] * distance_prior(newer_particles_adjusted[j][next_obs_index, -1])
 
                     # Observation before intersection
+                    ###################################################################################### observation is at next time not fixed time?
                     else:
                         newer_particles_adjusted += [newer_particles[j][(first_occur_edge_other_particle_index + 1):].copy()]
                         next_obs_index = max_fix_next_indices[j] - first_occur_edge_other_particle_index - 1
-                        newer_particles_adjusted[j][0, 0] = max_fixed_time_next
+                        # newer_particles_adjusted[j][0, 0] = max_fixed_time_next ######################################################################################
                         newer_particles_adjusted[j][:(next_obs_index + 1), -1] += (newer_particles[j][first_occur_edge_other_particle_index, 4]
                                                                                             - fixed_particles[i][-1, 4]) * fixed_edge_length
+
+                        if any(newer_particles_adjusted[j][:(next_obs_index + 1), 4] > 1):
+                            print("alpha2 > 1")
+
                         resample_prob[j] = current_weights[j] * distance_prior(
                             newer_particles_adjusted[j][next_obs_index, -1])
-
 
                 else:
                     newer_particles_adjusted += [None]
@@ -478,13 +481,16 @@ def optimal_particle_filter_fixed_lag(polyline, n_samps, delta_y, d_refine, d_ma
         old_particles = xd_particles.copy()
         xd_particles = []
         for j in range(n_samps):
-            old_particle = old_particles[j]
+            old_particle = old_particles[j].copy()
 
             # Get all possible routes (no t column)
-            possible_routes = get_all_possible_routes(old_particle[-1:, 1:].copy(), d_max)
+            start_point = old_particle[-1:, 1:].copy()
+            start_point[0, -1] = 0
+            possible_routes = get_all_possible_routes(start_point, d_max)
 
             dis_routes_list = []
             for i, route in enumerate(possible_routes):
+
                 # Minimum distance travelled to be in route
                 route_d_min = 0 if route.shape[0] == 1 else route[-2, -1]
 
@@ -515,19 +521,22 @@ def optimal_particle_filter_fixed_lag(polyline, n_samps, delta_y, d_refine, d_ma
                     last_edge_geom = get_geometry(route[-1])
 
                     # Convert distances to alphas
-                    dis_route_matrix[:, 1] = alphas = \
+                    dis_route_matrix[:, 1] = \
                         route_ds / last_edge_geom.length + old_particle[-1, 4]\
                         if route.shape[0] == 1 else \
                         (route_ds - route_d_min) / last_edge_geom.length
 
+                    if np.any(dis_route_matrix[:, 1] > 1):
+                        print("alpha_in_gen > 1")
+
                     # Cartesianise points
                     dis_route_cart_points = np.array([tools.edges.edge_interpolate(last_edge_geom, alpha)
-                                                      for alpha in alphas])
+                                                      for alpha in dis_route_matrix[:, 1]])
 
                     # Squared distance to observation
                     dis_route_matrix[:, 4] = np.sum((dis_route_cart_points - polyline[m]) ** 2, axis=1)
 
-                    dis_routes_list += [dis_route_matrix]
+                    dis_routes_list += [dis_route_matrix.copy()]
 
             # Concatenate list into large array
             dis_routes = np.concatenate(dis_routes_list)
@@ -556,6 +565,10 @@ def optimal_particle_filter_fixed_lag(polyline, n_samps, delta_y, d_refine, d_ma
 
             # Calculate weight (unnormalised)
             weights[m, j] = sample_probs_norm_const
+
+            if np.any(xd_particles[j][:, 4] > 1):
+                print("alpha_in_gen > 1")
+
 
         # Normalise weights
         weights[m] /= sum(weights[m])
@@ -705,9 +718,12 @@ if __name__ == '__main__':
     fixed_lag = 2
 
     # Run optimal particle filter with fixed lag
-    particles, weights = optimal_particle_filter_fixed_lag(poly_single[:5], N_samps,
+    particles, weights = optimal_particle_filter_fixed_lag(poly_single[:20], N_samps,
                                                  delta_obs, edge_refinement_dist, distance_max, fixed_lag)
     ess = np.array([1 / sum(w ** 2) for w in weights])
+
+    alpha_max = [max(p[:, 4]) for p in particles]
+
 
     # Plot
     plot_particles(particles, poly_single, weights=weights[-1, :])
