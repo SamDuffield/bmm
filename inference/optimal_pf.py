@@ -381,7 +381,6 @@ def fixed_lag_resample_all(particles, current_weights, lag):
                     if np.array_equal(fixed_last_edge, other_particle_edges_until_observation[-1]) and \
                             (newer_particles[j][max_fix_next_indices[j], 4] < fixed_particles[i][-1, 4]):
                         newer_particles_adjusted += [None]
-                        resample_prob[j] = 0
                         continue
 
                     # First occurence of fixed edge on other particle
@@ -395,39 +394,45 @@ def fixed_lag_resample_all(particles, current_weights, lag):
                         newer_particles_adjusted[j][:(next_obs_index + 1), -1] += \
                             (1 - fixed_particles[i][-1, 4]) * fixed_edge_length\
                             - newer_particles[j][first_occur_edge_other_particle_index, -1]
-                        ############################################
-                        if any(newer_particles_adjusted[j][:(next_obs_index + 1), 4] > 1):
-                            print("alpha > 1")
 
                         resample_prob[j] = current_weights[j] * distance_prior(newer_particles_adjusted[j][next_obs_index, -1])
 
-                    # Observation before intersection
-                    ###################################################################################### observation is at next time not fixed time?
+                    # Other particle finishes (at next observation time) on fixed edge
+                    elif np.array_equal(fixed_last_edge, other_particle_edges_until_observation[-1]):
+                        newer_particles_adjusted += [np.atleast_2d(newer_particles[j][max_fix_next_indices[j]].copy())]
+                        newer_particles_adjusted[j][0, -1] = (newer_particles_adjusted[j][0, 4]
+                                                              - fixed_particles[i][-1, 4]) * fixed_edge_length
+
+                        resample_prob[j] = current_weights[j] * distance_prior(newer_particles_adjusted[j][0, -1])
+
+                    # Other particle starts on fixed edge and ends on a different edge
                     else:
                         newer_particles_adjusted += [newer_particles[j][(first_occur_edge_other_particle_index + 1):].copy()]
                         next_obs_index = max_fix_next_indices[j] - first_occur_edge_other_particle_index - 1
-                        # newer_particles_adjusted[j][0, 0] = max_fixed_time_next ######################################################################################
                         newer_particles_adjusted[j][:(next_obs_index + 1), -1] += (newer_particles[j][first_occur_edge_other_particle_index, 4]
                                                                                             - fixed_particles[i][-1, 4]) * fixed_edge_length
-
-                        if any(newer_particles_adjusted[j][:(next_obs_index + 1), 4] > 1):
-                            print("alpha2 > 1")
 
                         resample_prob[j] = current_weights[j] * distance_prior(
                             newer_particles_adjusted[j][next_obs_index, -1])
 
                 else:
                     newer_particles_adjusted += [None]
-                    resample_prob[j] = 0
 
-        # Normalise
-        resample_prob /= sum(resample_prob)
+        # If fixed edge isn't shared by any other particles, do full resampling
+        if all([a is None for a in newer_particles_adjusted]) or sum(resample_prob) == 0:
+            resample_index = np.random.choice(n_samps, 1, p=current_weights)[0]
+            out_particle = particles[resample_index]
+        # Otherwise sampled a new adjusted particle and append to fixed
+        else:
+            # Normalise
+            resample_prob /= sum(resample_prob)
 
-        # Resample
-        resample_index = np.random.choice(n_samps, 1, p=resample_prob)[0]
+            # Resample
+            resample_index = np.random.choice(n_samps, 1, p=resample_prob)[0]
 
-        # Append new particle to fixed
-        out_particle = np.append(fixed_particles[i], newer_particles_adjusted[resample_index], axis=0)
+            # Append new particle to fixed
+            out_particle = np.append(fixed_particles[i], newer_particles_adjusted[resample_index], axis=0)
+
         out_particles += [out_particle]
 
     return out_particles
@@ -526,9 +531,6 @@ def optimal_particle_filter_fixed_lag(polyline, n_samps, delta_y, d_refine, d_ma
                         if route.shape[0] == 1 else \
                         (route_ds - route_d_min) / last_edge_geom.length
 
-                    if np.any(dis_route_matrix[:, 1] > 1):
-                        print("alpha_in_gen > 1")
-
                     # Cartesianise points
                     dis_route_cart_points = np.array([tools.edges.edge_interpolate(last_edge_geom, alpha)
                                                       for alpha in dis_route_matrix[:, 1]])
@@ -549,8 +551,14 @@ def optimal_particle_filter_fixed_lag(polyline, n_samps, delta_y, d_refine, d_ma
             # Normalising constant = p(y_m | x_m-1^j)
             sample_probs_norm_const = sum(sample_probs)
 
-            # Sample an edge and distance
-            sampled_dis_route_index = np.random.choice(len(dis_routes), 1, p=sample_probs/sample_probs_norm_const)[0]
+            # Check if path diverged so much all probabilities are 0
+            if sample_probs_norm_const == 0:
+                # In this case just set arbitrarily and it should get resampled away
+                sampled_dis_route_index = 0
+            # Otherwise sample accordingly
+            else:
+                sampled_dis_route_index = np.random.choice(len(dis_routes), 1, p=sample_probs/sample_probs_norm_const)[0]
+
             sampled_dis_route = dis_routes[sampled_dis_route_index]
 
             # Append sampled route to old particle
@@ -565,9 +573,6 @@ def optimal_particle_filter_fixed_lag(polyline, n_samps, delta_y, d_refine, d_ma
 
             # Calculate weight (unnormalised)
             weights[m, j] = sample_probs_norm_const
-
-            if np.any(xd_particles[j][:, 4] > 1):
-                print("alpha_in_gen > 1")
 
 
         # Normalise weights
@@ -715,7 +720,7 @@ if __name__ == '__main__':
     # plot_particles(particles, poly_single, weights=weights[-1, :])\
 
     # Fixed lag
-    fixed_lag = 2
+    fixed_lag = 1
 
     # Run optimal particle filter with fixed lag
     particles, weights = optimal_particle_filter_fixed_lag(poly_single[:20], N_samps,
@@ -723,7 +728,6 @@ if __name__ == '__main__':
     ess = np.array([1 / sum(w ** 2) for w in weights])
 
     alpha_max = [max(p[:, 4]) for p in particles]
-
 
     # Plot
     plot_particles(particles, poly_single, weights=weights[-1, :])
