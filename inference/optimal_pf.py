@@ -119,14 +119,14 @@ def sample_x0(y_0, n_sample, edge_refinement):
 def get_all_possible_routes(in_route, max_distance_to_travel):
     """
     Given a route so far and maximum distance to travel, calculate and return all possible routes on graph.
-    :param in_route: np.array, shape = (6)
+    :param in_route: np.ndarray, shape = (_, 6)
         starting edge and position on edge
         u, v, k, alpha, n_inter, d
         Note no time parameter
     :param max_distance_to_travel: float
         maximum possible distance to travel
     :return:
-        list of np.arrays, shape=(_ , 6)
+        list of np.ndarrays, shape=(_ , 6)
         each array describes a possible route
     """
 
@@ -335,7 +335,20 @@ def first_occurence(twod_array, oned_array):
 
 
 def fixed_lag_resample_all(particles, current_weights, lag):
-
+    """
+    Multinomial fixed lag resampling
+    :param particles: list of np.arrays, list length = n_samps, array shape=(_, 7)
+            array columns = t, u, v, k, alpha, n_inter, d
+            each array represents a sampled vehicle path
+    :param current_weights: np.ndarray, shape = (n_samps,)
+            latest weights for each particle
+    :param lag: int
+            lag before which we stop resampling
+    :return: list of np.arrays, list length = n_samps, array shape=(_, 7)
+            array columns = t, u, v, k, alpha, n_inter, d
+            each array represents a resampled vehicle path
+            note all weights are now equal
+    """
     observation_times_full = particles[0][:, 0]
     observation_times = observation_times_full[(observation_times_full != 0)
                                                | (np.arange(len(observation_times_full)) == 0)]
@@ -399,7 +412,7 @@ def fixed_lag_resample_all(particles, current_weights, lag):
 
                     # Other particle finishes (at next observation time) on fixed edge
                     elif np.array_equal(fixed_last_edge, other_particle_edges_until_observation[-1]):
-                        newer_particles_adjusted += [np.atleast_2d(newer_particles[j][max_fix_next_indices[j]].copy())]
+                        newer_particles_adjusted += [np.atleast_2d(newer_particles[j][max_fix_next_indices[j]:].copy())]
                         newer_particles_adjusted[j][0, -1] = (newer_particles_adjusted[j][0, 4]
                                                               - fixed_particles[i][-1, 4]) * fixed_edge_length
 
@@ -567,6 +580,7 @@ def optimal_particle_filter_fixed_lag(polyline, n_samps, delta_y, d_refine, d_ma
             new_route_append[-1, 0] = old_particle[-1, 0] + delta_y
             new_route_append[:, 1:] = sampled_route
             new_route_append[-1, 4] = sampled_dis_route[1]
+            new_route_append[-1, 5] = 0
             new_route_append[-1, 6] = sampled_dis_route[2]
 
             xd_particles += [np.append(old_particle, new_route_append, axis=0)]
@@ -703,7 +717,7 @@ if __name__ == '__main__':
     edge_refinement_dist = 1
 
     # Sample size
-    N_samps = 10
+    N_samps = 100
 
     # Observation time increment (s)
     delta_obs = 15
@@ -720,16 +734,14 @@ if __name__ == '__main__':
     # plot_particles(particles, poly_single, weights=weights[-1, :])\
 
     # Fixed lag
-    fixed_lag = 1
+    fixed_lag = 3
 
     # Run optimal particle filter with fixed lag
-    particles, weights = optimal_particle_filter_fixed_lag(poly_single[:20], N_samps,
-                                                 delta_obs, edge_refinement_dist, distance_max, fixed_lag)
+    particles, weights = optimal_particle_filter_fixed_lag(poly_single[:12], N_samps,
+                                                           delta_obs, edge_refinement_dist, distance_max, fixed_lag)
     ess = np.array([1 / sum(w ** 2) for w in weights])
-
-    alpha_max = [max(p[:, 4]) for p in particles]
 
     # Plot
     plot_particles(particles, poly_single, weights=weights[-1, :])
 
-    plt.show(block=True)
+    plt.show()
