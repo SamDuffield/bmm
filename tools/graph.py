@@ -200,17 +200,19 @@ def plot_graph(graph, polyline=None, edges_to_highlight=None):
     """
     if edges_to_highlight is not None:
         edge_colours = ['blue' if [u, v] in edges_to_highlight or [v, u] in edges_to_highlight
-                        else 'grey' for u, v, d in graph.edges]
+                        else 'lightgrey' for u, v, d in graph.edges]
     else:
-        edge_colours = 'grey'
+        edge_colours = 'lightgrey'
 
-    fig, ax = ox.plot_graph(graph, show=False, close=False, equal_aspect=True, edge_color=edge_colours)
+    fig, ax = ox.plot_graph(graph, show=False, close=False, equal_aspect=True, edge_color=edge_colours,
+                            node_size=0, edge_linewidth=3)
 
     if polyline is not None:
         if len(polyline) > 1:
-            ax.scatter(polyline_axis(polyline, 0), polyline_axis(polyline, 1), c='red')
-            ax.scatter(polyline[-1][0], polyline[-1][1], c='red', edgecolor='blue', linewidth=2)
-        ax.scatter(polyline[0][0], polyline[0][1], c='red', edgecolor='green', linewidth=2)
+            ax.scatter(polyline_axis(polyline, 0), polyline_axis(polyline, 1),
+                       marker='x', c='red', s=100, linewidth=3, zorder=10)
+            # ax.scatter(polyline[-1][0], polyline[-1][1], marker='x', c='blue', s=100, linewidth=3)
+        # ax.scatter(polyline[0][0], polyline[0][1], marker='x', c='blue', s=100, linewidth=3)
 
     plt.tight_layout()
 

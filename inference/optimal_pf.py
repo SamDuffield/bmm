@@ -408,25 +408,27 @@ def fixed_lag_resample_all(particles, current_weights, lag):
                             (1 - fixed_particles[i][-1, 4]) * fixed_edge_length\
                             - newer_particles[j][first_occur_edge_other_particle_index, -1]
 
-                        resample_prob[j] = current_weights[j] * distance_prior(newer_particles_adjusted[j][next_obs_index, -1])
+
 
                     # Other particle finishes (at next observation time) on fixed edge
                     elif np.array_equal(fixed_last_edge, other_particle_edges_until_observation[-1]):
                         newer_particles_adjusted += [np.atleast_2d(newer_particles[j][max_fix_next_indices[j]:].copy())]
                         newer_particles_adjusted[j][0, -1] = (newer_particles_adjusted[j][0, 4]
                                                               - fixed_particles[i][-1, 4]) * fixed_edge_length
-
-                        resample_prob[j] = current_weights[j] * distance_prior(newer_particles_adjusted[j][0, -1])
+                        next_obs_index = 0
 
                     # Other particle starts on fixed edge and ends on a different edge
                     else:
                         newer_particles_adjusted += [newer_particles[j][(first_occur_edge_other_particle_index + 1):].copy()]
                         next_obs_index = max_fix_next_indices[j] - first_occur_edge_other_particle_index - 1
                         newer_particles_adjusted[j][:(next_obs_index + 1), -1] += (newer_particles[j][first_occur_edge_other_particle_index, 4]
-                                                                                            - fixed_particles[i][-1, 4]) * fixed_edge_length
+                                                                                   - fixed_particles[i][-1, 4]) * fixed_edge_length
 
-                        resample_prob[j] = current_weights[j] * distance_prior(
-                            newer_particles_adjusted[j][next_obs_index, -1])
+                    intersection_col = newer_particles_adjusted[j][:next_obs_index, -2]
+
+                    resample_prob[j] = current_weights[j] \
+                        * distance_prior(newer_particles_adjusted[j][next_obs_index, -1]) \
+                        * np.prod(1 / intersection_col[intersection_col > 1])
 
                 else:
                     newer_particles_adjusted += [None]
@@ -617,8 +619,8 @@ def cartesianise_numpy(point_np):
 def cartesianise_path(path, intersection_indicator=False):
     """
     Converts particle stored as edge, alpha into cartesian points.
-    :param path: np.array, shape=(T,7)
-        columns - t, u, v, k, alpha, n_inter, d
+    :param path: np.array, shape=(T, 5+)
+        columns - t, u, v, k, alpha
     :param intersection_indicator: boolean
         whether to also return np.array of length T with boolean indicating if point is an intersection
     :return:
@@ -633,16 +635,16 @@ def cartesianise_path(path, intersection_indicator=False):
     cart_points = np.zeros(shape=(path.shape[0], 2))
 
     for i, point in enumerate(path):
-        cart_points[i, :] = cartesianise_numpy(point[-6:-2])
+        cart_points[i, :] = cartesianise_numpy(point[1:5])
 
     if not intersection_indicator:
         return cart_points
     else:
-        intersection_bool = np.array([point[-3] == 1 for point in path])
+        intersection_bool = np.array([point[4] == 1 for point in path])
         return [cart_points, intersection_bool]
 
 
-def plot_particles(particles, polyline=None, weights=None):
+def plot_particles(particles, polyline=None, weights=None, intersections=False):
     """
     Plot paths (output from particle filter).
     :param particles: List of np.arrays representing paths
@@ -665,7 +667,11 @@ def plot_particles(particles, polyline=None, weights=None):
     ylim = [None, None]
 
     for i, path in enumerate(particles):
+
         cart_path, inter_bool = cartesianise_path(path, True)
+
+        if not intersections:
+            cart_path = cart_path[np.invert(inter_bool), :]
 
         xlim[0] = np.min(cart_path[:, 0]) if i == 0 else min(xlim[0], np.min(cart_path[:, 0]))
         xlim[1] = np.max(cart_path[:, 0]) if i == 0 else max(xlim[1], np.max(cart_path[:, 0]))
@@ -677,9 +683,70 @@ def plot_particles(particles, polyline=None, weights=None):
 
         ax.scatter(cart_path[:, 0], cart_path[:, 1],
                    linewidths=[0.2 if inter else 3 for inter in inter_bool],
-                   alpha=alpha, color='orange')
+                   alpha=alpha, color='orange', zorder=2)
 
-    expand_coef = 0.25
+    expand_coef = 0.1
+
+    x_range = xlim[1] - xlim[0]
+    xlim[0] -= x_range * expand_coef
+    xlim[1] += x_range * expand_coef
+
+    y_range = ylim[1] - ylim[0]
+    ylim[0] -= y_range * expand_coef
+    ylim[1] += y_range * expand_coef
+
+    ax.set_xlim(xlim[0], xlim[1])
+    ax.set_ylim(ylim[0], ylim[1])
+
+    return fig, ax
+
+
+def interpolate_path(path, dis_length=1):
+    out_arr = path[:1].copy()
+    prev_point = out_arr[0]
+
+    for point in path[1:]:
+        edge_geom = get_geometry(point[1:4])
+        edge_length = edge_geom.length
+        if np.array_equal(point[1:4], prev_point[1:4]):
+            edge_metres = np.arange(prev_point[4] * edge_length + dis_length, point[4]*edge_length, dis_length)
+        else:
+            edge_metres = np.arange(0, point[4]*edge_length, dis_length)
+        edge_alphas = edge_metres / edge_length
+        append_arr = np.zeros((len(edge_alphas), 5))
+        append_arr[:, :4] = point[:4]
+        append_arr[:, 4] = edge_alphas
+        out_arr = np.append(out_arr, append_arr, axis=0)
+        prev_point = point
+    return out_arr
+
+
+def plot_route(particle, polyline=None, weights=None):
+    """
+    Plot single route.
+    :param particle: np.array representing path
+    :param polyline: np.array, shape=(M,2) for M trajectory observations
+    :param weights: np.array, same length as the list particles
+    :return: fig, ax, graph with polyline and sampled trajectories
+    """
+    global graph
+
+    fig, ax = plot_graph(graph, polyline=polyline)
+
+    path = interpolate_path(particle[:, :5])
+
+    cart_path, inter_bool = cartesianise_path(path, True)
+
+    xlim = [None, None]
+    ylim = [None, None]
+    xlim[0] = np.min(cart_path[:, 0])
+    xlim[1] = np.max(cart_path[:, 0])
+    ylim[0] = np.min(cart_path[:, 1])
+    ylim[1] = np.max(cart_path[:, 1])
+
+    ax.plot(cart_path[:, 0], cart_path[:, 1], color='orange', linewidth=5)
+
+    expand_coef = 0.1
 
     x_range = xlim[1] - xlim[0]
     xlim[0] -= x_range * expand_coef
@@ -704,7 +771,8 @@ if __name__ == '__main__':
     graph_edges = tools.edges.graph_edges_gdf(graph)
 
     # Load taxi data
-    data_path = data.utils.choose_data()
+    # data_path = data.utils.choose_data()
+    data_path = process_data_path + "/data/portotaxi_06052014_06052014_utm_1730_1745.csv"
     raw_data = data.utils.read_data(data_path, 100).get_chunk()
 
     # Select single polyline
@@ -717,7 +785,7 @@ if __name__ == '__main__':
     edge_refinement_dist = 1
 
     # Sample size
-    N_samps = 100
+    N_samps = 10
 
     # Observation time increment (s)
     delta_obs = 15
@@ -737,11 +805,10 @@ if __name__ == '__main__':
     fixed_lag = 3
 
     # Run optimal particle filter with fixed lag
-    particles, weights = optimal_particle_filter_fixed_lag(poly_single[:12], N_samps,
+    particles, weights = optimal_particle_filter_fixed_lag(poly_single[:13], N_samps,
                                                            delta_obs, edge_refinement_dist, distance_max, fixed_lag)
     ess = np.array([1 / sum(w ** 2) for w in weights])
 
     # Plot
     plot_particles(particles, poly_single, weights=weights[-1, :])
-
     plt.show()
