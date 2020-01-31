@@ -1,5 +1,5 @@
 ################################################################################
-# Module: inference/optimal_pf.py
+# Module: inference_2/optimal_pf.py
 # Description: Infer route taken by vehicle given sparse observations
 #              through the use of SMC/particle filtering with optimal proposal.
 #
@@ -11,7 +11,6 @@ import data
 from tools.graph import load_graph, plot_graph
 import tools.edges
 import matplotlib.pyplot as plt
-import osmnx as ox
 from scipy.special import gamma as gamma_func
 from shapely.geometry import Point
 from shapely.geometry import LineString
@@ -204,7 +203,7 @@ def optimal_particle_filter(polyline, n_samps, delta_y, d_refine, d_max):
         weights: np.array, shape=(M, n_samps)
             probability assigned to each particle at each time points
     """
-    global graph, graph_edges
+    global graph
 
     # Number of observations
     M = len(polyline)
@@ -476,7 +475,7 @@ def optimal_particle_filter_fixed_lag(polyline, n_samps, delta_y, d_refine, d_ma
         weights: np.array, shape=(M, n_samps)
             probability assigned to each particle at each time points
     """
-    global graph, graph_edges
+    global graph
 
     # Number of observations
     M = len(polyline)

@@ -139,7 +139,6 @@ def remove_unconnected_islands(graph):
     return G2
 
 
-
 def save_graph(graph, path):
     """
     Saves graph as an OSM (XML) file
