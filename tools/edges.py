@@ -19,9 +19,6 @@ increment_dist = 3
 # GPS noise variance (isotropic)
 sigma2_GPS = 7 ** 2
 
-# Cut off distance from a point
-dist_retain = np.sqrt(sigma2_GPS) * 3
-
 
 def edge_interpolate(geometry, alpha):
     """
@@ -46,7 +43,7 @@ def graph_edges_gdf(graph):
     return edge_gdf
 
 
-def get_edges_within_dist(graph_edges, coord, dist=dist_retain):
+def get_edges_within_dist(graph_edges, coord, dist):
     """
     Given a point returns all edges that fall within a radius of dist.
     :param graph_edges: simplified graph edges (either gdf or list)
@@ -78,21 +75,33 @@ def discretise_edge(geom, edge_refinement):
     return alphas
 
 
-def get_truncated_discrete_edges(graph_edges, coord, edge_refinement):
+def get_truncated_discrete_edges(graph, coord, edge_refinement, dist_retain):
     """
     Discretises edges within dist_retain of coord
     :param graph_edges: simplified graph edges, gdf
     :param coord: conformal with graph (i.e. UTM)
     :param edge_refinement: float, discretisation increment of edges (metres)
-    :return: list [edge, alpha] of edge [u, v, k, geometry] (order of u,v dictates direction)
-                and alpha in [0,1] indicating proportion along edge from u to v
+    :return: numpy.ndarray, shape = (number of points within truncation, 5)
+        columns: u, v, k, alpha, distance_to_coord
+            u: int, edge start node
+            v: int, edge end node
+            k: int, edge key
+            alpha: in [0,1], position along edge
+            distance_to_coord: metres, distance to input coord
     """
+    # Extract geodataframe
+    graph_edges = graph_edges_gdf(graph)
 
+    # Remove edges with closest point outside truncation
     close_edges = get_edges_within_dist(graph_edges, coord, dist_retain)
+
+    # Discretise edges
     close_edges['alpha'] = close_edges['geometry'].apply(discretise_edge, edge_refinement=edge_refinement)
+
+    # Remove distance from closest point on edge column
     close_edges = close_edges.drop(columns='distance_to_obs')
 
-    # Elongate dataframe and remove points outside truncation
+    # Elongate, remove points outside truncation and store in list of lists
     discretised_edges = []
     for _, row in close_edges.iterrows():
         for a in row['alpha']:
@@ -102,9 +111,10 @@ def get_truncated_discrete_edges(graph_edges, coord, edge_refinement):
                 add_row = row.copy()
                 add_row['alpha'] = a
                 add_row['distance_to_obs'] = dist
-                discretised_edges.append(add_row)
+                discretised_edges += [[row['u'], row['v'], row['key'], a, dist]]
 
-    discretised_edges = gpd.GeoDataFrame(discretised_edges, crs=close_edges.crs)
+    # Convert to numpy.ndarray
+    discretised_edges = np.array(discretised_edges)
 
     return discretised_edges
 
@@ -171,7 +181,8 @@ def plot_graph_with_weighted_points(graph, polyline=None, points=None, weights=N
         not_at_obs = points['alpha'] == 1
 
         # Add points to plot
-        ax.scatter(points_xy[:, 0], points_xy[:, 1], c=rgba_colors, linewidths=[0.5 if a else 3 for a in not_at_obs])
+        ax.scatter(points_xy[:, 0], points_xy[:, 1], c=rgba_colors, linewidths=[0.5 if a else 3 for a in not_at_obs],
+                   zorder=2)
 
     return fig, ax
 
@@ -180,9 +191,8 @@ if __name__ == '__main__':
     # Source data paths
     _, process_data_path = data.utils.source_data()
 
-    # Load networkx graph and edges gdf
+    # Load networkx graph
     graph = load_graph()
-    edges_gdf = graph_edges_gdf(graph)
 
     # Load taxi data
     data_path = data.utils.choose_data()
@@ -193,10 +203,10 @@ if __name__ == '__main__':
     poly_single = raw_data['POLYLINE_UTM'][single_index]
 
     # Discretise edges close to start point of polyline
-    dis_edges = get_truncated_discrete_edges(edges_gdf, poly_single[0])
+    dis_edges = get_truncated_discrete_edges(graph, poly_single[0], 1)
 
     # Plot
     fig, ax = plot_graph_with_weighted_points(graph, poly_single, points=dis_edges)
     truncate_circle = plt.Circle(tuple(poly_single[0]), dist_retain, color='orange', fill=False)
     ax.add_patch(truncate_circle)
-    plt.show(block=True)
+    plt.show()
