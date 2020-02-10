@@ -12,6 +12,8 @@ import matplotlib.pyplot as plt
 import data.utils
 from tools.graph import load_graph, plot_graph
 import geopandas as gpd
+from shapely.geometry import Point
+from shapely.geometry import LineString
 
 # Set road discretisation distance in metres
 increment_dist = 3
@@ -185,6 +187,47 @@ def plot_graph_with_weighted_points(graph, polyline=None, points=None, weights=N
                    zorder=2)
 
     return fig, ax
+
+
+
+
+
+
+
+
+def get_geometry(edge_array):
+    """
+    Extract geometry of an edge from global graph object. If geometry doesn't exist set to straight line.
+    :param edge_array: list-like, length = 3
+        elements u, v, k
+            u: int, edge start node
+            v: int, edge end node
+            k: int, edge key
+    :return: NetowrkX geometry object
+    """
+    global graph
+
+    # Extract edge data, in particular the geometry
+    edge_data = graph.get_edge_data(edge_array[0], edge_array[1], edge_array[2])
+
+    # If no geometry attribute, manually add straight line
+    if 'geometry' in edge_data:
+        edge_geom = edge_data['geometry']
+    else:
+        point_u = Point((graph.nodes[edge_array[0]]['x'], graph.nodes[edge_array[0]]['y']))
+        point_v = Point((graph.nodes[edge_array[1]]['x'], graph.nodes[edge_array[1]]['y']))
+        edge_geom = LineString([point_u, point_v])
+
+    return edge_geom
+
+
+
+
+
+
+
+
+
 
 
 if __name__ == '__main__':
