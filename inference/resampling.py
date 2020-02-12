@@ -8,7 +8,8 @@
 
 import numpy as np
 
-from inference.smc import MMParticles
+from inference.model import distance_prior
+from inference.particles import MMParticles
 from tools.edges import get_geometry
 
 
@@ -52,7 +53,7 @@ def multinomial(particles, weights):
     return out_particles
 
 
-def fixed_lag_stitching(particles, weights, lag, distance_prior):
+def fixed_lag_stitching(graph, particles, weights, lag):
     """
     Resamples only elements of particles after a certain time - defined by the lag parameter.
     :param particles: MMParticles object (from inference.smc)
@@ -62,8 +63,6 @@ def fixed_lag_stitching(particles, weights, lag, distance_prior):
     :param lag: int
         lag parameter
         trajectories before this will be fixed
-    :param distance_prior: function (see inference.model)
-        probability density over distance variable
     :return: MMParticles object
         unweighted collection of trajectories post resampling + stitching
     """
@@ -79,10 +78,7 @@ def fixed_lag_stitching(particles, weights, lag, distance_prior):
 
     # If not reached lag yet do standard resampling
     if m <= lag:
-        if m == 0:
-            particles.ess = np.atleast_2d(np.ones(n) / sum(weights**2))
-        else:
-            particles.ess = np.append(particles.ess, np.atleast_2d(np.ones(n) / sum(weights**2)), axis=0)
+        particles.ess = np.append(particles.ess, np.atleast_2d(np.ones(n) / sum(weights**2)), axis=1)
         return multinomial(particles, weights)
 
     # Largest time not to be resampled
@@ -103,7 +99,7 @@ def fixed_lag_stitching(particles, weights, lag, distance_prior):
         max_fixed_time_index = np.where(out_particles[j][:, 0] == max_fixed_time)[0][0]
         fixed_particle = out_particles[j][:(max_fixed_time_index + 1)]
         last_edge_fixed = fixed_particle[-1]
-        last_edge_fixed_geom = get_geometry(last_edge_fixed[1:4])
+        last_edge_fixed_geom = get_geometry(graph, last_edge_fixed[1:4])
         last_edge_fixed_length = last_edge_fixed_geom.length
 
         # Possible particles to be resampled placeholder
@@ -157,7 +153,7 @@ def fixed_lag_stitching(particles, weights, lag, distance_prior):
             ess_track[j] = 1 / sum(res_weights**2)
 
     # Append tracked ESS
-    out_particles.ess = np.append(particles.ess, np.atleast_2d(ess_track), axis=0)
+    out_particles.ess = np.append(particles.ess, np.atleast_2d(ess_track), axis=1)
 
     return out_particles
 

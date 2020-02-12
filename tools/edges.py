@@ -24,10 +24,10 @@ sigma2_GPS = 7 ** 2
 
 def edge_interpolate(geometry, alpha):
     """
-    Given edge and proportion travelled, return lat-long.
+    Given edge and proportion travelled, return (x,y) coordinate.
     :param edge: edge geometry
     :param alpha: proportion of edge travelled
-    :return: [lat, long]
+    :return: coordinate
     """
     length_arb = geometry.length
     coord = np.asarray(geometry.interpolate(alpha * length_arb))
@@ -119,85 +119,40 @@ def get_truncated_discrete_edges(graph, coord, edge_refinement, dist_retain):
     discretised_edges = np.array(discretised_edges)
 
     return discretised_edges
+#
+#
+# def cartesianise_gdf(points):
+#     """
+#     Converts a gdf of edge, alpha coordinates into a numpy array of xy coordinates
+#     :param points: points to plot (gdf with geometry and alpha columns)
+#     :return: numpy array, of xy coordinates
+#     """
+#     points_xy = points.apply(lambda row: edge_interpolate(row['geometry'], row['alpha']), axis=1)
+#     points_xy = np.asarray(points_xy.to_list())
+#     return points_xy
+#
+#
+# def gaussian_weights(points, y_obs):
+#     """
+#     Calculates (normalised) weights, p(y|x).
+#     :param points: list of [edge, alpha] points (edge = [u,v,k,geom])
+#     :param y_obs: [x,y] observed coordinate
+#     :return: np.array, normalised weights
+#     """
+#     points_xy = cartesianise_gdf(points)
+#
+#     un_weights = np.exp(-0.5 / sigma2_GPS * np.sum((points_xy - y_obs)**2, axis=1))
+#
+#     return un_weights / sum(un_weights)
 
 
-def cartesianise(points):
-    """
-    Converts a gdf of edge, alpha coordinates into a numpy array of xy coordinates
-    :param points: points to plot (gdf with geometry and alpha columns)
-    :return: numpy array, of xy coordinates
-    """
-    points_xy = points.apply(lambda row: edge_interpolate(row['geometry'], row['alpha']), axis=1)
-    points_xy = np.asarray(points_xy.to_list())
-    return points_xy
-
-
-def gaussian_weights(points, y_obs):
-    """
-    Calculates (normalised) weights, p(y|x).
-    :param points: list of [edge, alpha] points (edge = [u,v,k,geom])
-    :param y_obs: [x,y] observed coordinate
-    :return: np.array, normalised weights
-    """
-    points_xy = cartesianise(points)
-
-    un_weights = np.exp(-0.5 / sigma2_GPS * np.sum((points_xy - y_obs)**2, axis=1))
-
-    return un_weights / sum(un_weights)
-
-
-def plot_graph_with_weighted_points(graph, polyline=None, points=None, weights=None):
-    """
-    Wrapper for plot_graph. Adds weighted sampled points to graph.
-    :param graph: road network
-    :param polyline: observed coordinates
-    :param points: points to plot (gdf with geometry and alpha columns)
-    :param weights: weights for points
-    :return: fig, ax of plotted road network (plus polyline and samples)
-    """
-
-    # Initiate graph
-    fig, ax = plot_graph(graph, polyline)
-
-    if points is not None:
-        # Extract xy coordinates of samples
-        points_xy = cartesianise(points)
-
-        # Set orange colour
-        rgba_colors = np.zeros((len(points), 4))
-        rgba_colors[:, 0] = 1.0
-        rgba_colors[:, 1] = 0.6
-
-        # Weighted opacity (if inputted)
-        if weights is None:
-            n = points_xy.shape[0]
-            weights = np.ones(n) / n
-
-        # Min opacity
-        opa_min = 0.2
-
-        alphas = opa_min + (1 - opa_min) * weights
-        rgba_colors[:, 3] = alphas
-
-        # Highlight points at observation time
-        not_at_obs = points['alpha'] == 1
-
-        # Add points to plot
-        ax.scatter(points_xy[:, 0], points_xy[:, 1], c=rgba_colors, linewidths=[0.5 if a else 3 for a in not_at_obs],
-                   zorder=2)
-
-    return fig, ax
-
-
-
-
-
-
-
-
-def get_geometry(edge_array):
+def get_geometry(graph, edge_array):
     """
     Extract geometry of an edge from global graph object. If geometry doesn't exist set to straight line.
+    :param graph: NetworkX MultiDiGraph
+        UTM projection
+        encodes road network
+        generating using OSMnx, see tools.graph.py
     :param edge_array: list-like, length = 3
         elements u, v, k
             u: int, edge start node
@@ -205,7 +160,6 @@ def get_geometry(edge_array):
             k: int, edge key
     :return: NetowrkX geometry object
     """
-    global graph
 
     # Extract edge data, in particular the geometry
     edge_data = graph.get_edge_data(edge_array[0], edge_array[1], edge_array[2])
@@ -221,6 +175,93 @@ def get_geometry(edge_array):
     return edge_geom
 
 
+def interpolate_path(graph, path, d_refine=1, t_column=False):
+    """
+    Turns path into a discrete collection of positions to be plotted
+    :param path: numpy.ndarray, shape = (_, 4)
+    :param d_refine: float
+        metres
+        resolution of distance discretisation
+    :param t_column: boolean
+        boolean describing if input has a first column for the time variable
+    :return: numpy.ndarray, shape = (_, 6)
+        elongated array for plotting path
+    """
+    start_col = 1 * t_column
+    out_arr = path[:1].copy()
+    prev_point = out_arr[0]
+    for point in path[1:]:
+        edge_geom = get_geometry(graph, point[start_col:(start_col + 3)])
+        edge_length = edge_geom.length
+        if np.array_equal(point[start_col:(start_col + 3)], prev_point[start_col:(start_col + 3)]):
+            edge_metres = np.arange(prev_point[start_col + 3] * edge_length
+                                    + d_refine, point[start_col + 3]*edge_length, d_refine)
+        else:
+            edge_metres = np.arange(0, point[start_col + 3]*edge_length, d_refine)
+        edge_alphas = edge_metres / edge_length
+        append_arr = np.zeros((len(edge_alphas), out_arr.shape[1]))
+        append_arr[:, start_col:(start_col + 3)] = point[start_col:(start_col + 3)]
+        append_arr[:, start_col + 3] = edge_alphas
+        out_arr = np.append(out_arr, append_arr, axis=0)
+        prev_point = point
+    return out_arr
+
+
+def cartesianise_path(graph, path, t_column=False):
+    """
+    Converts particle or array of edges and alphas into cartesian points.
+    :param path: numpy.ndarray, shape=(_, 5+)
+        columns - (t), u, v, k, alpha, ...
+    :param t_column: boolean
+        boolean describing if input has a first column for the time variable
+    :return: numpy.ndarray, shape = (_, 2)
+        cartesian points
+    """
+    start_col = 1*t_column
+
+    cart_points = np.zeros(shape=(path.shape[0], 2))
+
+    for i, point in enumerate(path):
+        edge_geom = get_geometry(graph, point[start_col:(3+start_col)])
+        cart_points[i, :] = edge_interpolate(edge_geom, point[3+start_col])
+
+    return cart_points
+
+
+def plot_particles(graph, particles, polyline=None, weights=None):
+
+    fig, ax = plot_graph(graph, polyline=polyline)
+
+    xlim = [None, None]
+    ylim = [None, None]
+
+    for i, particle in enumerate(particles):
+        path = interpolate_path(graph, particle, t_column=True)
+
+        cart_path = cartesianise_path(graph, path, t_column=True)
+
+        xlim[0] = np.min(cart_path[:, 0]) if xlim[0] is None else min(np.min(cart_path[:, 0]), xlim[0])
+        xlim[1] = np.max(cart_path[:, 0]) if xlim[1] is None else max(np.max(cart_path[:, 0]), xlim[1])
+        ylim[0] = np.min(cart_path[:, 1]) if ylim[0] is None else min(np.min(cart_path[:, 1]), ylim[0])
+        ylim[1] = np.min(cart_path[:, 1]) if ylim[1] is None else max(np.max(cart_path[:, 1]), ylim[1])
+
+        ax.plot(cart_path[:, 0], cart_path[:, 1], color='orange', linewidth=5,
+                alpha=1 if weights is None else weights[i])
+
+    expand_coef = 0.1
+
+    x_range = xlim[1] - xlim[0]
+    xlim[0] -= x_range * expand_coef
+    xlim[1] += x_range * expand_coef
+
+    y_range = ylim[1] - ylim[0]
+    ylim[0] -= y_range * expand_coef
+    ylim[1] += y_range * expand_coef
+
+    ax.set_xlim(xlim[0], xlim[1])
+    ax.set_ylim(ylim[0], ylim[1])
+
+    return fig, ax
 
 
 
@@ -230,26 +271,28 @@ def get_geometry(edge_array):
 
 
 
-if __name__ == '__main__':
-    # Source data paths
-    _, process_data_path = data.utils.source_data()
-
-    # Load networkx graph
-    graph = load_graph()
-
-    # Load taxi data
-    data_path = data.utils.choose_data()
-    raw_data = data.utils.read_data(data_path, 100).get_chunk()
-
-    # Select single polyline
-    single_index = 0
-    poly_single = raw_data['POLYLINE_UTM'][single_index]
-
-    # Discretise edges close to start point of polyline
-    dis_edges = get_truncated_discrete_edges(graph, poly_single[0], 1)
-
-    # Plot
-    fig, ax = plot_graph_with_weighted_points(graph, poly_single, points=dis_edges)
-    truncate_circle = plt.Circle(tuple(poly_single[0]), dist_retain, color='orange', fill=False)
-    ax.add_patch(truncate_circle)
-    plt.show()
+#
+#
+# if __name__ == '__main__':
+#     # Source data paths
+#     _, process_data_path = data.utils.source_data()
+#
+#     # Load networkx graph
+#     graph = load_graph()
+#
+#     # Load taxi data
+#     data_path = data.utils.choose_data()
+#     raw_data = data.utils.read_data(data_path, 100).get_chunk()
+#
+#     # Select single polyline
+#     single_index = 0
+#     poly_single = raw_data['POLYLINE_UTM'][single_index]
+#
+#     # Discretise edges close to start point of polyline
+#     dis_edges = get_truncated_discrete_edges(graph, poly_single[0], 1)
+#
+#     # Plot
+#     fig, ax = plot_graph_with_weighted_points(graph, poly_single, points=dis_edges)
+#     truncate_circle = plt.Circle(tuple(poly_single[0]), dist_retain, color='orange', fill=False)
+#     ax.add_patch(truncate_circle)
+#     plt.show()

@@ -643,7 +643,7 @@ def cartesianise_path(path, intersection_indicator=False):
         return [cart_points, intersection_bool]
 
 
-def plot_particles(particles, polyline=None, weights=None, intersections=False):
+def plot_particles(graph, particles, polyline=None, weights=None, intersections=False):
     """
     Plot paths (output from particle filter).
     :param particles: List of np.arrays representing paths

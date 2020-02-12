@@ -5,112 +5,33 @@
 # Web: https://github.com/SamDuffield/bayesian-traffic
 ########################################################################################################################
 
-import copy
-
 import numpy as np
 
 import tools.edges
+from inference.particles import MMParticles
+from inference.resampling import fixed_lag_stitching
 
 
-class MMParticles:
+def default_d_max(d_max, time_interval, max_speed=35):
     """
-    Class to store trajectories from map-matching algorithm.
-
-    In particular contains the following objects:
-    self.n: int
-        number of particles
-    self.latest_observation_time: float
-        time of most recently received observation
-    self.particles: list of numpy.ndarrays, length = n_samps
-        each numpy.ndarray with shape = (_, 7)
-        columns: t, u, v, k, alpha, n_inter, d
-            t: seconds, observation time
-            u: int, edge start node
-            v: int, edge end node
-            k: int, edge key
-            alpha: in [0,1], position along edge
-            n_inter: int, number of options if intersection
-            d: metres, distance travelled since previous observation time
+    Initiates default value of the maximum distance possibly travelled in the time interval.
+    Assumes a maximum possible speed.
+    :param d_max: float or None
+        metres
+        value to be checked
+    :param time_interval: float
+        seconds
+        time between observations
+    :param max_speed: float
+        metres per second
+        assumed maximum possible speed
+    :return: float
+        defaulted d_max
     """
-    def __init__(self, initial_positions, name="Trajectories"):
-        """
-        Initiate storage of trajectories with some start positions as input.
-        :param initial_positions: list-like, length = n_samps
-            each element is list-like of length 4 with elements u, v, k, alpha
-            u: int, edge start node
-            v: int, edge end node
-            k: int, edge key
-            alpha: in [0,1], position along edge
-        :param name: str
-            optional name for trajectories
-        """
-        self.name = name
-        self.n = len(initial_positions)
-        self.particles = [np.zeros((1, 7)) for _ in range(self.n)]
-        for i in range(self.n):
-            self.particles[i][0, 1:5] = initial_positions[i]
-
-    def copy(self):
-        return copy.deepcopy(self)
-
-    @property
-    def latest_observation_time(self):
-        """
-        Extracts time of most recent observation.
-        :return: float
-            time of most recent observation
-        """
-        return self.particles[0][-1, 0]
-
-    @property
-    def observation_times(self):
-        """
-        Extracts all observation times.
-        :return: numpy.ndarray, shape = (m,)
-            observation times
-        """
-        all_times = self.particles[0][:, 0]
-        observation_times = all_times[(all_times != 0) | (np.arange(len(all_times)) == 0)]
-        return observation_times
-
-    @property
-    def m(self):
-        """
-        Number of observations received.
-        :return: int
-            number of observations received
-        """
-        return len(self.observation_times)
-
-    def __getitem__(self, item):
-        """
-        Extract single particle
-        :param item: int
-            index of particle to be extracted
-        :return: numpy.ndarray, shape = (_, 7)
-            columns: t, u, v, k, alpha, n_inter, d
-            t: seconds, observation time
-            u: int, edge start node
-            v: int, edge end node
-            k: int, edge key
-            alpha: in [0,1], position along edge
-            n_inter: int, number of options if intersection
-            d: metres, distance travelled since previous observation time
-        """
-        return self.particles[item]
-
-    def __setitem__(self, key, value):
-        """
-        Allows editing and replacement of particles
-        :param key: int
-            index of particle
-        :param value: numpy.ndarray
-            replacement value(s)
-        """
-        self.particles[key] = value
+    return max_speed * time_interval if d_max is None else d_max
 
 
-def initiate_particles(graph, first_observation, n_samps, d_refine=1, gps_sd=7, truncation_distance=None):
+def initiate_particles(graph, first_observation, n_samps, gps_sd=7, d_refine=1, truncation_distance=None, ess_all=True):
     """
     Initiate start of a trajectory by sampling points around the first observation.
     Note that coordinate system of inputs must be the same, typically a UTM projection (not longtitude-latitude!).
@@ -124,13 +45,13 @@ def initiate_particles(graph, first_observation, n_samps, d_refine=1, gps_sd=7, 
         coordinate of first observation
     :param n_samps: int
         number of samples to generate
+    :param gps_sd: float
+        metres
+        standard deviation of GPS noise
     :param d_refine: float
         metres
         resolution of distance discretisation
         increase of speed, decrease for accuracy
-    :param gps_sd: float
-        metres
-        standard deviation of GPS noise
     :param truncation_distance: float
         metres
         distance beyond which to assume zero likelihood probability
@@ -150,11 +71,17 @@ def initiate_particles(graph, first_observation, n_samps, d_refine=1, gps_sd=7, 
     # Sample indices according to weights
     sampled_indices = np.random.choice(len(weights), n_samps, replace=True, p=weights)
 
-    return MMParticles(dis_points[sampled_indices, :4])
+    # Output
+    out_particles = MMParticles(dis_points[sampled_indices, :4])
+
+    # Initiate ESS
+    out_particles.ess = np.ones((1, out_particles.n)) * out_particles.n if ess_all else np.array([out_particles.n])
+
+    return out_particles
 
 
-def update_particles(graph, particles, time_interval, new_observation,
-                     proposal, resampling_scheme,
+def update_particles(graph, particles, new_observation, time_interval,
+                     proposal, lag=3, gps_sd=7,
                      d_refine=1, d_max=None,
                      **kwargs):
     """
@@ -166,17 +93,20 @@ def update_particles(graph, particles, time_interval, new_observation,
         generating using OSMnx, see tools.graph.py
     :param particles: MMParticles object (from inference.smc)
         unweighted particle approximation up to the previous observation time
-    :param time_interval: float
-        time between last observation and newly received observation
     :param new_observation: numpy.ndarray, shape = (2,)
         UTM projection
-        coordinate of new observation
+        coordinate of new observation]
+    :param time_interval: float
+        seconds
+        time between last observation and newly received observation
     :param proposal: function
         propagates forward each particle and then reweights
         see inference/proposal
-    :param resampling_scheme: function
-        resamples: weighted particles -> unweighted particles
-        see inference/resampling
+    :param lag: int
+        fixed lag for resampling/stitching
+    :param gps_sd: float
+        metres
+        standard deviation of GPS noise
     :param d_refine: float
         metres
         resolution of distance discretisation
@@ -189,45 +119,26 @@ def update_particles(graph, particles, time_interval, new_observation,
         any additional arguments to be passed to proposal or resampling functions
         i.e. fixed lag, GPS noise level etc
     :return: MMParticles object (from inference.smc)
-
     """
+    # Default d_max
+    d_max = default_d_max(d_max, time_interval)
 
-    if d_max is None:
-        d_max = time_interval * 35
-
-    # Propose and reweight
+    # Initiate particle output
     out_particles = particles.copy()
-    out_particles, weights = proposal(graph, out_particles, time_interval, new_observation, d_refine, d_max,
-                                      **kwargs)
+
+    # Initiate weight output
+    weights = np.zeros(particles.n)
+
+    # Propose and weight for each particle
+    for j in range(particles.n):
+        out_particles[j], weights[j] = proposal(graph, particles[j], new_observation,
+                                                time_interval, gps_sd, d_refine, d_max, **kwargs)
+
+    # Normalise weights
+    weights /= sum(weights)
 
     # Resample
-    out_particles = resampling_scheme(out_particles, weights, **kwargs)
+    out_particles = fixed_lag_stitching(graph, out_particles, weights, lag)
 
     return out_particles
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
