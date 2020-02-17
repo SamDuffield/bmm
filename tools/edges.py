@@ -8,10 +8,7 @@
 
 import numpy as np
 import osmnx as ox
-import matplotlib.pyplot as plt
-import data.utils
-from tools.graph import load_graph, plot_graph
-import geopandas as gpd
+from tools.graph import plot_graph
 from shapely.geometry import Point
 from shapely.geometry import LineString
 
@@ -25,7 +22,7 @@ sigma2_GPS = 7 ** 2
 def edge_interpolate(geometry, alpha):
     """
     Given edge and proportion travelled, return (x,y) coordinate.
-    :param edge: edge geometry
+    :param geometry: edge geometry
     :param alpha: proportion of edge travelled
     :return: coordinate
     """
@@ -119,31 +116,6 @@ def get_truncated_discrete_edges(graph, coord, edge_refinement, dist_retain):
     discretised_edges = np.array(discretised_edges)
 
     return discretised_edges
-#
-#
-# def cartesianise_gdf(points):
-#     """
-#     Converts a gdf of edge, alpha coordinates into a numpy array of xy coordinates
-#     :param points: points to plot (gdf with geometry and alpha columns)
-#     :return: numpy array, of xy coordinates
-#     """
-#     points_xy = points.apply(lambda row: edge_interpolate(row['geometry'], row['alpha']), axis=1)
-#     points_xy = np.asarray(points_xy.to_list())
-#     return points_xy
-#
-#
-# def gaussian_weights(points, y_obs):
-#     """
-#     Calculates (normalised) weights, p(y|x).
-#     :param points: list of [edge, alpha] points (edge = [u,v,k,geom])
-#     :param y_obs: [x,y] observed coordinate
-#     :return: np.array, normalised weights
-#     """
-#     points_xy = cartesianise_gdf(points)
-#
-#     un_weights = np.exp(-0.5 / sigma2_GPS * np.sum((points_xy - y_obs)**2, axis=1))
-#
-#     return un_weights / sum(un_weights)
 
 
 def get_geometry(graph, edge_array):

@@ -10,7 +10,7 @@ import numpy as np
 
 from tools.edges import get_geometry, edge_interpolate
 from inference.model import distance_prior
-from inference.smc import default_d_max
+from inference.model import default_d_max
 
 
 def get_all_possible_routes(graph, in_route, d_max):
@@ -67,7 +67,7 @@ def get_all_possible_routes(graph, in_route, d_max):
             # Dead-end and one-way
             return [in_route]
 
-        n_inter = max(1, sum(intersection_edges[:, 1] != start_edge_and_position[0]))
+        n_inter = max(1, np.sum(intersection_edges[:, 1] != start_edge_and_position[0]))
         start_edge_and_position[5] = n_inter
 
         if len(intersection_edges) == 1 and intersection_edges[0][1] == start_edge_and_position[0]:
@@ -226,8 +226,10 @@ def optimal_proposal(graph, particle, new_observation, time_interval, gps_sd=7, 
     # Append sampled route to old particle
     sampled_route = possible_routes[int(sampled_dis_route[0])]
     new_route_append = sampled_route
+    new_route_append[0, 0] = 0
     new_route_append[-1, 0] = particle[-1, 0] + time_interval
     new_route_append[-1, 4] = sampled_dis_route[1]
+    new_route_append[-1, 5] = 0
     new_route_append[-1, 6] = sampled_dis_route[2]
 
     return np.append(particle, new_route_append, axis=0), sample_probs_norm_const

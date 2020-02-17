@@ -47,6 +47,8 @@ class MMParticles:
         self.particles = [np.zeros((1, 7)) for _ in range(self.n)]
         for i in range(self.n):
             self.particles[i][0, 1:5] = initial_positions[i]
+        self.time = 0
+        self.ess = None
 
     def copy(self):
         return copy.deepcopy(self)
@@ -106,3 +108,4 @@ class MMParticles:
             replacement value(s)
         """
         self.particles[key] = value
+

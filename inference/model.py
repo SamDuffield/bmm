@@ -9,9 +9,28 @@ import numpy as np
 from scipy.special import gamma as gamma_func
 
 
+def default_d_max(d_max, time_interval, max_speed=35):
+    """
+    Initiates default value of the maximum distance possibly travelled in the time interval.
+    Assumes a maximum possible speed.
+    :param d_max: float or None
+        metres
+        value to be checked
+    :param time_interval: float
+        seconds
+        time between observations
+    :param max_speed: float
+        metres per second
+        assumed maximum possible speed
+    :return: float
+        defaulted d_max
+    """
+    return max_speed * time_interval if d_max is None else d_max
+
+
 def pdf_gamma_mv(vals, mean, var):
     """
-    Evaluates Gamma pdf with parameters adjusted to give an inputted mean and variance.
+    Evaluates Gamma pdf (uses moment matching based on received mean and variance).
     :param vals: float or np.array
         values to be evaluated
     :param mean: float
@@ -39,13 +58,4 @@ def distance_prior(distance, mean=108, var=10700):
         prior pdf evaluations
     """
     return pdf_gamma_mv(distance, mean, var)
-
-
-
-
-
-
-
-
-
 

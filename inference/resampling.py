@@ -76,19 +76,19 @@ def fixed_lag_stitching(graph, particles, weights, lag):
     m = len(observation_times)
     n = particles.n
 
+    # Initiate output
+    out_particles = particles.copy()
+
     # If not reached lag yet do standard resampling
     if m <= lag:
-        particles.ess = np.append(particles.ess, np.atleast_2d(np.ones(n) / sum(weights**2)), axis=1)
-        return multinomial(particles, weights)
+        out_particles.ess = np.append(particles.ess, np.atleast_2d(np.ones(n) / sum(weights**2)), axis=1)
+        return multinomial(out_particles, weights)
 
     # Largest time not to be resampled
     max_fixed_time = observation_times[m - lag - 1]
 
     # Smallest time to be resampled
     min_resample_time = observation_times[m - lag]
-
-    # Initiate output
-    out_particles = particles.copy()
 
     # Initiate ESS
     ess_track = np.zeros(n)
@@ -130,7 +130,7 @@ def fixed_lag_stitching(graph, particles, weights, lag):
                 newer_particles_adjusted[k] = new_particle[1:]
 
                 # Calculate adjusted weight
-                res_weights = weights[k] \
+                res_weights[k] = weights[k] \
                     * distance_prior(new_particle[new_particle[:, 0] <= min_resample_time][-1, 6]) \
                     / distance_prior(particles[k][particles[k][:, 0] <= min_resample_time][-1, 6])
 
