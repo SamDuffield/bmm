@@ -12,12 +12,6 @@ from tools.graph import plot_graph
 from shapely.geometry import Point
 from shapely.geometry import LineString
 
-# Set road discretisation distance in metres
-increment_dist = 3
-
-# GPS noise variance (isotropic)
-sigma2_GPS = 7 ** 2
-
 
 def edge_interpolate(geometry, alpha):
     """
@@ -65,11 +59,11 @@ def discretise_edge(geom, edge_refinement):
     """
     Given edge return, series of [edge, alpha] points at determined discretisation increments along edge.
     alpha is proportion of edge traversed.
-    :param edge: [u, v, k, geometry]
+    :param geom: edge geometry
     :param edge_refinement: float, discretisation increment of edges (metres)
     :return: list of [edge, alpha] at each discretisation point
     """
-    ds = np.arange(increment_dist/2, geom.length, edge_refinement)
+    ds = np.arange(0.01, geom.length, edge_refinement)
     alphas = ds / geom.length
     return alphas
 
@@ -77,7 +71,7 @@ def discretise_edge(geom, edge_refinement):
 def get_truncated_discrete_edges(graph, coord, edge_refinement, dist_retain):
     """
     Discretises edges within dist_retain of coord
-    :param graph_edges: simplified graph edges, gdf
+    :param graph: simplified graph
     :param coord: conformal with graph (i.e. UTM)
     :param edge_refinement: float, discretisation increment of edges (metres)
     :return: numpy.ndarray, shape = (number of points within truncation, 5)
@@ -200,33 +194,45 @@ def cartesianise_path(graph, path, t_column=False):
     return cart_points
 
 
-def plot_particles(graph, particles, polyline=None, weights=None):
+def plot_particles(graph, particles, polyline=None, weights=None, alpha_min=0.05):
 
     fig, ax = plot_graph(graph, polyline=polyline)
+
+    if isinstance(particles, np.ndarray):
+        particles = [particles]
 
     xlim = [None, None]
     ylim = [None, None]
 
-    for i, particle in enumerate(particles):
-        path = interpolate_path(graph, particle, t_column=True)
+    if weights is None:
+        alphas = alpha_min + (1 - alpha_min) / len(particles) * np.ones(len(particles))
+    else:
+        alphas = alpha_min + (1 - alpha_min) * weights
 
-        cart_path = cartesianise_path(graph, path, t_column=True)
+    for i, particle in enumerate(particles):
+
+        if len(particle) > 1:
+            path = interpolate_path(graph, particle, t_column=True)
+
+            cart_path = cartesianise_path(graph, path, t_column=True)
+            ax.plot(cart_path[:, 0], cart_path[:, 1], color='orange', linewidth=5,
+                    alpha=alphas[i])
+        else:
+            cart_path = cartesianise_path(graph, particle, t_column=True)
+            ax.scatter(cart_path[:, 0], cart_path[:, 1], color='orange', alpha=alphas[i])
 
         xlim[0] = np.min(cart_path[:, 0]) if xlim[0] is None else min(np.min(cart_path[:, 0]), xlim[0])
         xlim[1] = np.max(cart_path[:, 0]) if xlim[1] is None else max(np.max(cart_path[:, 0]), xlim[1])
         ylim[0] = np.min(cart_path[:, 1]) if ylim[0] is None else min(np.min(cart_path[:, 1]), ylim[0])
-        ylim[1] = np.min(cart_path[:, 1]) if ylim[1] is None else max(np.max(cart_path[:, 1]), ylim[1])
-
-        ax.plot(cart_path[:, 0], cart_path[:, 1], color='orange', linewidth=5,
-                alpha=1 if weights is None else weights[i])
+        ylim[1] = np.max(cart_path[:, 1]) if ylim[1] is None else max(np.max(cart_path[:, 1]), ylim[1])
 
     expand_coef = 0.1
 
-    x_range = xlim[1] - xlim[0]
+    x_range = max(xlim[1] - xlim[0], 200)
     xlim[0] -= x_range * expand_coef
     xlim[1] += x_range * expand_coef
 
-    y_range = ylim[1] - ylim[0]
+    y_range = max(ylim[1] - ylim[0], 200)
     ylim[0] -= y_range * expand_coef
     ylim[1] += y_range * expand_coef
 

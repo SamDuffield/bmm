@@ -40,7 +40,7 @@ def multinomial(particles, weights):
         if particles.n != n:
             raise ValueError("Length of MMParticles to be resampled and weights do not conform")
         out_particles = particles.copy()
-        out_particles.particles = [out_particles.particles[i] for i in sampled_indices]
+        out_particles.particles = [out_particles.particles[i].copy() for i in sampled_indices]
     elif isinstance(particles, np.ndarray):
         if len(particles) != n:
             raise ValueError("Length of particles (numpy.ndarray) to be resampled and weights do not conform")
@@ -81,7 +81,7 @@ def fixed_lag_stitching(graph, particles, weights, lag):
 
     # If not reached lag yet do standard resampling
     if m <= lag:
-        out_particles.ess = np.append(particles.ess, np.atleast_2d(np.ones(n) / sum(weights**2)), axis=1)
+        out_particles.ess = np.append(particles.ess, np.atleast_2d(np.ones(n) / sum(weights**2)), axis=0)
         return multinomial(out_particles, weights)
 
     # Largest time not to be resampled
@@ -140,6 +140,7 @@ def fixed_lag_stitching(graph, particles, weights, lag):
         # If only particle on fixed edge resample full trajectory
         if max(res_weights) == 1 or max(res_weights) == 0:
             out_particles[j] = particles[np.random.choice(n, 1, p=weights)[0]]
+            ess_track[j] = 1 / sum(weights ** 2)
 
         # Otherwise fixed-lag resample and stitch
         else:
@@ -150,10 +151,10 @@ def fixed_lag_stitching(graph, particles, weights, lag):
             out_particles[j] = np.append(fixed_particle, newer_particles_adjusted[res_index], axis=0)
 
             # Track ESS
-            ess_track[j] = 1 / sum(res_weights**2)
+            ess_track[j] = 1 / np.sum(res_weights**2)
 
     # Append tracked ESS
-    out_particles.ess = np.append(particles.ess, np.atleast_2d(ess_track), axis=1)
+    out_particles.ess = np.append(particles.ess, np.atleast_2d(ess_track), axis=0)
 
     return out_particles
 

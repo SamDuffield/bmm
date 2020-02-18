@@ -16,7 +16,13 @@ from inference.proposal import optimal_proposal
 from inference.resampling import fixed_lag_stitching
 
 
-def initiate_particles(graph, first_observation, n_samps, gps_sd=7, d_refine=1, truncation_distance=None, ess_all=True):
+def initiate_particles(graph,
+                       first_observation,
+                       n_samps,
+                       gps_sd=7,
+                       d_refine=1,
+                       truncation_distance=None,
+                       ess_all=True):
     """
     Initiate start of a trajectory by sampling points around the first observation.
     Note that coordinate system of inputs must be the same, typically a UTM projection (not longtitude-latitude!).
@@ -73,77 +79,16 @@ def initiate_particles(graph, first_observation, n_samps, gps_sd=7, d_refine=1, 
     return out_particles
 
 
-def update_particles(graph, particles, new_observation, time_interval,
-                     proposal, lag=3, gps_sd=7,
-                     d_refine=1, d_max=None,
-                     **kwargs):
-    """
-    Update a MMParticles object in light of a newly received observation.
-    Particle filter: propose + reweight then resample.
-    :param graph: NetworkX MultiDiGraph
-        UTM projection
-        encodes road network
-        generating using OSMnx, see tools.graph.py
-    :param particles: MMParticles object (from inference.smc)
-        unweighted particle approximation up to the previous observation time
-    :param new_observation: numpy.ndarray, shape = (2,)
-        UTM projection
-        coordinate of new observation]
-    :param time_interval: float
-        seconds
-        time between last observation and newly received observation
-    :param proposal: function
-        propagates forward each particle and then reweights
-        see inference/proposal
-    :param lag: int
-        fixed lag for resampling/stitching
-    :param gps_sd: float
-        metres
-        standard deviation of GPS noise
-    :param d_refine: float
-        metres
-        resolution of distance discretisation
-        increase of speed, decrease for accuracy
-    :param d_max: float
-        metres
-        maximum distance for vehicle to travel in time_interval
-        defaults to time_interval * 35 (35m/s ≈ 78mph)
-    :param kwargs:
-        any additional arguments to be passed to proposal or resampling functions
-        i.e. fixed lag, GPS noise level etc
-    :return: MMParticles object (from inference.smc)
-    """
-    # Default d_max
-    d_max = default_d_max(d_max, time_interval)
-
-    start = time()
-
-    # Initiate particle output
-    out_particles = particles.copy()
-
-    # Initiate weight output
-    weights = np.zeros(particles.n)
-
-    # Propose and weight for each particle
-    for j in range(particles.n):
-        out_particles[j], weights[j] = proposal(graph, particles[j], new_observation,
-                                                time_interval, gps_sd, d_refine, d_max, **kwargs)
-
-    # Normalise weights
-    weights /= sum(weights)
-
-    # Resample
-    out_particles = fixed_lag_stitching(graph, out_particles, weights, lag)
-
-    end = time()
-    out_particles.time += end - start
-
-    return out_particles
-
-
-def offline_map_match(graph, polyline, n_samps, time_interval,
-                     proposal=optimal_proposal, lag=3, gps_sd=7,
-                     d_refine=1, d_max=None, initial_truncation=None):
+def offline_map_match(graph,
+                      polyline,
+                      n_samps,
+                      time_interval,
+                      proposal=optimal_proposal,
+                      lag=3,
+                      gps_sd=7,
+                      d_refine=1,
+                      d_max=None,
+                      initial_truncation=None):
     """
     Runs offline map-matching. I.e. receives a full polyline and refers equal probability trajectory particles.
     :param graph: NetworkX MultiDiGraph
@@ -195,4 +140,77 @@ def offline_map_match(graph, polyline, n_samps, time_interval,
         print(str(particles.latest_observation_time) + " ESS av: " + str(np.mean(particles.ess[-1])))
 
     return particles
+
+
+def update_particles(graph,
+                     particles,
+                     new_observation,
+                     time_interval,
+                     proposal,
+                     lag=3,
+                     gps_sd=7,
+                     d_refine=1,
+                     d_max=None):
+    """
+    Update a MMParticles object in light of a newly received observation.
+    Particle filter: propose + reweight then resample.
+    :param graph: NetworkX MultiDiGraph
+        UTM projection
+        encodes road network
+        generating using OSMnx, see tools.graph.py
+    :param particles: MMParticles object (from inference.smc)
+        unweighted particle approximation up to the previous observation time
+    :param new_observation: numpy.ndarray, shape = (2,)
+        UTM projection
+        coordinate of new observation]
+    :param time_interval: float
+        seconds
+        time between last observation and newly received observation
+    :param proposal: function
+        propagates forward each particle and then reweights
+        see inference/proposal
+    :param lag: int
+        fixed lag for resampling/stitching
+    :param gps_sd: float
+        metres
+        standard deviation of GPS noise
+    :param d_refine: float
+        metres
+        resolution of distance discretisation
+        increase of speed, decrease for accuracy
+    :param d_max: float
+        metres
+        maximum distance for vehicle to travel in time_interval
+        defaults to time_interval * 35 (35m/s ≈ 78mph)
+    :param kwargs:
+        any additional arguments to be passed to proposal or resampling functions
+        i.e. fixed lag, GPS noise level etc
+    :return: MMParticles object (from inference.smc)
+    """
+    # Default d_max
+    d_max = default_d_max(d_max, time_interval)
+
+    start = time()
+
+    # Initiate particle output
+    out_particles = particles.copy()
+
+    # Initiate weight output
+    weights = np.zeros(particles.n)
+
+    # Propose and weight for each particle
+    for j in range(particles.n):
+        out_particles[j], weights[j] = proposal(graph, particles[j], new_observation,
+                                                time_interval, gps_sd, d_refine, d_max)
+
+    # Normalise weights
+    weights /= sum(weights)
+
+    # Resample
+    out_particles = fixed_lag_stitching(graph, out_particles, weights, lag)
+
+    end = time()
+    out_particles.time += end - start
+
+    return out_particles
 

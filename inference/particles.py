@@ -53,6 +53,9 @@ class MMParticles:
     def copy(self):
         return copy.deepcopy(self)
 
+    def __len__(self):
+        return self.n
+
     @property
     def latest_observation_time(self):
         """

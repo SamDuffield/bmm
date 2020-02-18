@@ -130,7 +130,7 @@ def discretise_route(graph, route, discrete_distances):
         dis_route_matrix[:, 1] = route_ds
 
         # Product of 1 / number of intersection choices
-        intersection_col = route[:, 2]
+        intersection_col = route[:-1, 5]
         dis_route_matrix[:, 2] = np.prod(1 / intersection_col[intersection_col > 1])
 
         # Get last edge geometry
