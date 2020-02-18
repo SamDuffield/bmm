@@ -93,11 +93,22 @@ def fixed_lag_stitching(graph, particles, weights, lag):
     # Initiate ESS
     ess_track = np.zeros(n)
 
+    # Extract fixed and new particles
+    fixed_particles = []
+    new_particles = []
+    max_fixed_time_indices = [0] * n
+    min_resample_time_indices = [0] * n
+    for j in range(n):
+        max_fixed_time_indices[j] = np.where(out_particles[j][:, 0] == max_fixed_time)[0][0]
+        fixed_particles += [out_particles[j][:(max_fixed_time_indices[j] + 1)]]
+        new_particles += [out_particles[j][max_fixed_time_indices[j]:]]
+        min_resample_time_indices[j] = np.where(new_particles[j][:, 0] == min_resample_time)[0][0]
+
     # Iterate through particles
     for j in range(n):
         # Extract fixed particle
-        max_fixed_time_index = np.where(out_particles[j][:, 0] == max_fixed_time)[0][0]
-        fixed_particle = out_particles[j][:(max_fixed_time_index + 1)]
+        # max_fixed_time_index = np.where(out_particles[j][:, 0] == max_fixed_time)[0][0]
+        fixed_particle = fixed_particles[j]
         last_edge_fixed = fixed_particle[-1]
         last_edge_fixed_geom = get_geometry(graph, last_edge_fixed[1:4])
         last_edge_fixed_length = last_edge_fixed_geom.length
@@ -109,7 +120,12 @@ def fixed_lag_stitching(graph, particles, weights, lag):
         res_weights = np.zeros(n)
 
         for k in range(n):
-            new_particle = particles[k][particles[k][:, 0] >= max_fixed_time].copy()
+            if k == j:
+                newer_particles_adjusted[k] = new_particles[k][1:]
+                res_weights[k] = weights[k]
+                continue
+
+            new_particle = new_particles[k].copy()
 
             # Check both particles start from same edge
             if np.array_equal(last_edge_fixed[1:4], new_particle[0, 1:4]):
@@ -124,7 +140,7 @@ def fixed_lag_stitching(graph, particles, weights, lag):
 
                 change_dist = first_distance_j_to_k - first_distance_k
 
-                new_particle[new_particle[:, 0] <= min_resample_time, 6] += change_dist
+                new_particle[:min_resample_time_indices[j], 6] += change_dist
 
                 # Store adjusted particle
                 newer_particles_adjusted[k] = new_particle[1:]

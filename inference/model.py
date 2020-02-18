@@ -53,7 +53,14 @@ def distance_prior(distance, mean=108, var=10700):
     """
     Evaluates prior probability of distance, assumes time interval of 15 seconds.
     :param distance: float or np.array
+        metres
         distance values to be evaluated
+    :param mean: float
+        metres
+        mean of gamma prior
+    :param var: float
+        metres^2
+        variance of gamma prior
     :return: float or np.array with values in [0,1], same length as distance
         prior pdf evaluations
     """
