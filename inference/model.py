@@ -44,6 +44,7 @@ def pdf_gamma_mv(vals, mean, var):
     gamma_alpha = mean * gamma_beta
 
     if any(np.atleast_1d(vals) <= 0):
+        print(vals)
         raise ValueError("Gamma pdf takes only positive values")
 
     return gamma_beta ** gamma_beta / gamma_func(gamma_alpha) * vals ** (gamma_alpha - 1) * np.exp(-gamma_beta * vals)

@@ -67,7 +67,12 @@ def get_all_possible_routes(graph, in_route, d_max):
             # Dead-end and one-way
             return [in_route]
 
-        n_inter = max(1, np.sum(intersection_edges[:, 1] != start_edge_and_position[0]))
+        try:
+            n_inter = max(1, np.sum(intersection_edges[:, 1] != start_edge_and_position[0]))
+        except:
+            print(intersection_edges)
+            raise IndexError()
+
         start_edge_and_position[5] = n_inter
 
         if len(intersection_edges) == 1 and intersection_edges[0][1] == start_edge_and_position[0]:
