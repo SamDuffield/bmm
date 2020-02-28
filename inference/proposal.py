@@ -63,13 +63,14 @@ def get_all_possible_routes(graph, in_route, d_max):
         intersection_edges = np.atleast_2d([[u, v, k] for u, v, k in graph.out_edges(start_edge_and_position[2],
                                                                                      keys=True)])
 
-        if intersection_edges.shape[0] == 0:
+        if intersection_edges.shape[1] == 0:
             # Dead-end and one-way
             return [in_route]
 
         try:
             n_inter = max(1, np.sum(intersection_edges[:, 1] != start_edge_and_position[0]))
         except:
+            print(start_edge_and_position)
             print(intersection_edges)
             raise IndexError()
 
@@ -158,7 +159,7 @@ def discretise_route(graph, route, discrete_distances):
     return dis_route_matrix
 
 
-def optimal_proposal(graph, particle, new_observation, time_interval, gps_sd=7, d_refine=1, d_max=None):
+def optimal_proposal(graph, particle, new_observation, time_interval, gps_sd, d_refine=1, d_max=None):
     """
     Samples a single particle from the (distance discretised) optimal proposal.
     :param graph: NetworkX MultiDiGraph
@@ -238,4 +239,33 @@ def optimal_proposal(graph, particle, new_observation, time_interval, gps_sd=7, 
     new_route_append[-1, 6] = sampled_dis_route[2]
 
     return np.append(particle, new_route_append, axis=0), sample_probs_norm_const
+
+
+def sample_euclidean_length_distance_proposal(euclidean_distance, gps_sd, var):
+
+
+
+
+
+
+
+
+
+def evaluate_euclidean_length_distance_proposal(euclidean_distance, gps_sd, var):
+
+
+
+
+
+
+
+
+def euclidean_length_proposal(graph, particle, new_observation, time_interval, gps_sd):
+
+
+
+
+
+
+
 
