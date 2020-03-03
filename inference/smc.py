@@ -20,7 +20,7 @@ def initiate_particles(graph,
                        first_observation,
                        n_samps,
                        gps_sd=7,
-                       d_refine=1,
+                       d_init_refine=1,
                        truncation_distance=None,
                        ess_all=True):
     """
@@ -39,7 +39,7 @@ def initiate_particles(graph,
     :param gps_sd: float
         metres
         standard deviation of GPS noise
-    :param d_refine: float
+    :param d_init_refine: float
         metres
         resolution of distance discretisation
         increase of speed, decrease for accuracy
@@ -58,7 +58,7 @@ def initiate_particles(graph,
     start = time()
 
     # Discretize edges within truncation
-    dis_points = tools.edges.get_truncated_discrete_edges(graph, first_observation, d_refine, truncation_distance)
+    dis_points = tools.edges.get_truncated_discrete_edges(graph, first_observation, d_init_refine, truncation_distance)
 
     # Likelihood weights
     weights = np.exp(-0.5 / gps_sd ** 2 * dis_points[:, 4] ** 2)
@@ -74,6 +74,7 @@ def initiate_particles(graph,
     out_particles.ess = np.ones((1, out_particles.n)) * out_particles.n if ess_all else np.array([out_particles.n])
     out_particles.ess_pf = np.array([out_particles.n])
 
+
     end = time()
     out_particles.time += end - start
 
@@ -87,8 +88,7 @@ def update_particles(graph,
                      proposal,
                      lag=3,
                      gps_sd=7,
-                     d_refine=1,
-                     d_max=None):
+                     **kwargs):
     """
     Update a MMParticles object in light of a newly received observation.
     Particle filter: propose + reweight then resample.
@@ -112,22 +112,11 @@ def update_particles(graph,
     :param gps_sd: float
         metres
         standard deviation of GPS noise
-    :param d_refine: float
-        metres
-        resolution of distance discretisation
-        increase of speed, decrease for accuracy
-    :param d_max: float
-        metres
-        maximum distance for vehicle to travel in time_interval
-        defaults to time_interval * 35 (35m/s ≈ 78mph)
     :param kwargs:
-        any additional arguments to be passed to proposal or resampling functions
-        i.e. fixed lag, GPS noise level etc
+        any additional arguments to be passed to proposal
+        i.e. d_refine or d_max for optimal proposal
     :return: MMParticles object (from inference.smc)
     """
-    # Default d_max
-    d_max = default_d_max(d_max, time_interval)
-
     start = time()
 
     # Initiate particle output
@@ -139,7 +128,7 @@ def update_particles(graph,
     # Propose and weight for each particle
     for j in range(particles.n):
         out_particles[j], weights[j] = proposal(graph, particles[j], new_observation,
-                                                time_interval, gps_sd, d_refine, d_max)
+                                                time_interval, gps_sd, **kwargs)
     # Normalise weights
     weights /= sum(weights)
 
@@ -161,9 +150,9 @@ def offline_map_match(graph,
                       proposal=optimal_proposal,
                       lag=3,
                       gps_sd=7,
-                      d_refine=1,
-                      d_max=None,
-                      initial_truncation=None):
+                      d_init_refine=1,
+                      initial_truncation=None,
+                      **kwargs):
     """
     Runs offline map-matching. I.e. receives a full polyline and refers equal probability trajectory particles.
     :param graph: NetworkX MultiDiGraph
@@ -186,31 +175,33 @@ def offline_map_match(graph,
         fixed lag, the number of observations beyond which to stop resampling
     :param gps_sd: float
         standard deviation of GPS noise
-        assumes isotropic (same in x and y)
+        assumes isotropic
     :param d_refine: float
         metres
         discretisation level of distance parameter
-    :param d_max: float
-        metres
-        maximum distance vehicle could possibly travel in time_interval
-        defaults to 35 * time_interval
+        needed for initiate_particle and potentially proposal
     :param initial_truncation: float
         metres
         distance to truncate for sampling initial postition
         defaults to 3 * gps_sd
+    :param d_max: float
+        metres
+        maximum distance vehicle could possibly travel in time_interval
+        defaults to 35 * time_interval
+
     :return: MMParticles object (from inference.smc)
     """
 
     # Initiate particles
     particles = initiate_particles(graph, polyline[0], n_samps,
-                                   gps_sd=gps_sd, d_refine=d_refine, truncation_distance=initial_truncation,
+                                   gps_sd=gps_sd, d_init_refine=d_init_refine, truncation_distance=initial_truncation,
                                    ess_all=True)
 
     # Update particles
     for observation in polyline[1:]:
         particles = update_particles(graph, particles, observation, time_interval=time_interval, proposal=proposal,
                                      lag=lag, gps_sd=gps_sd,
-                                     d_refine=d_refine, d_max=d_max)
+                                     **kwargs)
 
         print(str(particles.latest_observation_time) + " ESS av: " + str(np.mean(particles.ess[-1])))
 

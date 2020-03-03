@@ -50,20 +50,23 @@ def pdf_gamma_mv(vals, mean, var):
     return gamma_beta ** gamma_beta / gamma_func(gamma_alpha) * vals ** (gamma_alpha - 1) * np.exp(-gamma_beta * vals)
 
 
-def distance_prior(distance, mean=108, var=10700):
+def distance_prior(distance, time_interval, speed_mean=7.21, speed_var=47.55):
     """
-    Evaluates prior probability of distance, assumes time interval of 15 seconds.
+    Evaluates prior probability of distance travelled in time interval.
     :param distance: float or np.array
         metres
         distance values to be evaluated
-    :param mean: float
+    :param time_interval: float
+        seconds
+        time between observations
+    :param speed_mean: float
         metres
         mean of gamma prior
-    :param var: float
+    :param speed_var: float
         metres^2
         variance of gamma prior
     :return: float or np.array with values in [0,1], same length as distance
         prior pdf evaluations
     """
-    return pdf_gamma_mv(distance, mean, var)
+    return pdf_gamma_mv(distance/time_interval, speed_mean, speed_var)
 
