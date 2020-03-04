@@ -69,6 +69,8 @@ def get_possible_routes(graph, in_route, dist, all=False):
             # Dead-end and one-way
             if all:
                 return [in_route]
+            else:
+                return [None]
 
         n_inter = max(1, np.sum(intersection_edges[:, 1] != start_edge_and_position[0]))
 
@@ -271,12 +273,12 @@ class DistanceProposal:
 
 
 class EuclideanLengthDistanceProposal:
-    def sample(self, euclidean_distance, var=10):
+    def sample(self, euclidean_distance, var=5):
         gamma_beta = euclidean_distance / var
         gamma_alpha = euclidean_distance * gamma_beta
         return np.random.gamma(gamma_alpha, 1/gamma_beta)
 
-    def pdf(self, x, euclidean_distance, var=10):
+    def pdf(self, x, euclidean_distance, var=5):
         return pdf_gamma_mv(x, euclidean_distance, var)
 
 
@@ -301,7 +303,7 @@ def dist_then_edge_proposal(graph, particle, new_observation, time_interval, gps
         standard deviation of GPS noise
     :param dist_prop: DistanceProposal
         class that can propose a distance and evaluate pdf of said proposal
-    :param **kwargs: optional parameters to pass to distance proposal
+    :param kwargs: optional parameters to pass to distance proposal
         i.e. variance of proposal (var=10)
     :return: tuple, particle with appended proposal and weight
         particle: numpy.ndarray, shape = (_, 7)
@@ -327,6 +329,15 @@ def dist_then_edge_proposal(graph, particle, new_observation, time_interval, gps
     # Get possible routes of length dist_samp
     routes = get_possible_routes(graph, start_position, dist_samp, all=False)
 
+    # No routes implies reached dead end
+    if len(routes) == 0:
+        start_position[-1, 0] = particle[-1, 0] + time_interval
+        start_position[-1, 5] = 0
+        start_position[-1, -1] = 0
+        out_particle = np.append(particle, start_position, axis=0)
+        return out_particle, 0
+
+
     # Initiate cartesian position of end of routes
     routes_end_cart_pos = np.zeros((len(routes), 2))
 
@@ -335,6 +346,10 @@ def dist_then_edge_proposal(graph, particle, new_observation, time_interval, gps
 
     # Iterate through routes
     for i, route in enumerate(routes):
+
+        if route is None:
+            continue
+
         end_position = route[-1]
 
         end_geom = get_geometry(graph, end_position[1:4])

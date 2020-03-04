@@ -11,7 +11,6 @@ import numpy as np
 
 import tools.edges
 from inference.particles import MMParticles
-from inference.model import default_d_max
 from inference.proposal import optimal_proposal
 from inference.resampling import fixed_lag_stitching
 
@@ -184,11 +183,8 @@ def offline_map_match(graph,
         metres
         distance to truncate for sampling initial postition
         defaults to 3 * gps_sd
-    :param d_max: float
-        metres
-        maximum distance vehicle could possibly travel in time_interval
-        defaults to 35 * time_interval
-
+    :param kwargs: optional parameters to pass to proposal
+        i.e. d_max, d_refine or var
     :return: MMParticles object (from inference.smc)
     """
 

@@ -33,10 +33,10 @@ poly_single = np.asarray(poly_single_list)
 
 
 # Run offline map-matching
-n_samps = 10
+n_samps = 100
 # particles = offline_map_match(graph, poly_single[:5], n_samps, time_interval=15, lag=4, gps_sd=7, d_init_refine=1,
 #                               d_max=None, d_refine=1)
-particles = offline_map_match(graph, poly_single[:5], n_samps, time_interval=15, lag=4, gps_sd=7, d_init_refine=1,
+particles = offline_map_match(graph, poly_single, n_samps, time_interval=15, lag=4, gps_sd=7, d_init_refine=1,
                               proposal=proposal.dist_then_edge_proposal, var=10)
 
 # Plot
