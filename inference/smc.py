@@ -128,6 +128,10 @@ def update_particles(graph,
     for j in range(particles.n):
         out_particles[j], weights[j] = proposal(graph, particles[j], new_observation,
                                                 time_interval, gps_sd, **kwargs)
+
+    # Clearly temporary dict storing shared sampling data
+    out_particles._temp = {}
+
     # Normalise weights
     weights /= sum(weights)
 

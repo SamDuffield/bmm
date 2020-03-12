@@ -27,17 +27,17 @@ raw_data = read_data(data_path, 100).get_chunk()
 
 # Select single polyline
 # single_index = np.random.choice(100, 1)[0]
-single_index = 0
+single_index = 1
 poly_single_list = raw_data['POLYLINE_UTM'][single_index]
 poly_single = np.asarray(poly_single_list)
 
 
 # Run offline map-matching
 n_samps = 100
-# particles = offline_map_match(graph, poly_single[:5], n_samps, time_interval=15, lag=4, gps_sd=7, d_init_refine=1,
+# particles = offline_map_match(graph, poly_single[:13], n_samps, time_interval=15, lag=3, gps_sd=7, d_init_refine=1,
 #                               d_max=None, d_refine=1)
-particles = offline_map_match(graph, poly_single, n_samps, time_interval=15, lag=4, gps_sd=7, d_init_refine=1,
-                              proposal=proposal.dist_then_edge_proposal, var=10)
+particles = offline_map_match(graph, poly_single, n_samps, time_interval=15, lag=3, gps_sd=7, d_init_refine=1,
+                              proposal=proposal.dist_then_edge_proposal, var=5)
 
 # Plot
 plot_particles(graph, particles, poly_single)

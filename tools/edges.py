@@ -227,8 +227,10 @@ def plot_particles(graph, particles, polyline=None, alpha=None):
     if isinstance(particles, np.ndarray):
         particles = [particles]
 
+    alpha_min = 0.3
+
     if alpha is None:
-        alpha = 1 / len(particles)
+        alpha = 1 / len(particles) * (1 - alpha_min) + alpha_min
 
     xlim = [None, None]
     ylim = [None, None]
