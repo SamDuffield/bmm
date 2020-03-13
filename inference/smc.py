@@ -6,6 +6,7 @@
 ########################################################################################################################
 
 from time import time
+import inspect
 
 import numpy as np
 
@@ -19,7 +20,7 @@ def initiate_particles(graph,
                        first_observation,
                        n_samps,
                        gps_sd=7,
-                       d_init_refine=1,
+                       d_refine=1,
                        truncation_distance=None,
                        ess_all=True):
     """
@@ -38,7 +39,7 @@ def initiate_particles(graph,
     :param gps_sd: float
         metres
         standard deviation of GPS noise
-    :param d_init_refine: float
+    :param d_refine: float
         metres
         resolution of distance discretisation
         increase of speed, decrease for accuracy
@@ -57,7 +58,7 @@ def initiate_particles(graph,
     start = time()
 
     # Discretize edges within truncation
-    dis_points = tools.edges.get_truncated_discrete_edges(graph, first_observation, d_init_refine, truncation_distance)
+    dis_points = tools.edges.get_truncated_discrete_edges(graph, first_observation, d_refine, truncation_distance)
 
     # Likelihood weights
     weights = np.exp(-0.5 / gps_sd ** 2 * dis_points[:, 4] ** 2)
@@ -72,7 +73,6 @@ def initiate_particles(graph,
     # Initiate ESS
     out_particles.ess = np.ones((1, out_particles.n)) * out_particles.n if ess_all else np.array([out_particles.n])
     out_particles.ess_pf = np.array([out_particles.n])
-
 
     end = time()
     out_particles.time += end - start
@@ -126,15 +126,13 @@ def update_particles(graph,
 
     # Propose and weight for each particle
     for j in range(particles.n):
-        out_particles[j], weights[j] = proposal(graph, particles[j], new_observation,
+        out_particles[j], weights[j] = proposal(graph, out_particles[j], new_observation,
                                                 time_interval, gps_sd, **kwargs)
-
-    # Clearly temporary dict storing shared sampling data
-    out_particles._temp = {}
 
     # Normalise weights
     weights /= sum(weights)
 
+    # Store ESS
     out_particles.ess_pf = np.append(out_particles.ess_pf, 1 / np.sum(weights ** 2))
 
     # Resample
@@ -153,7 +151,7 @@ def offline_map_match(graph,
                       proposal=optimal_proposal,
                       lag=3,
                       gps_sd=7,
-                      d_init_refine=1,
+                      d_refine=1,
                       initial_truncation=None,
                       **kwargs):
     """
@@ -194,8 +192,11 @@ def offline_map_match(graph,
 
     # Initiate particles
     particles = initiate_particles(graph, polyline[0], n_samps,
-                                   gps_sd=gps_sd, d_init_refine=d_init_refine, truncation_distance=initial_truncation,
+                                   gps_sd=gps_sd, d_refine=d_refine, truncation_distance=initial_truncation,
                                    ess_all=True)
+
+    if 'd_refine' in inspect.getargspec(proposal)[0]:
+        kwargs['d_refine'] = d_refine
 
     # Update particles
     for observation in polyline[1:]:

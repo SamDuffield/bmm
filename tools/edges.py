@@ -6,11 +6,14 @@
 # Web: https://github.com/SamDuffield/bayesian-traffic
 ################################################################################
 
+from functools import lru_cache
+
 import numpy as np
 import osmnx as ox
-from tools.graph import plot_graph
 from shapely.geometry import Point
 from shapely.geometry import LineString
+
+from tools.graph import plot_graph
 
 
 def edge_interpolate(geometry, alpha):
@@ -21,8 +24,155 @@ def edge_interpolate(geometry, alpha):
     :return: coordinate
     """
     length_arb = geometry.length
-    coord = np.asarray(geometry.interpolate(alpha * length_arb))
+    coord = np.array(geometry.interpolate(alpha * length_arb))
     return coord
+
+
+def get_geometry(graph, edge):
+    """
+    Extract geometry of an edge from global graph object. If geometry doesn't exist set to straight line.
+    :param graph: NetworkX MultiDiGraph
+        UTM projection
+        encodes road network
+        generating using OSMnx, see tools.graph.py
+    :param edge: list_like, length = 3
+        elements u, v, k
+            u: int, edge start node
+            v: int, edge end node
+            k: int, edge key
+    :return: NetowrkX geometry object
+    """
+    edge_tuple = tuple(int(e) for e in edge)
+
+    out_geom = get_geometry_cached(graph, edge_tuple)
+
+    return out_geom
+
+
+# @lru_cache(max_size=2**1)
+def get_geometry_cached(graph, edge_tuple):
+    """
+    Cacheable
+    Extract geometry of an edge from global graph object. If geometry doesn't exist set to straight line.
+    :param graph: NetworkX MultiDiGraph
+        UTM projection
+        encodes road network
+        generating using OSMnx, see tools.graph.py
+    :param edge_tuple: tuple (hashable for lru_cache), length = 3
+        elements u, v, k
+            u: int, edge start node
+            v: int, edge end node
+            k: int, edge key
+    :return: NetowrkX geometry object
+    """
+
+    # Extract edge data, in particular the geometry
+    edge_data = graph.get_edge_data(edge_tuple[0], edge_tuple[1], edge_tuple[2])
+
+    # If no geometry attribute, manually add straight line
+    if 'geometry' in edge_data:
+        edge_geom = edge_data['geometry']
+    else:
+        point_u = Point((graph.nodes[edge_tuple[0]]['x'], graph.nodes[edge_tuple[0]]['y']))
+        point_v = Point((graph.nodes[edge_tuple[1]]['x'], graph.nodes[edge_tuple[1]]['y']))
+        edge_geom = LineString([point_u, point_v])
+
+    return edge_geom
+
+
+def discretise_edge(graph, edge, d_refine, observation=None, gps_sd=None):
+    """
+    Discretises edge to given edge refinement parameter.
+    Will also return observation likelihood if received.
+    :param graph: NetworkX MultiDiGraph
+        UTM projection
+        encodes road network
+        generating using OSMnx, see tools.graph.py
+    :param edge_tuple: list-like, length = 3
+        elements u, v, k
+            u: int, edge start node
+            v: int, edge end node
+            k: int, edge key
+    :param d_refine: float
+        metres
+        resolution of distance discretisation
+        increase of speed, decrease for accuracy
+    :param observation: numpy.ndarray, shape = (2,)
+        UTM projection
+        coordinate of first observation
+    :param gps_sd: float
+        metres
+        standard deviation of GPS noise
+    :return: numpy.ndarray, shape = (_, 2 or 3)
+        columns
+            alpha: float in (0,1], position along edge
+            distance: float, distance from start of edge
+            likelihood: float, unnormalised Gaussian likelihood of observation (only if observeration and gps_sd given)
+    """
+    edge_tuple = tuple(int(e) for e in edge)
+    if observation is not None:
+        observation = tuple(float(o) for o in observation)
+    return discretise_edge_cached(graph, edge_tuple, d_refine, observation, gps_sd).copy()
+
+
+@lru_cache(maxsize=2**8)
+def discretise_edge_cached(graph, edge_tuple, d_refine, observation=None, gps_sd=None):
+    """
+    Cacheable
+    Discretises edge to given edge refinement parameter.
+    Will also return observation likelihood if received.
+    :param graph: NetworkX MultiDiGraph
+        UTM projection
+        encodes road network
+        generating using OSMnx, see tools.graph.py
+    :param edge_tuple: tuple (hashable for lru_cache), length = 3
+        elements u, v, k
+            u: int, edge start node
+            v: int, edge end node
+            k: int, edge key
+    :param d_refine: float
+        metres
+        resolution of distance discretisation
+        increase of speed, decrease for accuracy
+    :param observation: tuple, shape = (2,)
+        UTM projection
+        coordinate of first observation
+    :param gps_sd: float
+        metres
+        standard deviation of GPS noise
+    :return: numpy.ndarray, shape = (_, 2 or 3)
+        columns
+            alpha: float in (0,1], position along edge
+            distance: float, distance from start of edge
+            likelihood: float, unnormalised Gaussian likelihood of observation (only if observeration and gps_sd given)
+    """
+    if observation is None and gps_sd is not None:
+        raise ValueError("Received gps_sd but not observation")
+
+    if observation is not None and gps_sd is None:
+        raise ValueError("Received observation but not gps_sd")
+
+    edge_geom = get_geometry(graph, edge_tuple)
+
+    edge_length = edge_geom.length
+
+    distances = np.arange(edge_length, d_refine/10, -d_refine)
+
+    n_distances = len(distances)
+
+    out_mat = np.zeros((n_distances, 2)) if observation is None else np.zeros((len(distances), 3))
+
+    out_mat[:, 0] = distances / edge_length
+    out_mat[:, 1] = distances
+
+    if observation is not None:
+        cart_coords = np.zeros((n_distances, 2))
+        for i in range(n_distances):
+            cart_coords[i] = edge_geom.interpolate(distances[i])
+
+        out_mat[:, 2] = np.exp(-0.5 / gps_sd**2 * np.sum((observation - cart_coords)**2, axis=1))
+
+    return out_mat
 
 
 def graph_edges_gdf(graph):
@@ -55,17 +205,20 @@ def get_edges_within_dist(graph_edges, coord, dist):
     return edges_within_dist
 
 
-def discretise_edge(geom, edge_refinement):
+def discretise_edge_alphas(geom, edge_refinement, return_dists=False):
     """
     Given edge return, series of [edge, alpha] points at determined discretisation increments along edge.
     alpha is proportion of edge traversed.
     :param geom: edge geometry
-    :param edge_refinement: float, discretisation increment of edges (metres)
-    :return: list of [edge, alpha] at each discretisation point
+    :param return_dists: bool
+    :return: list of alphas at each discretisation point
     """
-    ds = np.arange(0.01, geom.length, edge_refinement)
+    ds = np.arange(geom.length, edge_refinement/10, -edge_refinement)
     alphas = ds / geom.length
-    return alphas
+    if return_dists:
+        return alphas, ds
+    else:
+        return alphas
 
 
 def get_truncated_discrete_edges(graph, coord, edge_refinement, dist_retain):
@@ -89,7 +242,7 @@ def get_truncated_discrete_edges(graph, coord, edge_refinement, dist_retain):
     close_edges = get_edges_within_dist(graph_edges, coord, dist_retain)
 
     # Discretise edges
-    close_edges['alpha'] = close_edges['geometry'].apply(discretise_edge, edge_refinement=edge_refinement)
+    close_edges['alpha'] = close_edges['geometry'].apply(discretise_edge_alphas, edge_refinement=edge_refinement)
 
     # Remove distance from closest point on edge column
     close_edges = close_edges.drop(columns='distance_to_obs')
@@ -110,35 +263,6 @@ def get_truncated_discrete_edges(graph, coord, edge_refinement, dist_retain):
     discretised_edges = np.array(discretised_edges)
 
     return discretised_edges
-
-
-def get_geometry(graph, edge_array):
-    """
-    Extract geometry of an edge from global graph object. If geometry doesn't exist set to straight line.
-    :param graph: NetworkX MultiDiGraph
-        UTM projection
-        encodes road network
-        generating using OSMnx, see tools.graph.py
-    :param edge_array: list-like, length = 3
-        elements u, v, k
-            u: int, edge start node
-            v: int, edge end node
-            k: int, edge key
-    :return: NetowrkX geometry object
-    """
-
-    # Extract edge data, in particular the geometry
-    edge_data = graph.get_edge_data(edge_array[0], edge_array[1], edge_array[2])
-
-    # If no geometry attribute, manually add straight line
-    if 'geometry' in edge_data:
-        edge_geom = edge_data['geometry']
-    else:
-        point_u = Point((graph.nodes[edge_array[0]]['x'], graph.nodes[edge_array[0]]['y']))
-        point_v = Point((graph.nodes[edge_array[1]]['x'], graph.nodes[edge_array[1]]['y']))
-        edge_geom = LineString([point_u, point_v])
-
-    return edge_geom
 
 
 def interpolate_path(graph, path, d_refine=1, t_column=False):

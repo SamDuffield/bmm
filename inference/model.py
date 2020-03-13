@@ -50,7 +50,7 @@ def pdf_gamma_mv(vals, mean, var):
     return stats.gamma.pdf(vals, a=gamma_alpha, scale=1/gamma_beta)
 
 
-def distance_prior(distance, time_interval, speed_mean=7.21, speed_var=47.55):
+def distance_prior(distance, time_interval, speed_mean=7.44, speed_var=47.38, zero_prob=0.044):
     """
     Evaluates prior probability of distance travelled in time interval.
     :param distance: float or np.array
@@ -65,8 +65,20 @@ def distance_prior(distance, time_interval, speed_mean=7.21, speed_var=47.55):
     :param speed_var: float
         metres^2
         variance of gamma prior
+    :param zero_prob: float in [0,1]
+        probability of distance = 0 metres
     :return: float or np.array with values in [0,1], same length as distance
         prior pdf evaluations
     """
-    return pdf_gamma_mv(distance/time_interval, speed_mean, speed_var)
+    distance = np.atleast_1d(distance)
+
+    out_arr = np.ones_like(distance) * zero_prob
+
+    non_zero_inds = distance > 0
+
+    if np.sum(non_zero_inds) > 0:
+        out_arr[non_zero_inds] = pdf_gamma_mv(distance[non_zero_inds]/time_interval, speed_mean, speed_var)\
+            * (1 - zero_prob)
+
+    return np.squeeze(out_arr)
 
