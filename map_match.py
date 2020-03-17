@@ -6,6 +6,7 @@
 ########################################################################################################################
 
 import numpy as np
+import matplotlib.pyplot as plt
 
 from data.utils import source_data, read_data
 from tools.graph import load_graph
@@ -34,12 +35,13 @@ poly_single = np.asarray(poly_single_list)
 
 # Run offline map-matching
 n_samps = 100
-particles = offline_map_match(graph, poly_single[:13], n_samps, time_interval=15, lag=3, gps_sd=7, d_refine=1,
+particles = offline_map_match(graph, poly_single[:], n_samps, time_interval=15, lag=3, gps_sd=7, d_refine=1,
                               d_max=None)
-# particles = offline_map_match(graph, poly_single[:13], n_samps, time_interval=15, lag=3, gps_sd=7, d_refine=1,
-#                               proposal=proposal.dist_then_edge_proposal, var=5)
 
 # Plot
 plot_particles(graph, particles, poly_single)
+plt.show()
 
 print(particles.time)
+print(particles.time / len(poly_single))
+

@@ -6,7 +6,7 @@
 ########################################################################################################################
 
 import numpy as np
-from scipy import stats
+from scipy.special import gamma
 
 
 def default_d_max(d_max, time_interval, max_speed=35):
@@ -43,11 +43,13 @@ def pdf_gamma_mv(vals, mean, var):
     gamma_beta = mean / var
     gamma_alpha = mean * gamma_beta
 
+    gamma_func_alpha = gamma(gamma_alpha)
+
     if any(np.atleast_1d(vals) <= 0):
         print(vals)
         raise ValueError("Gamma pdf takes only positive values")
 
-    return stats.gamma.pdf(vals, a=gamma_alpha, scale=1/gamma_beta)
+    return gamma_beta ** gamma_alpha / gamma_func_alpha * vals ** (gamma_alpha - 1) * np.exp(-gamma_beta * vals)
 
 
 def distance_prior(distance, time_interval, speed_mean=7.44, speed_var=47.38, zero_prob=0.044):

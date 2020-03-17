@@ -28,7 +28,7 @@ def multinomial(particles, weights):
     n = len(weights)
 
     # Check weights are normalised
-    weights_sum = sum(weights)
+    weights_sum = np.sum(weights)
     if weights_sum != 1:
         weights /= weights_sum
 
@@ -67,7 +67,7 @@ def fixed_lag_stitching(graph, particles, weights, lag):
         unweighted collection of trajectories post resampling + stitching
     """
     # Check weights are normalised
-    weights_sum = sum(weights)
+    weights_sum = np.sum(weights)
     if weights_sum != 1:
         weights /= weights_sum
 
@@ -81,7 +81,7 @@ def fixed_lag_stitching(graph, particles, weights, lag):
 
     # If not reached lag yet do standard resampling
     if m <= lag:
-        out_particles.ess = np.append(particles.ess, np.atleast_2d(np.ones(n) / sum(weights**2)), axis=0)
+        out_particles.ess = np.append(particles.ess, np.atleast_2d(np.ones(n) / np.sum(weights**2)), axis=0)
         return multinomial(out_particles, weights)
 
     # Largest time not to be resampled
@@ -101,16 +101,21 @@ def fixed_lag_stitching(graph, particles, weights, lag):
     new_particles = []
     max_fixed_time_indices = [0] * n
     min_resample_time_indices = [0] * n
+
+    originial_stitching_distances = np.zeros(n)
+
     for j in range(n):
         max_fixed_time_indices[j] = np.where(out_particles[j][:, 0] == max_fixed_time)[0][0]
         fixed_particles += [out_particles[j][:(max_fixed_time_indices[j] + 1)]]
         new_particles += [out_particles[j][max_fixed_time_indices[j]:]]
         min_resample_time_indices[j] = np.where(new_particles[j][:, 0] == min_resample_time)[0][0]
+        originial_stitching_distances[j] = new_particles[j][min_resample_time_indices[j], -1]
+
+    distance_prior_evals = distance_prior(originial_stitching_distances, stitch_time_interval)
 
     # Iterate through particles
     for j in range(n):
         # Extract fixed particle
-        # max_fixed_time_index = np.where(out_particles[j][:, 0] == max_fixed_time)[0][0]
         fixed_particle = fixed_particles[j]
         last_edge_fixed = fixed_particle[-1]
         last_edge_fixed_geom = get_geometry(graph, last_edge_fixed[1:4])
@@ -119,13 +124,13 @@ def fixed_lag_stitching(graph, particles, weights, lag):
         # Possible particles to be resampled placeholder
         newer_particles_adjusted = [None] * n
 
-        # Initially set all resample weights to 0
-        res_weights = np.zeros(n)
+        # Stitching distances
+        new_stitching_distances = -np.ones(n)
 
         for k in range(n):
             if k == j:
                 newer_particles_adjusted[k] = new_particles[k][1:]
-                res_weights[k] = weights[k]
+                new_stitching_distances[k] = originial_stitching_distances[k]
                 continue
 
             new_particle = new_particles[k].copy()
@@ -145,23 +150,25 @@ def fixed_lag_stitching(graph, particles, weights, lag):
 
                 new_particle[:min_resample_time_indices[j], 6] += change_dist
 
+                new_stitching_distances[k] = new_particle[new_particle[:, 0] <= min_resample_time][-1, 6]
+
                 # Store adjusted particle
                 newer_particles_adjusted[k] = new_particle[1:]
 
-                # Calculate adjusted weight
-                res_weights[k] = weights[k] \
-                    * distance_prior(new_particle[new_particle[:, 0] <= min_resample_time][-1, 6],
-                                     stitch_time_interval)\
-                    / distance_prior(particles[k][particles[k][:, 0] <= min_resample_time][-1, 6],
-                                     stitch_time_interval)
+        # Calculate adjusted weight
+        res_weights = np.zeros(n)
+        possible_inds = new_stitching_distances >= 0
+        res_weights[possible_inds] = weights[possible_inds]\
+            * distance_prior(new_stitching_distances[possible_inds], stitch_time_interval)\
+            / distance_prior_evals[possible_inds]
 
         # Normalise adjusted resample weights
-        res_weights /= sum(res_weights)
+        res_weights /= np.sum(res_weights)
 
         # If only particle on fixed edge resample full trajectory
         if max(res_weights) == 1 or max(res_weights) == 0:
             out_particles[j] = particles[np.random.choice(n, 1, p=weights)[0]]
-            ess_track[j] = 1 / sum(weights ** 2)
+            ess_track[j] = 1 / np.sum(weights ** 2)
 
         # Otherwise fixed-lag resample and stitch
         else:

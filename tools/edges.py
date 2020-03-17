@@ -49,7 +49,7 @@ def get_geometry(graph, edge):
     return out_geom
 
 
-# @lru_cache(max_size=2**1)
+@lru_cache(maxsize=2**8)
 def get_geometry_cached(graph, edge_tuple):
     """
     Cacheable
