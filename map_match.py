@@ -13,6 +13,7 @@ from tools.graph import load_graph
 from tools.edges import plot_particles
 from inference.smc import offline_map_match
 from inference import proposal
+from inference import resampling
 
 
 # Source data paths
@@ -35,12 +36,14 @@ poly_single = np.asarray(poly_single_list)
 
 # Run offline map-matching
 n_samps = 100
-particles = offline_map_match(graph, poly_single[:], n_samps, time_interval=15, lag=3, gps_sd=7, d_refine=1,
-                              d_max=None)
+particles = offline_map_match(graph, poly_single[:13], n_samps, time_interval=15,
+                              resampling=resampling.fixed_lag_stitching_rejection,
+                              lag=3, gps_sd=7,
+                              d_refine=1, d_max=None)
 
-# Plot
-plot_particles(graph, particles, poly_single)
-plt.show()
+# # Plot
+# plot_particles(graph, particles, poly_single)
+# plt.show()
 
 print(particles.time)
 print(particles.time / len(poly_single))

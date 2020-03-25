@@ -9,6 +9,9 @@ import numpy as np
 from scipy.special import gamma
 
 
+intersection_penalisation = 0.2
+
+
 def default_d_max(d_max, time_interval, max_speed=35):
     """
     Initiates default value of the maximum distance possibly travelled in the time interval.
@@ -83,4 +86,27 @@ def distance_prior(distance, time_interval, speed_mean=7.44, speed_var=47.38, ze
             * (1 - zero_prob)
 
     return np.squeeze(out_arr)
+
+
+def get_distance_prior_bound(speed_mean=7.44, speed_var=47.38, zero_prob=0.044):
+    """
+    Extracts upper bound for distance prior
+    :param speed_mean: float
+        metres
+        mean of gamma prior
+    :param speed_var: float
+        metres^2
+        variance of gamma prior
+    :param zero_prob: float in [0,1]
+        probability of distance = 0 metres
+    :return: float
+        upper bound
+    """
+    ls = np.linspace(0, 40, 1000)
+    one_sec_prior = distance_prior(ls, 1, speed_mean, speed_var, zero_prob)
+    return np.max(one_sec_prior)
+
+
+
+
 

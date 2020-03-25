@@ -9,7 +9,7 @@
 import numpy as np
 
 from tools.edges import get_geometry, edge_interpolate, discretise_edge
-from inference.model import distance_prior, default_d_max, pdf_gamma_mv
+from inference.model import distance_prior, default_d_max, pdf_gamma_mv, intersection_penalisation
 
 
 def get_possible_routes(graph, in_route, dist, all=False):
@@ -127,7 +127,7 @@ def discretise_route(graph, route, d_refine, observation, gps_sd):
         columns alpha, d, p_inter_likelihood
             alpha: in [0,1], position along edge
             d: metres, distance travelled since previous observation time
-            p_inter_likelihood: likelihood time prior edge probability
+            p_inter_likelihood: likelihood times prior edge probability
     """
     # Minimum distance travelled to be in route
     route_d_min = 0 if route.shape[0] == 1 else route[-2, -1]
@@ -137,7 +137,8 @@ def discretise_route(graph, route, d_refine, observation, gps_sd):
 
     # Product of 1 / number of intersection choices
     intersection_col = route[:-1, 5]
-    intersection_choices_prob = np.prod(1 / intersection_col[intersection_col > 1])
+    intersection_choices_prob = np.prod(1 / intersection_col[intersection_col > 1])\
+        * intersection_penalisation ** len(intersection_col)
 
     # Extract last edge
     last_edge = route[-1, 1:4]
@@ -162,7 +163,8 @@ def discretise_route(graph, route, d_refine, observation, gps_sd):
     return dis_last_edge_mat
 
 
-def optimal_proposal(graph, particle, new_observation, time_interval, gps_sd, d_refine=1, d_max=None):
+def optimal_proposal(graph, particle, new_observation, time_interval, gps_sd,
+                     d_refine=1, d_max=None):
     """
     Samples a single particle from the (distance discretised) optimal proposal.
     :param graph: NetworkX MultiDiGraph
@@ -224,6 +226,9 @@ def optimal_proposal(graph, particle, new_observation, time_interval, gps_sd, d_
 
     # Normalising constant = p(y_m | x_m-1^j)
     sample_probs_norm_const = np.sum(sample_probs)
+
+    if sample_probs_norm_const < 1e-200:
+        return None, 0.
 
     # Sample an edge and distance
     sampled_dis_route_index = np.random.choice(len(discretised_routes), 1, p=sample_probs / sample_probs_norm_const)[0]
@@ -356,7 +361,8 @@ def dist_then_edge_proposal(graph, particle, new_observation, time_interval, gps
         routes_end_cart_pos[i] = edge_interpolate(end_geom, end_position[4])
 
         intersection_col = route[:-1, 5]
-        intersection_probs[i] = np.prod(1 / intersection_col[intersection_col > 1])
+        intersection_probs[i] = np.prod(1 / intersection_col[intersection_col > 1])\
+            * intersection_penalisation ** len(intersection_col)
 
     # Distances of end points to new observation
     obs_distances_sqr = np.sum((routes_end_cart_pos - new_observation) ** 2, axis=1)

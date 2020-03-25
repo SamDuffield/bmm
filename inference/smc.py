@@ -5,7 +5,7 @@
 # Web: https://github.com/SamDuffield/bayesian-traffic
 ########################################################################################################################
 
-from time import time
+from time import time as tm
 import inspect
 
 import numpy as np
@@ -55,7 +55,7 @@ def initiate_particles(graph,
     if truncation_distance is None:
         truncation_distance = gps_sd * 3
 
-    start = time()
+    start = tm()
 
     # Discretize edges within truncation
     dis_points = tools.edges.get_truncated_discrete_edges(graph, first_observation, d_refine, truncation_distance)
@@ -74,7 +74,7 @@ def initiate_particles(graph,
     out_particles.ess = np.ones((1, out_particles.n)) * out_particles.n if ess_all else np.array([out_particles.n])
     out_particles.ess_pf = np.array([out_particles.n])
 
-    end = time()
+    end = tm()
     out_particles.time += end - start
 
     return out_particles
@@ -85,6 +85,7 @@ def update_particles(graph,
                      new_observation,
                      time_interval,
                      proposal,
+                     resampling=fixed_lag_stitching,
                      lag=3,
                      gps_sd=7,
                      **kwargs):
@@ -106,6 +107,10 @@ def update_particles(graph,
     :param proposal: function
         propagates forward each particle and then reweights
         see inference/proposal
+    :param resampling: function
+        resamples particles
+        converts weighted particles to unweighted
+        invokes fixed-lag approximation
     :param lag: int
         fixed lag for resampling/stitching
     :param gps_sd: float
@@ -116,7 +121,7 @@ def update_particles(graph,
         i.e. d_refine or d_max for optimal proposal
     :return: MMParticles object (from inference.smc)
     """
-    start = time()
+    start = tm()
 
     # Initiate particle output
     out_particles = particles.copy()
@@ -129,6 +134,8 @@ def update_particles(graph,
         out_particles[j], weights[j] = proposal(graph, out_particles[j], new_observation,
                                                 time_interval, gps_sd, **kwargs)
 
+    # print(sum([p is None for p in out_particles]))
+
     # Normalise weights
     weights /= sum(weights)
 
@@ -136,9 +143,9 @@ def update_particles(graph,
     out_particles.ess_pf = np.append(out_particles.ess_pf, 1 / np.sum(weights ** 2))
 
     # Resample
-    out_particles = fixed_lag_stitching(graph, out_particles, weights, lag)
+    out_particles = resampling(graph, out_particles, weights, lag)
 
-    end = time()
+    end = tm()
     out_particles.time += end - start
 
     return out_particles
@@ -149,13 +156,15 @@ def offline_map_match(graph,
                       n_samps,
                       time_interval,
                       proposal=optimal_proposal,
+                      resampling=fixed_lag_stitching,
                       lag=3,
                       gps_sd=7,
                       d_refine=1,
                       initial_truncation=None,
                       **kwargs):
     """
-    Runs offline map-matching. I.e. receives a full polyline and refers equal probability trajectory particles.
+    Runs offline map-matching. I.e. receives a full polyline and returns an equal probability collection
+    of trajectories (particles).
     :param graph: NetworkX MultiDiGraph
         UTM projection
         encodes road network
@@ -172,6 +181,10 @@ def offline_map_match(graph,
         function that takes previous trajectory and new observation
         and output new trajectory and (unnormalised weight)
         defaults to the optimal (discrete distance) proposal
+    :param resampling: function
+        resamples particles
+        converts weighted particles to unweighted
+        invokes fixed-lag approximation
     :param lag: int
         fixed lag, the number of observations beyond which to stop resampling
     :param gps_sd: float
@@ -195,17 +208,18 @@ def offline_map_match(graph,
                                    gps_sd=gps_sd, d_refine=d_refine, truncation_distance=initial_truncation,
                                    ess_all=True)
 
-    if 'd_refine' in inspect.getargspec(proposal)[0]:
+    print(str(particles.latest_observation_time) + " ESS av: " + str(np.mean(particles.ess_pf[-1])))
+
+    if 'd_refine' in inspect.getfullargspec(proposal)[0]:
         kwargs['d_refine'] = d_refine
 
     # Update particles
     for observation in polyline[1:]:
         particles = update_particles(graph, particles, observation, time_interval=time_interval, proposal=proposal,
-                                     lag=lag, gps_sd=gps_sd,
+                                     resampling=resampling, lag=lag, gps_sd=gps_sd,
                                      **kwargs)
 
-        print(str(particles.latest_observation_time) + " ESS av: " + str(np.mean(particles.ess[-1])))
+        print(str(particles.latest_observation_time) + " ESS av: " + str(np.mean(particles.ess_pf[-1])))
 
     return particles
-
 

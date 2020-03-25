@@ -30,7 +30,7 @@ class MMParticles:
             n_inter: int, number of options if intersection
             d: metres, distance travelled since previous observation time
     """
-    def __init__(self, initial_positions, name="Trajectories"):
+    def __init__(self, initial_positions):
         """
         Initiate storage of trajectories with some start positions as input.
         :param initial_positions: list-like, length = n_samps
@@ -39,10 +39,7 @@ class MMParticles:
             v: int, edge end node
             k: int, edge key
             alpha: in [0,1], position along edge
-        :param name: str
-            optional name for trajectories
         """
-        self.name = name
         self.n = len(initial_positions)
         self.particles = [np.zeros((1, 7)) for _ in range(self.n)]
         for i in range(self.n):
@@ -58,13 +55,18 @@ class MMParticles:
         return self.n
 
     @property
+    def _first_non_none_particle(self):
+        return self.particles[0] if self.particles[0] is not None\
+            else next(particle for particle in self.particles if particle is not None)
+
+    @property
     def latest_observation_time(self):
         """
         Extracts time of most recent observation.
         :return: float
             time of most recent observation
         """
-        return self.particles[0][-1, 0]
+        return self._first_non_none_particle[-1, 0]
 
     @property
     def observation_times(self):
@@ -73,7 +75,7 @@ class MMParticles:
         :return: numpy.ndarray, shape = (m,)
             observation times
         """
-        all_times = self.particles[0][:, 0]
+        all_times = self._first_non_none_particle[:, 0]
         observation_times = all_times[(all_times != 0) | (np.arange(len(all_times)) == 0)]
         return observation_times
 

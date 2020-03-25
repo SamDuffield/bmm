@@ -8,7 +8,7 @@
 
 import numpy as np
 
-from inference.model import distance_prior
+from inference.model import distance_prior, get_distance_prior_bound
 from inference.particles import MMParticles
 from tools.edges import get_geometry
 
@@ -56,7 +56,7 @@ def multinomial(particles, weights):
 def fixed_lag_stitching(graph, particles, weights, lag):
     """
     Resamples only elements of particles after a certain time - defined by the lag parameter.
-    :param particles: MMParticles object (from inference.smc)
+    :param particles: MMParticles object (from inference.particles)
         trajectories generated
     :param weights: list-like, length = n
         weights at latest observation time
@@ -97,17 +97,19 @@ def fixed_lag_stitching(graph, particles, weights, lag):
     ess_track = np.zeros(n)
 
     # Extract fixed and new particles
-    fixed_particles = []
-    new_particles = []
+    fixed_particles = [None] * n
+    new_particles = [None] * n
     max_fixed_time_indices = [0] * n
     min_resample_time_indices = [0] * n
-
     originial_stitching_distances = np.zeros(n)
 
     for j in range(n):
+        if weights[j] == 0:
+            continue
+
         max_fixed_time_indices[j] = np.where(out_particles[j][:, 0] == max_fixed_time)[0][0]
-        fixed_particles += [out_particles[j][:(max_fixed_time_indices[j] + 1)]]
-        new_particles += [out_particles[j][max_fixed_time_indices[j]:]]
+        fixed_particles[j] = out_particles[j][:(max_fixed_time_indices[j] + 1)]
+        new_particles[j] = out_particles[j][max_fixed_time_indices[j]:]
         min_resample_time_indices[j] = np.where(new_particles[j][:, 0] == min_resample_time)[0][0]
         originial_stitching_distances[j] = new_particles[j][min_resample_time_indices[j], -1]
 
@@ -115,6 +117,11 @@ def fixed_lag_stitching(graph, particles, weights, lag):
 
     # Iterate through particles
     for j in range(n):
+        if weights[j] == 0:
+            out_particles[j] = out_particles[np.random.choice(n, 1, p=weights)[0]]
+            ess_track[j] = 0
+            continue
+
         # Extract fixed particle
         fixed_particle = fixed_particles[j]
         last_edge_fixed = fixed_particle[-1]
@@ -131,6 +138,9 @@ def fixed_lag_stitching(graph, particles, weights, lag):
             if k == j:
                 newer_particles_adjusted[k] = new_particles[k][1:]
                 new_stitching_distances[k] = originial_stitching_distances[k]
+                continue
+
+            if weights[k] == 0:
                 continue
 
             new_particle = new_particles[k].copy()
@@ -186,4 +196,118 @@ def fixed_lag_stitching(graph, particles, weights, lag):
 
     return out_particles
 
+
+def fixed_lag_stitching_rejection(graph, particles, weights, lag, max_rejections=100):
+    """
+    Resamples only elements of particles after a certain time - defined by the lag parameter.
+    :param particles: MMParticles object (from inference.smc)
+        trajectories generated
+    :param weights: list-like, length = n
+        weights at latest observation time
+    :param lag: int
+        lag parameter
+        trajectories before this will be fixed
+    :param max_rejections: int
+        maximum number of rejections
+    :return: MMParticles object
+        unweighted collection of trajectories post resampling + stitching
+    """
+    # Check weights are normalised
+    weights_sum = np.sum(weights)
+    if weights_sum != 1:
+        weights /= weights_sum
+
+    # Extract basic quantities
+    observation_times = particles.observation_times
+    m = len(observation_times)
+    n = particles.n
+
+    # Initiate output
+    out_particles = particles.copy()
+
+    # If not reached lag yet do standard resampling
+    if m <= lag:
+        return multinomial(out_particles, weights)
+
+    # Largest time not to be resampled
+    max_fixed_time = observation_times[m - lag - 1]
+
+    # Smallest time to be resampled
+    min_resample_time = observation_times[m - lag]
+
+    # Time between stitching observations
+    stitch_time_interval = min_resample_time - max_fixed_time
+
+    # Initiate ESS
+    ess_track = np.zeros(n)
+
+    # Extract fixed and new particles
+    fixed_particles = [None] * n
+    new_particles = [None] * n
+    max_fixed_time_indices = [0] * n
+    min_resample_time_indices = [0] * n
+    originial_stitching_distances = np.zeros(n)
+
+    # Extract distance prior bound
+    distance_prior_bound = get_distance_prior_bound()
+
+    for j in range(n):
+        if weights[j] == 0:
+            continue
+
+        max_fixed_time_indices[j] = np.where(out_particles[j][:, 0] == max_fixed_time)[0][0]
+        fixed_particles[j] = out_particles[j][:(max_fixed_time_indices[j] + 1)]
+        new_particles[j] = out_particles[j][max_fixed_time_indices[j]:]
+        min_resample_time_indices[j] = np.where(new_particles[j][:, 0] == min_resample_time)[0][0]
+        originial_stitching_distances[j] = new_particles[j][min_resample_time_indices[j], -1]
+
+    distance_prior_evals = distance_prior(originial_stitching_distances, stitch_time_interval)
+
+    adjusted_weights = weights / distance_prior_evals
+    adjusted_weights /= np.sum(adjusted_weights)
+
+    # Iterate through particles
+    for j in range(n):
+        # Check if particle has probability 0 then do full resampling
+        # i.e. fixed lag approx has failed
+        if weights[j] == 0:
+            out_particles[j] = out_particles[np.random.choice(n, 1, p=weights)[0]]
+            continue
+
+        # Extract fixed particle
+        fixed_particle = fixed_particles[j]
+        last_edge_fixed = fixed_particle[-1]
+        last_edge_fixed_geom = get_geometry(graph, last_edge_fixed[1:4])
+        last_edge_fixed_length = last_edge_fixed_geom.length
+
+        for k in range(max_rejections):
+            new_index = np.random.choice(n, 1, p=adjusted_weights)[0]
+            new_particle = new_particles[new_index].copy()
+
+            # Reject if new_particle starts from differen edge
+            if not np.array_equal(last_edge_fixed[1:4], new_particle[0, 1:4]):
+                continue
+            # Reject if new_particle doesn't overtake fixed_particles
+            elif np.array_equal(last_edge_fixed[1:4], new_particle[1, 1:4]) and \
+                        new_particle[1, 4] < last_edge_fixed[4]:
+                continue
+
+            # Calculate stitching distance
+            first_distance_j_to_k = (new_particle[1, 4] - last_edge_fixed[4]) * last_edge_fixed_length
+            first_distance_k = new_particle[1, 6]
+
+            change_dist = first_distance_j_to_k - first_distance_k
+
+            new_particle[:min_resample_time_indices[j], 6] += change_dist
+
+            new_stitching_distance = new_particle[new_particle[:, 0] <= min_resample_time][-1, 6]
+
+            # Evaluate distance prior
+            new_stitching_distance_prior = distance_prior(new_stitching_distance, stitch_time_interval)
+
+            if np.random.uniform() < new_stitching_distance_prior / distance_prior_bound:
+                out_particles[j] = np.append(fixed_particle, new_particle[1:], axis=0)
+                break
+
+    return out_particles
 
