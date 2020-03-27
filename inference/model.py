@@ -102,11 +102,14 @@ def get_distance_prior_bound(speed_mean=7.44, speed_var=47.38, zero_prob=0.044):
     :return: float
         upper bound
     """
-    ls = np.linspace(0, 40, 1000)
-    one_sec_prior = distance_prior(ls, 1, speed_mean, speed_var, zero_prob)
-    return np.max(one_sec_prior)
 
+    gamma_beta = speed_mean / speed_var
+    gamma_alpha = speed_mean * gamma_beta
 
+    if gamma_alpha < 1:
+        raise ValueError("Distance prior not bounded")
 
+    gamma_mode = (gamma_alpha - 1) / gamma_beta
 
+    return max(pdf_gamma_mv(gamma_mode, speed_mean, speed_var) * (1-zero_prob), zero_prob)
 

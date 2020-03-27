@@ -13,7 +13,7 @@ import numpy as np
 import tools.edges
 from inference.particles import MMParticles
 from inference.proposal import optimal_proposal
-from inference.resampling import fixed_lag_stitching
+from inference.resampling import fixed_lag_stitching_rejection
 
 
 def initiate_particles(graph,
@@ -71,7 +71,8 @@ def initiate_particles(graph,
     out_particles = MMParticles(dis_points[sampled_indices, :4])
 
     # Initiate ESS
-    out_particles.ess = np.ones((1, out_particles.n)) * out_particles.n if ess_all else np.array([out_particles.n])
+    if ess_all:
+        out_particles.ess_stitch = np.ones((1, out_particles.n)) * out_particles.n
     out_particles.ess_pf = np.array([out_particles.n])
 
     end = tm()
@@ -85,9 +86,9 @@ def update_particles(graph,
                      new_observation,
                      time_interval,
                      proposal,
-                     resampling=fixed_lag_stitching,
                      lag=3,
                      gps_sd=7,
+                     max_rejections=100,
                      **kwargs):
     """
     Update a MMParticles object in light of a newly received observation.
@@ -116,6 +117,9 @@ def update_particles(graph,
     :param gps_sd: float
         metres
         standard deviation of GPS noise
+    :param max_rejections: int
+        number of rejections before doing full fixed-lag stitching in resampling
+        0 will do full fixed-lag stitching and track ess_stitch
     :param kwargs:
         any additional arguments to be passed to proposal
         i.e. d_refine or d_max for optimal proposal
@@ -143,7 +147,7 @@ def update_particles(graph,
     out_particles.ess_pf = np.append(out_particles.ess_pf, 1 / np.sum(weights ** 2))
 
     # Resample
-    out_particles = resampling(graph, out_particles, weights, lag)
+    out_particles = fixed_lag_stitching_rejection(graph, out_particles, weights, lag, max_rejections)
 
     end = tm()
     out_particles.time += end - start
@@ -156,11 +160,11 @@ def offline_map_match(graph,
                       n_samps,
                       time_interval,
                       proposal=optimal_proposal,
-                      resampling=fixed_lag_stitching,
                       lag=3,
                       gps_sd=7,
                       d_refine=1,
                       initial_truncation=None,
+                      max_rejections=100,
                       **kwargs):
     """
     Runs offline map-matching. I.e. receives a full polyline and returns an equal probability collection
@@ -174,7 +178,7 @@ def offline_map_match(graph,
         series of 2D coordinates
     :param n_samps: int
         number of particles
-    :param time_interval: float ########################################################################## change to variable? i.e. allow array
+    :param time_interval: float or list-like (length M-1)
         seconds
         time between observations
     :param proposal: function
@@ -198,28 +202,41 @@ def offline_map_match(graph,
         metres
         distance to truncate for sampling initial postition
         defaults to 3 * gps_sd
+    :param max_rejections: int
+        number of rejections before doing full fixed-lag stitching in resampling
+        0 will do full fixed-lag stitching and track ess_stitch
     :param kwargs: optional parameters to pass to proposal
         i.e. d_max, d_refine or var
     :return: MMParticles object (from inference.smc)
     """
+    num_obs = len(polyline)
+
+    ess_all = max_rejections == 0
 
     # Initiate particles
     particles = initiate_particles(graph, polyline[0], n_samps,
                                    gps_sd=gps_sd, d_refine=d_refine, truncation_distance=initial_truncation,
-                                   ess_all=True)
+                                   ess_all=ess_all)
 
-    print(str(particles.latest_observation_time) + " ESS av: " + str(np.mean(particles.ess_pf[-1])))
+    print(str(particles.latest_observation_time) + " PF ESS: " + str(np.mean(particles.ess_pf[-1])))
 
     if 'd_refine' in inspect.getfullargspec(proposal)[0]:
         kwargs['d_refine'] = d_refine
 
+    if isinstance(time_interval, (int,float)):
+        time_interval_arr = np.ones(num_obs - 1) * time_interval
+    elif len(time_interval) == (num_obs - 1):
+        time_interval_arr = time_interval
+    else:
+        raise ValueError("time_interval must be either float or list-like of length one less than polyline")
+
     # Update particles
-    for observation in polyline[1:]:
-        particles = update_particles(graph, particles, observation, time_interval=time_interval, proposal=proposal,
-                                     resampling=resampling, lag=lag, gps_sd=gps_sd,
+    for i in range(num_obs - 1):
+        particles = update_particles(graph, particles, polyline[1 + i], time_interval=time_interval_arr[i],
+                                     proposal=proposal, lag=lag, gps_sd=gps_sd, max_rejections=max_rejections,
                                      **kwargs)
 
-        print(str(particles.latest_observation_time) + " ESS av: " + str(np.mean(particles.ess_pf[-1])))
+        print(str(particles.latest_observation_time) + " PF ESS: " + str(np.mean(particles.ess_pf[-1])))
 
     return particles
 
