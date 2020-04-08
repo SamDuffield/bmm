@@ -6,7 +6,7 @@
 ########################################################################################################################
 
 import numpy as np
-from scipy.special import gamma
+from scipy.special import gamma, gammainc
 
 
 intersection_penalisation = 0.2
@@ -53,6 +53,28 @@ def pdf_gamma_mv(vals, mean, var):
         raise ValueError("Gamma pdf takes only positive values")
 
     return gamma_beta ** gamma_alpha / gamma_func_alpha * vals ** (gamma_alpha - 1) * np.exp(-gamma_beta * vals)
+
+
+def cdf_gamma_mv(vals, mean, var):
+    """
+    Evaluates Gamma cdf (uses moment matching based on received mean and variance).
+    :param vals: float or np.array
+        values to be evaluated
+    :param mean: float
+        inputted distribution mean
+    :param var: float
+        inputted distribution variance
+    :return: np.array, same length as vals
+        Gamma pdf evaulations
+    """
+    gamma_beta = mean / var
+    gamma_alpha = mean * gamma_beta
+
+    if any(np.atleast_1d(vals) <= 0):
+        print(vals)
+        raise ValueError("Gamma pdf takes only positive values")
+
+    return gammainc(gamma_alpha, gamma_beta*vals)
 
 
 def distance_prior(distance, time_interval, speed_mean=7.44, speed_var=47.38, zero_prob=0.044):

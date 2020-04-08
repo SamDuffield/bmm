@@ -12,6 +12,7 @@ from data.utils import source_data, read_data
 from tools.graph import load_graph
 from tools.edges import plot_particles
 from inference.smc import offline_map_match
+from inference import proposal
 
 
 # Source data paths
@@ -26,26 +27,40 @@ data_path = process_data_path + "/data/portotaxi_06052014_06052014_utm_1730_1745
 raw_data = read_data(data_path, 100).get_chunk()
 
 # Select single polyline
-# single_index = np.random.choice(100, 1)[0]
-single_index = 0
+single_index = np.random.choice(100, 1)[0]
+# single_index = 0
+# single_index = 44         # map incorrect?
+# single_index = 76           # dead end with too high probability issue
+# single_index = 86         # times out
+single_index = 83
 poly_single_list = raw_data['POLYLINE_UTM'][single_index]
 poly_single = np.asarray(poly_single_list)
 
+print(single_index)
 
 # Run offline map-matching
 n_samps = 100
-particles = offline_map_match(graph, poly_single[:13], n_samps, time_interval=15,
+#
+# particles = offline_map_match(graph, poly_single[:], n_samps, time_interval=15,
+#                               lag=3, gps_sd=7,
+#                               d_refine=1,
+#                               max_rejections=20,
+#                               d_max=None)
+
+particles = offline_map_match(graph, poly_single[:], n_samps, time_interval=15,
                               lag=3, gps_sd=7,
                               d_refine=1,
-                              max_rejections=0,
-                              d_max=None)
-
-# # Plot
-plot_particles(graph, particles, poly_single)
-plt.show()
+                              max_rejections=20,
+                              proposal=proposal.auxiliary_distance_proposal,
+                              dist_expand=50,
+                              var=5)
 
 print(particles.time)
 print(particles.time / len(poly_single))
 
+
+# Plot
+plot_particles(graph, particles, poly_single)
+plt.show()
 
 

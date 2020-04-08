@@ -146,6 +146,8 @@ def update_particles(graph,
     # Store ESS
     out_particles.ess_pf = np.append(out_particles.ess_pf, 1 / np.sum(weights ** 2))
 
+    ############################## ADD CATCH FOR ALL NONE (i.e. reinitiate particles at new_observation = start again)
+
     # Resample
     out_particles = fixed_lag_stitching_rejection(graph, out_particles, weights, lag, max_rejections)
 
@@ -223,7 +225,7 @@ def offline_map_match(graph,
     if 'd_refine' in inspect.getfullargspec(proposal)[0]:
         kwargs['d_refine'] = d_refine
 
-    if isinstance(time_interval, (int,float)):
+    if isinstance(time_interval, (int, float)):
         time_interval_arr = np.ones(num_obs - 1) * time_interval
     elif len(time_interval) == (num_obs - 1):
         time_interval_arr = time_interval

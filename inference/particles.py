@@ -45,7 +45,7 @@ class MMParticles:
         for i in range(self.n):
             self.particles[i][0, 1:5] = initial_positions[i]
         self.time = 0
-        self.ess_pf = None
+        self.ess_pf = np.zeros(1)
 
     def copy(self):
         return copy.deepcopy(self)
