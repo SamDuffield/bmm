@@ -146,7 +146,7 @@ def update_particles(graph,
     # Store ESS
     out_particles.ess_pf = np.append(out_particles.ess_pf, 1 / np.sum(weights ** 2))
 
-    ############################## ADD CATCH FOR ALL NONE (i.e. reinitiate particles at new_observation = start again)
+    ############################## ADD CATCH FOR ALL NONE (i.e. reinitiate particles at new_observation = start new route)
 
     # Resample
     out_particles = fixed_lag_stitching_rejection(graph, out_particles, weights, lag, max_rejections)
@@ -157,17 +157,17 @@ def update_particles(graph,
     return out_particles
 
 
-def offline_map_match(graph,
-                      polyline,
-                      n_samps,
-                      time_interval,
-                      proposal=optimal_proposal,
-                      lag=3,
-                      gps_sd=7,
-                      d_refine=1,
-                      initial_truncation=None,
-                      max_rejections=100,
-                      **kwargs):
+def offline_map_match_fl(graph,
+                         polyline,
+                         n_samps,
+                         time_interval,
+                         proposal=optimal_proposal,
+                         lag=3,
+                         gps_sd=7,
+                         d_refine=1,
+                         initial_truncation=None,
+                         max_rejections=100,
+                         **kwargs):
     """
     Runs offline map-matching. I.e. receives a full polyline and returns an equal probability collection
     of trajectories (particles).
@@ -202,7 +202,7 @@ def offline_map_match(graph,
         needed for initiate_particle and potentially proposal
     :param initial_truncation: float
         metres
-        distance to truncate for sampling initial postition
+        distance to truncate for sampling initial position
         defaults to 3 * gps_sd
     :param max_rejections: int
         number of rejections before doing full fixed-lag stitching in resampling

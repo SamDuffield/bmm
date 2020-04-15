@@ -65,7 +65,8 @@ def full_fixed_lag_stitch(j, fixed_particle, last_edge_fixed, last_edge_fixed_le
     newer_particles_adjusted = [None] * n
 
     # Stitching distances
-    new_stitching_distances = -np.ones(n)
+    new_stitching_distances = np.empty(n)
+    new_stitching_distances[:] = np.nan
 
     for k in range(n):
         if k == j:
@@ -100,13 +101,13 @@ def full_fixed_lag_stitch(j, fixed_particle, last_edge_fixed, last_edge_fixed_le
 
     # Calculate adjusted weight
     res_weights = np.zeros(n)
-    possible_inds = new_stitching_distances >= 0
+    possible_inds = ~np.isnan(new_stitching_distances)
     res_weights[possible_inds] = pf_weights[possible_inds] \
                                  * distance_prior(new_stitching_distances[possible_inds], stitch_time_interval) \
                                  / distance_prior_evals[possible_inds]
 
     # Normalise adjusted resample weights
-    res_weights /= np.sum(res_weights)
+    res_weights /= res_weights.sum()
 
     # If only particle on fixed edge resample full trajectory
     if max(res_weights) == 1 or max(res_weights) == 0:
@@ -243,7 +244,7 @@ def fixed_lag_stitching_rejection(graph, particles, weights, lag, max_rejections
     distance_prior_evals = distance_prior(originial_stitching_distances, stitch_time_interval)
 
     # Initiate some required quantities depending on whether to do rejection sampling or not
-    if max_rejections == 0:
+    if full_fixed_lag_resample:
         ess_stitch_track = np.zeros(n)
 
         distance_prior_bound = None
@@ -264,8 +265,6 @@ def fixed_lag_stitching_rejection(graph, particles, weights, lag, max_rejections
             if full_fixed_lag_resample:
                 ess_stitch_track[j] = ess_pf
             continue
-
-        n = len(new_particles)
 
         fixed_particle = fixed_particles[j]
         last_edge_fixed = fixed_particle[-1]

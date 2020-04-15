@@ -225,7 +225,22 @@ def discretise_route(graph, route, d_refine, observation, gps_sd, trim_routes=Tr
                                  intersection_choices_prob, trim_routes)
 
 
-def optimal_proposal(graph, particle, new_observation, time_interval, gps_sd,
+def process_output(particle, sampled_route, sampled_dis_route, time_interval, full_smoothing):
+    # Append sampled route to old particle
+    new_route_append = sampled_route
+    new_route_append[0, 0] = 0
+    new_route_append[-1, 0] = particle[-1, 0] + time_interval
+    new_route_append[-1, 4] = sampled_dis_route[1]
+    new_route_append[-1, 5] = 0
+    new_route_append[-1, 6] = sampled_dis_route[2]
+
+    if full_smoothing:
+        return np.append(particle, new_route_append, axis=0)
+    else:
+        return np.append(particle[-1:], new_route_append, axis=0)
+
+
+def optimal_proposal(graph, particle, new_observation, time_interval, gps_sd, full_smoothing=True,
                      d_refine=1, d_max=None):
     """
     Samples a single particle from the (distance discretised) optimal proposal.
@@ -244,6 +259,9 @@ def optimal_proposal(graph, particle, new_observation, time_interval, gps_sd,
     :param gps_sd: float
         metres
         standard deviation of GPS noise
+    :param full_smoothing: bool
+        if True returns full trajectory
+        else returns only x_t-1 to x_t
     :param d_refine: float
         metres
         resolution of distance discretisation
@@ -298,14 +316,9 @@ def optimal_proposal(graph, particle, new_observation, time_interval, gps_sd,
 
     # Append sampled route to old particle
     sampled_route = possible_routes[int(sampled_dis_route[0])]
-    new_route_append = sampled_route
-    new_route_append[0, 0] = 0
-    new_route_append[-1, 0] = particle[-1, 0] + time_interval
-    new_route_append[-1, 4] = sampled_dis_route[1]
-    new_route_append[-1, 5] = 0
-    new_route_append[-1, 6] = sampled_dis_route[2]
 
-    return np.append(particle, new_route_append, axis=0), sample_probs_norm_const
+    return process_output(particle, sampled_route, sampled_dis_route, time_interval, full_smoothing),\
+        sample_probs_norm_const
 
 
 class DistanceProposal:
@@ -401,6 +414,198 @@ class EuclideanLengthDistanceProposal(DistanceProposal):
         :return: float or np.array in [0,1]
         """
         return cdf_gamma_mv(x, euclidean_distance, var)
+
+
+def get_route_ranges(routes):
+    d_ranges_all = np.zeros((2, len(routes)))
+    for i in range(len(routes)):
+        d_ranges_all[0, i] = 0 if routes[i].shape[0] == 1 else routes[i][-2, -1]
+        d_ranges_all[1, i] = routes[i][-1, -1]
+    return d_ranges_all
+
+
+def auxiliary_distance_proposal(graph, particle, new_observation, time_interval, gps_sd, full_smoothing=True,
+                                d_refine=1, dist_expand=50,
+                                dist_prop=EuclideanLengthDistanceProposal(), **kwargs):
+    # Extract all possible routes from previous position
+    start_position = particle[-1:].copy()
+    start_position[0, -1] = 0
+
+    # Get geometry
+    start_geom = get_geometry(graph, start_position[0, 1:4])
+
+    # Cartesianise
+    cart_start = edge_interpolate(start_geom, start_position[0, 4])
+
+    # Get Euclidean distance between particle and new observation
+    euclid_dist = np.linalg.norm(cart_start - new_observation)
+
+    # Sample distance
+    dist_samp = dist_prop.sample(euclid_dist, **kwargs)
+
+    # Expand sampled distance
+    min_dist_range = max(0, dist_samp - dist_expand)
+    dist_range = (min_dist_range, min_dist_range + 2 * dist_expand)
+
+    # Get possible routes of length dist_samp
+    all_routes = get_possible_routes(graph, start_position, dist_range[1], all_routes=True)
+
+    # Remove routes that don't finish in dist_range
+    d_ranges_all = get_route_ranges(all_routes)
+    dist_samp_keep = d_ranges_all[1] >= dist_range[0]
+    routes = [all_routes[i] for i in np.where(dist_samp_keep)[0]]
+
+    # No routes implies reach and overflow dead end
+    if len(routes) == 0:
+        return None, 0
+
+    # Get all possible positions on each route
+    discretised_routes_list = []
+    for i, route in enumerate(routes):
+        # All possible end positions of route
+        discretised_route_matrix = discretise_route(graph, route, d_refine, new_observation, gps_sd, trim_routes=False)
+
+        if route.shape[0] == 1:
+            discretised_route_matrix = discretised_route_matrix[discretised_route_matrix[:, 0] >= particle[-1, 4]]
+            discretised_route_matrix[:, 1] -= discretised_route_matrix[-1, 1]
+
+        # Track route index and append to list
+        if discretised_route_matrix is not None:
+            discretised_routes_list += [np.append(np.ones((discretised_route_matrix.shape[0], 1)) * i,
+                                                  discretised_route_matrix, axis=1)]
+
+    # Concatenate into numpy.ndarray
+    discretised_routes = np.concatenate(discretised_routes_list)
+
+    # Remove points outside range
+    discretised_routes = discretised_routes[np.logical_and(discretised_routes[:, 2] >= dist_range[0],
+                                                           discretised_routes[:, 2] < dist_range[1])]
+
+    # Calculate sample probabilities
+    sample_probs = distance_prior(discretised_routes[:, 2], time_interval) * discretised_routes[:, 3]
+
+    # Normalising constant
+    sample_probs_norm_const = np.sum(sample_probs)
+
+    if sample_probs_norm_const < 1e-200:
+        return None, 0.
+
+    # Sample an edge and distance
+    sampled_dis_route_index = np.random.choice(len(discretised_routes), 1, p=sample_probs / sample_probs_norm_const)[0]
+    sampled_dis_route = discretised_routes[sampled_dis_route_index]
+
+    # Append sampled route to old particle
+    sampled_route = routes[int(sampled_dis_route[0])]
+    out_particle = process_output(particle, sampled_route, sampled_dis_route, time_interval, full_smoothing)
+
+    # Sampled position distance
+    selected_dist = sampled_dis_route[2]
+
+    # Range of distances that need checking
+    dist_check_range = (max(0, selected_dist - 2 * dist_expand), selected_dist + 2 * dist_expand)
+
+    # All possible routes up to max_aux_dist
+    min_dist_keep = d_ranges_all[1, :] >= dist_check_range[0]
+    check_routes = [all_routes[i] for i in np.where(min_dist_keep)[0]]
+
+    # Extend routes
+    check_routes = extend_routes(graph, check_routes, dist_check_range[1] - dist_range[1])
+
+    d_ranges_check = get_route_ranges(check_routes)
+
+    check_routes_keep = np.logical_and(d_ranges_check[1, :] >= dist_check_range[0],
+                                       d_ranges_check[1, :] <= dist_check_range[1])
+    check_routes = [check_routes[i] for i in np.where(check_routes_keep)[0]]
+
+    # Discretise routes
+    discretised_check_routes_list = []
+    for i, route in enumerate(check_routes):
+        # All possible end positions of route
+        discretised_route_matrix = discretise_route(graph, route, d_refine, new_observation, gps_sd, trim_routes=False)
+
+        if route.shape[0] == 1:
+            discretised_route_matrix = discretised_route_matrix[discretised_route_matrix[:, 0] >= particle[-1, 4]]
+            discretised_route_matrix[:, 1] -= discretised_route_matrix[-1, 1]
+
+        # Track route index and append to list
+        if discretised_route_matrix is not None:
+            discretised_check_routes_list += [np.append(np.ones((discretised_route_matrix.shape[0], 1)) * i,
+                                                        discretised_route_matrix, axis=1)]
+
+    # Concatenate into numpy.ndarray
+    discretised_check_routes = np.concatenate(discretised_check_routes_list)
+
+    # Remove points outside range
+    discretised_check_routes = discretised_check_routes[
+        np.logical_and(discretised_check_routes[:, 2] >= dist_check_range[0],
+                       discretised_check_routes[:, 2] <= dist_check_range[1])]
+
+    # Calculate sample probabilities
+    dis_check_probs = distance_prior(discretised_check_routes[:, 2], time_interval) * discretised_check_routes[:, 3]
+
+    # All possible (discrete) distances
+    all_check_distances = np.unique(discretised_check_routes[:, 2])
+
+    # possible extrema of stratum
+    poss_min_strata = all_check_distances[all_check_distances <= max(dist_samp, 2 * dist_expand)]
+    if poss_min_strata[0] < dist_expand:
+        poss_min_strata[0] = 0
+        poss_min_strata = poss_min_strata[np.logical_or(poss_min_strata == 0,
+                                                        poss_min_strata >= dist_expand)]
+    poss_max_stata = all_check_distances[all_check_distances >= max(dist_samp, 2 * dist_expand)]
+    poss_min_strata = np.unique(np.append(poss_min_strata, poss_max_stata - 2 * dist_expand))
+    poss_max_strata = poss_min_strata + 2 * dist_expand
+    poss_mid_strata = poss_min_strata + dist_expand
+
+    mid_strata_cdf_evals = dist_prop.cdf(poss_mid_strata, euclid_dist, **kwargs)
+    mid_strata_cdf_evals[1:] -= mid_strata_cdf_evals[:-1]
+
+    unnorm_weight_denom = aux_dist_expand_weight(discretised_check_routes, dis_check_probs,
+                                                 poss_min_strata, poss_max_strata, mid_strata_cdf_evals)
+
+    if unnorm_weight_denom == 0:
+        return out_particle, 0
+    else:
+        return out_particle, 1 / unnorm_weight_denom
+
+
+@njit
+def aux_dist_expand_weight(discretised_check_routes, dis_check_probs,
+                           poss_min_strata, poss_max_strata, mid_strata_cdf_evals):
+
+    unnorm_weight_denom = 0
+    for i in range(len(poss_min_strata)):
+        if mid_strata_cdf_evals[i] == 0:
+            continue
+
+        min_stratum = poss_min_strata[i]
+        max_stratum = poss_max_strata[i]
+
+        partial_prob_denom = np.sum(dis_check_probs[np.logical_and(discretised_check_routes[:, 2] >= min_stratum,
+                                                                   discretised_check_routes[:, 2] <= max_stratum)])
+
+        if partial_prob_denom == 0:
+            continue
+
+        unnorm_weight_denom += mid_strata_cdf_evals[i] / partial_prob_denom
+
+    return unnorm_weight_denom
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 def dist_then_edge_proposal(graph, particle, new_observation, time_interval, gps_sd,
@@ -507,204 +712,6 @@ def dist_then_edge_proposal(graph, particle, new_observation, time_interval, gps
              / dist_prop.pdf(dist_samp, euclid_dist, **kwargs)
 
     return out_particle, weight
-
-
-def get_route_ranges(routes):
-    d_ranges_all = np.zeros((2, len(routes)))
-    for i in range(len(routes)):
-        d_ranges_all[0, i] = 0 if routes[i].shape[0] == 1 else routes[i][-2, -1]
-        d_ranges_all[1, i] = routes[i][-1, -1]
-    return d_ranges_all
-
-
-def auxiliary_distance_proposal(graph, particle, new_observation, time_interval, gps_sd,
-                                d_refine=1, dist_expand=50,
-                                dist_prop=EuclideanLengthDistanceProposal(), **kwargs):
-    # Extract all possible routes from previous position
-    start_position = particle[-1:].copy()
-    start_position[0, -1] = 0
-
-    # Get geometry
-    start_geom = get_geometry(graph, start_position[0, 1:4])
-
-    # Cartesianise
-    cart_start = edge_interpolate(start_geom, start_position[0, 4])
-
-    # Get Euclidean distance between particle and new observation
-    euclid_dist = np.linalg.norm(cart_start - new_observation)
-
-    # Sample distance
-    dist_samp = dist_prop.sample(euclid_dist, **kwargs)
-
-    # Expand sampled distance
-    min_dist_range = max(0, dist_samp - dist_expand)
-    dist_range = (min_dist_range, min_dist_range + 2 * dist_expand)
-
-    # Get possible routes of length dist_samp
-    all_routes = get_possible_routes(graph, start_position, dist_range[1], all_routes=True)
-
-    # Remove routes that don't finish in dist_range
-    d_ranges_all = get_route_ranges(all_routes)
-    dist_samp_keep = d_ranges_all[1] >= dist_range[0]
-    routes = [all_routes[i] for i in np.where(dist_samp_keep)[0]]
-
-    # No routes implies reach and overflow dead end
-    if len(routes) == 0:
-        start_position[-1, 0] = particle[-1, 0] + time_interval
-        start_position[-1, 5] = 0
-        start_position[-1, -1] = 0
-        out_particle = np.append(particle, start_position, axis=0)
-        return out_particle, 0
-
-    # Get all possible positions on each route
-    discretised_routes_list = []
-    for i, route in enumerate(routes):
-        # All possible end positions of route
-        discretised_route_matrix = discretise_route(graph, route, d_refine, new_observation, gps_sd, trim_routes=False)
-
-        if route.shape[0] == 1:
-            discretised_route_matrix = discretised_route_matrix[discretised_route_matrix[:, 0] >= particle[-1, 4]]
-            discretised_route_matrix[:, 1] -= discretised_route_matrix[-1, 1]
-
-        # Track route index and append to list
-        if discretised_route_matrix is not None:
-            discretised_routes_list += [np.append(np.ones((discretised_route_matrix.shape[0], 1)) * i,
-                                                  discretised_route_matrix, axis=1)]
-
-    # Concatenate into numpy.ndarray
-    discretised_routes = np.concatenate(discretised_routes_list)
-
-    # Remove points outside range
-    discretised_routes = discretised_routes[np.logical_and(discretised_routes[:, 2] >= dist_range[0],
-                                                           discretised_routes[:, 2] < dist_range[1])]
-
-    # Calculate sample probabilities
-    sample_probs = distance_prior(discretised_routes[:, 2], time_interval) * discretised_routes[:, 3]
-
-    # Normalising constant
-    sample_probs_norm_const = np.sum(sample_probs)
-
-    if sample_probs_norm_const < 1e-200:
-        return None, 0.
-
-    # Sample an edge and distance
-    sampled_dis_route_index = np.random.choice(len(discretised_routes), 1, p=sample_probs / sample_probs_norm_const)[0]
-    sampled_dis_route = discretised_routes[sampled_dis_route_index]
-
-    # Append sampled route to old particle
-    sampled_route = routes[int(sampled_dis_route[0])]
-    new_route_append = sampled_route.copy()
-    new_route_append[0, 0] = 0
-    new_route_append[-1, 0] = particle[-1, 0].copy() + time_interval
-    new_route_append[-1, 4] = sampled_dis_route[1]
-    new_route_append[-1, 5] = 0
-    new_route_append[-1, 6] = sampled_dis_route[2]
-
-    # Sampled position distance
-    selected_dist = sampled_dis_route[2]
-
-    # Range of distances that need checking
-    dist_check_range = (max(0, selected_dist - 2 * dist_expand), selected_dist + 2 * dist_expand)
-
-    # All possible routes up to max_aux_dist
-    min_dist_keep = d_ranges_all[1, :] >= dist_check_range[0]
-    check_routes = [all_routes[i] for i in np.where(min_dist_keep)[0]]
-
-    # Extend routes
-    check_routes = extend_routes(graph, check_routes, dist_check_range[1] - dist_range[1])
-
-    d_ranges_check = get_route_ranges(check_routes)
-
-    check_routes_keep = np.logical_and(d_ranges_check[1, :] >= dist_check_range[0],
-                                       d_ranges_check[1, :] <= dist_check_range[1])
-    check_routes = [check_routes[i] for i in np.where(check_routes_keep)[0]]
-
-    # No routes implies reach and overflow dead end
-    if len(routes) == 0:
-        start_position[-1, 0] = particle[-1, 0] + time_interval
-        start_position[-1, 5] = 0
-        start_position[-1, -1] = 0
-        out_particle = np.append(particle, start_position, axis=0)
-        return out_particle, 0
-
-
-    # Discretise routes
-    discretised_check_routes_list = []
-    for i, route in enumerate(check_routes):
-        # All possible end positions of route
-        discretised_route_matrix = discretise_route(graph, route, d_refine, new_observation, gps_sd, trim_routes=False)
-
-        if route.shape[0] == 1:
-            discretised_route_matrix = discretised_route_matrix[discretised_route_matrix[:, 0] >= particle[-1, 4]]
-            discretised_route_matrix[:, 1] -= discretised_route_matrix[-1, 1]
-
-        # Track route index and append to list
-        if discretised_route_matrix is not None:
-            discretised_check_routes_list += [np.append(np.ones((discretised_route_matrix.shape[0], 1)) * i,
-                                                        discretised_route_matrix, axis=1)]
-
-    # Concatenate into numpy.ndarray
-    discretised_check_routes = np.concatenate(discretised_check_routes_list)
-
-    # Remove points outside range
-    discretised_check_routes = discretised_check_routes[
-        np.logical_and(discretised_check_routes[:, 2] >= dist_check_range[0],
-                       discretised_check_routes[:, 2] <= dist_check_range[1])]
-
-    # Calculate sample probabilities
-    dis_check_probs = distance_prior(discretised_check_routes[:, 2], time_interval) * discretised_check_routes[:, 3]
-
-    # All possible (discrete) distances
-    all_check_distances = np.unique(discretised_check_routes[:, 2])
-
-    # possible extrema of stratum
-    poss_min_strata = all_check_distances[all_check_distances <= max(dist_samp, 2 * dist_expand)]
-    if poss_min_strata[0] < dist_expand:
-        poss_min_strata[0] = 0
-        poss_min_strata = poss_min_strata[np.logical_or(poss_min_strata == 0,
-                                                        poss_min_strata >= dist_expand)]
-    poss_max_stata = all_check_distances[all_check_distances >= max(dist_samp, 2 * dist_expand)]
-    poss_min_strata = np.unique(np.append(poss_min_strata, poss_max_stata - 2 * dist_expand))
-    poss_max_strata = poss_min_strata + 2 * dist_expand
-    poss_mid_strata = poss_min_strata + dist_expand
-
-    mid_strata_cdf_evals = dist_prop.cdf(poss_mid_strata, euclid_dist, **kwargs)
-    mid_strata_cdf_evals[1:] -= mid_strata_cdf_evals[:-1]
-
-    unnorm_weight_denom = aux_dist_expand_weight(discretised_check_routes, dis_check_probs,
-                                                 poss_min_strata, poss_max_strata, mid_strata_cdf_evals)
-
-    if unnorm_weight_denom == 0:
-        return np.append(particle, new_route_append, axis=0), 0
-    else:
-        return np.append(particle, new_route_append, axis=0), 1 / unnorm_weight_denom
-
-
-@njit
-def aux_dist_expand_weight(discretised_check_routes, dis_check_probs,
-                           poss_min_strata, poss_max_strata, mid_strata_cdf_evals):
-
-    unnorm_weight_denom = 0
-    for i in range(len(poss_min_strata)):
-        if mid_strata_cdf_evals[i] == 0:
-            continue
-
-        min_stratum = poss_min_strata[i]
-        max_stratum = poss_max_strata[i]
-
-        partial_prob_denom = np.sum(dis_check_probs[np.logical_and(discretised_check_routes[:, 2] >= min_stratum,
-                                                                   discretised_check_routes[:, 2] <= max_stratum)])
-
-        if partial_prob_denom == 0:
-            continue
-
-        unnorm_weight_denom += mid_strata_cdf_evals[i] / partial_prob_denom
-
-    return unnorm_weight_denom
-
-
-
-
 
 
 def auxiliary_distance_proposal_edge(graph, particle, new_observation, time_interval, gps_sd,
