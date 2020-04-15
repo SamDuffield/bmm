@@ -24,7 +24,6 @@ def full_backward_sample(fixed_particle, first_edge_fixed, first_edge_fixed_leng
                          time_interval,
                          next_time_index,
                          return_ess_back=False):
-
     n = filter_particles.n
 
     filter_particles_adjusted = [None] * n
@@ -56,8 +55,7 @@ def full_backward_sample(fixed_particle, first_edge_fixed, first_edge_fixed_leng
     possible_inds = ~np.isnan(smoothing_distances)
     smoothing_weights = np.zeros(n)
     smoothing_weights[possible_inds] = filter_weights[possible_inds] \
-        * distance_prior(smoothing_distances[possible_inds], time_interval) \
-
+                                       * distance_prior(smoothing_distances[possible_inds], time_interval)
     smoothing_weights /= smoothing_weights.sum()
 
     sampled_index = np.random.choice(n, 1, p=smoothing_weights)[0]
@@ -72,8 +70,38 @@ def full_backward_sample(fixed_particle, first_edge_fixed, first_edge_fixed_leng
         return out_particle
 
 
-def rejection_backward_sample(*args, **kwargs):
-    pass
+def rejection_backward_sample(fixed_particle,
+                              first_edge_fixed, first_edge_fixed_length,
+                              filter_particles,
+                              filter_weights,
+                              time_interval,
+                              next_time_index,
+                              distance_prior_bound,
+                              max_rejections):
+    n = filter_particles.n
+
+    for k in range(max_rejections):
+        filter_index = np.random.choice(n, 1, p=filter_weights)[0]
+        filter_particle = filter_particles[filter_index].copy()
+
+        if not np.array_equal(first_edge_fixed[1:4], filter_particle[-1, 1:4]):
+            continue
+        elif np.array_equal(fixed_particle[next_time_index, 1:4], filter_particle[-1, 1:4]) and \
+                filter_particle[-1, 4] > fixed_particle[next_time_index, 4]:
+            continue
+
+        distance_j_to_k = (first_edge_fixed[4] - filter_particle[-1, 4]) * first_edge_fixed_length
+
+        fixed_particle[1:next_time_index, -1] += distance_j_to_k
+
+        smoothing_distance = fixed_particle[next_time_index, -1]
+
+        smoothing_distance_prior = distance_prior(smoothing_distance, time_interval)
+
+        if np.random.uniform() < smoothing_distance_prior / distance_prior_bound:
+            return np.append(filter_particle, fixed_particle[1:], axis=0)
+
+    return None
 
 
 def offline_map_match(graph,
@@ -84,7 +112,7 @@ def offline_map_match(graph,
                       gps_sd=7,
                       d_refine=1,
                       initial_truncation=None,
-                      max_rejections=100,
+                      max_rejections=20,
                       ess_threshold=1,
                       **kwargs):
     """
@@ -218,6 +246,8 @@ def offline_map_match(graph,
                                                              filter_particles[i],
                                                              filter_weights[i],
                                                              time_interval_arr[i],
+                                                             fixed_next_time_index,
+                                                             distance_prior_bound,
                                                              max_rejections)
 
                 if out_particles[j] is None:
@@ -226,9 +256,12 @@ def offline_map_match(graph,
                                                             filter_particles[i],
                                                             filter_weights[i],
                                                             time_interval_arr[i],
+                                                            fixed_next_time_index,
                                                             False)
         if full_sampling:
             print(str(filter_particles[i].latest_observation_time) + " Av Backward ESS: " + str(np.mean(ess_back[i])))
+        else:
+            print(str(filter_particles[i].latest_observation_time))
 
     if full_sampling:
         out_particles.ess_back = ess_back

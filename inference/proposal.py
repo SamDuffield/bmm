@@ -274,6 +274,9 @@ def optimal_proposal(graph, particle, new_observation, time_interval, gps_sd, fu
         particle: numpy.ndarray, shape = (_, 7)
         weight: float, not normalised
     """
+    if particle is None:
+        return None, 0.
+
     # Default d_max
     d_max = default_d_max(d_max, time_interval)
 
@@ -427,6 +430,9 @@ def get_route_ranges(routes):
 def auxiliary_distance_proposal(graph, particle, new_observation, time_interval, gps_sd, full_smoothing=True,
                                 d_refine=1, dist_expand=50,
                                 dist_prop=EuclideanLengthDistanceProposal(), **kwargs):
+    if particle is None:
+        return None, 0.
+
     # Extract all possible routes from previous position
     start_position = particle[-1:].copy()
     start_position[0, -1] = 0
@@ -635,6 +641,8 @@ def dist_then_edge_proposal(graph, particle, new_observation, time_interval, gps
         particle: numpy.ndarray, shape = (_, 7)
         weight: float, not normalised
     """
+    if particle is None:
+        return None, 0.
 
     # Extract position at last observation time
     start_position = particle[-1:].copy()
@@ -716,6 +724,9 @@ def dist_then_edge_proposal(graph, particle, new_observation, time_interval, gps
 
 def auxiliary_distance_proposal_edge(graph, particle, new_observation, time_interval, gps_sd,
                                      d_refine=1, dist_prop=EuclideanLengthDistanceProposal(), **kwargs):
+
+    if particle is None:
+        return None, 0.
 
     # Extract all possible routes from previous position
     start_position = particle[-1:].copy()

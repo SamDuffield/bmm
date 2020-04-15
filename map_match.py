@@ -60,11 +60,19 @@ n_samps = 100
 particles = offline_map_match(graph, poly_single[:], n_samps, time_interval=15,
                               gps_sd=7,
                               d_refine=1,
-                              max_rejections=0,
+                              max_rejections=10,
                               proposal=proposal.auxiliary_distance_proposal,
                               ess_threshold=0.5,
                               dist_expand=50,
                               var=5)
+
+# particles = offline_map_match(graph, poly_single[:], n_samps, time_interval=15,
+#                               gps_sd=7,
+#                               d_refine=1,
+#                               max_rejections=10,
+#                               proposal=proposal.optimal_proposal,
+#                               ess_threshold=0.5,
+#                               d_max=None)
 
 print(particles.time)
 print(particles.time / len(poly_single))

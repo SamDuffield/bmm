@@ -13,7 +13,7 @@ import numpy as np
 import tools.edges
 from inference.particles import MMParticles
 from inference.proposal import optimal_proposal
-from inference.resampling import fixed_lag_stitching_rejection
+from inference.resampling import fixed_lag_stitching
 
 
 def initiate_particles(graph,
@@ -149,7 +149,7 @@ def update_particles(graph,
     ############################## ADD CATCH FOR ALL NONE (i.e. reinitiate particles at new_observation = start new route)
 
     # Resample
-    out_particles = fixed_lag_stitching_rejection(graph, out_particles, weights, lag, max_rejections)
+    out_particles = fixed_lag_stitching(graph, out_particles, weights, lag, max_rejections)
 
     end = tm()
     out_particles.time += end - start
@@ -166,7 +166,7 @@ def offline_map_match_fl(graph,
                          gps_sd=7,
                          d_refine=1,
                          initial_truncation=None,
-                         max_rejections=100,
+                         max_rejections=20,
                          **kwargs):
     """
     Runs offline map-matching. I.e. receives a full polyline and returns an equal probability collection

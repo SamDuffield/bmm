@@ -171,7 +171,7 @@ def rejection_fixed_lag_stitch(j, fixed_particle, last_edge_fixed, last_edge_fix
     return None
 
 
-def fixed_lag_stitching_rejection(graph, particles, weights, lag, max_rejections=100):
+def fixed_lag_stitching(graph, particles, weights, lag, max_rejections=100):
     """
     Resamples only elements of particles after a certain time - defined by the lag parameter.
     :param graph: NetworkX MultiDiGraph
