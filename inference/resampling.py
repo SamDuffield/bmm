@@ -58,7 +58,6 @@ def full_fixed_lag_stitch(j, fixed_particle, last_edge_fixed, last_edge_fixed_le
                           min_resample_time, stitch_time_interval,
                           min_resample_time_indices, originial_stitching_distances, distance_prior_evals,
                           return_ess_stitch=False):
-
     n = len(new_particles)
 
     # Possible particles to be resampled placeholder
@@ -136,7 +135,6 @@ def rejection_fixed_lag_stitch(j, fixed_particle, last_edge_fixed, last_edge_fix
                                min_resample_time, stitch_time_interval,
                                min_resample_time_indices,
                                distance_prior_bound, max_rejections):
-
     n = len(new_particles)
 
     for k in range(max_rejections):
@@ -169,6 +167,97 @@ def rejection_fixed_lag_stitch(j, fixed_particle, last_edge_fixed, last_edge_fix
             return out_particle
 
     return None
+
+
+def fixed_lag_stitch_post_split(graph,
+                                fixed_particles,
+                                new_particles,
+                                new_weights,
+                                min_resample_time, min_resample_time_indices,
+                                originial_stitching_distances,
+                                max_rejections):
+    n = len(fixed_particles)
+    full_fixed_lag_resample = max_rejections == 0
+
+    out_particles = fixed_particles.copy()
+
+    max_fixed_time = fixed_particles[0][-1, 0]
+
+    stitch_time_interval = min_resample_time - max_fixed_time
+
+    distance_prior_evals = distance_prior(originial_stitching_distances, stitch_time_interval)
+
+    # Initiate some required quantities depending on whether to do rejection sampling or not
+    if full_fixed_lag_resample:
+        ess_stitch_track = np.zeros(n)
+
+        distance_prior_bound = None
+        adjusted_weights = None
+    else:
+        ess_stitch_track = None
+
+        distance_prior_bound = get_distance_prior_bound()
+        adjusted_weights = new_weights / distance_prior_evals
+        adjusted_weights /= np.sum(adjusted_weights)
+
+    # Iterate through particles
+    for j in range(n):
+        fixed_particle = fixed_particles[j]
+
+        # Check if particle is None
+        # i.e. fixed lag approx has failed
+        if fixed_particle is None:
+            out_particles[j] = None
+            if full_fixed_lag_resample:
+                ess_stitch_track[j] = 0
+            continue
+
+        last_edge_fixed = fixed_particle[-1]
+        last_edge_fixed_geom = get_geometry(graph, last_edge_fixed[1:4])
+        last_edge_fixed_length = last_edge_fixed_geom.length
+
+        if full_fixed_lag_resample:
+            #### Full resampling
+            out_particles[j], ess_stitch_track[j] = full_fixed_lag_stitch(j, fixed_particle,
+                                                                          last_edge_fixed, last_edge_fixed_length,
+                                                                          new_particles,
+                                                                          new_weights,
+                                                                          min_resample_time, stitch_time_interval,
+                                                                          min_resample_time_indices,
+                                                                          originial_stitching_distances,
+                                                                          distance_prior_evals,
+                                                                          True)
+
+        else:
+            out_particles[j] = rejection_fixed_lag_stitch(j, fixed_particle, last_edge_fixed, last_edge_fixed_length,
+                                                          new_particles, adjusted_weights,
+                                                          min_resample_time, stitch_time_interval,
+                                                          min_resample_time_indices,
+                                                          distance_prior_bound, max_rejections)
+            if out_particles[j] is None:
+                out_particles[j] = full_fixed_lag_stitch(j, fixed_particle, last_edge_fixed, last_edge_fixed_length,
+                                                         new_particles,
+                                                         new_weights,
+                                                         min_resample_time, stitch_time_interval,
+                                                         min_resample_time_indices,
+                                                         originial_stitching_distances,
+                                                         distance_prior_evals,
+                                                         False)
+
+    if full_fixed_lag_resample:
+        out_particles.ess_stitch = np.append(out_particles.ess_stitch, np.atleast_2d(ess_stitch_track), axis=0)
+
+    # Do full resampling where fixed lag approx broke
+    none_inds = np.array([p is None for p in out_particles])
+    good_inds = ~none_inds
+    n_good = good_inds.sum()
+    if n_good < n:
+        none_inds_res_indices = np.random.choice(n, n - n_good, p=good_inds/n_good)
+        out_particles[none_inds] = out_particles[none_inds_res_indices].copy()
+        if full_fixed_lag_resample:
+            out_particles.ess_stitch[-1, none_inds] = 1 / (new_weights ** 2).sum()
+
+    return out_particles
 
 
 def fixed_lag_stitching(graph, particles, weights, lag, max_rejections=100):
@@ -212,7 +301,7 @@ def fixed_lag_stitching(graph, particles, weights, lag, max_rejections=100):
     # If not reached lag yet do standard resampling
     if lag is None or m <= lag:
         if full_fixed_lag_resample:
-            out_particles.ess_stitch = np.append(particles.ess_stitch, np.ones((1, n))*ess_pf,
+            out_particles.ess_stitch = np.append(particles.ess_stitch, np.ones((1, n)) * ess_pf,
                                                  axis=0)
         return multinomial(out_particles, weights)
 
@@ -222,12 +311,9 @@ def fixed_lag_stitching(graph, particles, weights, lag, max_rejections=100):
     # Smallest time to be resampled
     min_resample_time = observation_times[m - lag]
 
-    # Time between stitching observations
-    stitch_time_interval = min_resample_time - max_fixed_time
-
     # Pre-process a bit
-    fixed_particles = [None] * n
-    new_particles = [None] * n
+    fixed_particles = out_particles.copy()
+    new_particles = out_particles.copy()
     max_fixed_time_indices = [0] * n
     min_resample_time_indices = [0] * n
     originial_stitching_distances = np.zeros(n)
@@ -241,71 +327,15 @@ def fixed_lag_stitching(graph, particles, weights, lag, max_rejections=100):
         new_particles[j] = out_particles[j][max_fixed_time_indices[j]:]
         min_resample_time_indices[j] = np.where(new_particles[j][:, 0] == min_resample_time)[0][0]
         originial_stitching_distances[j] = new_particles[j][min_resample_time_indices[j], -1]
-    distance_prior_evals = distance_prior(originial_stitching_distances, stitch_time_interval)
 
-    # Initiate some required quantities depending on whether to do rejection sampling or not
-    if full_fixed_lag_resample:
-        ess_stitch_track = np.zeros(n)
-
-        distance_prior_bound = None
-        adjusted_weights = None
-    else:
-        ess_stitch_track = None
-
-        distance_prior_bound = get_distance_prior_bound()
-        adjusted_weights = weights / distance_prior_evals
-        adjusted_weights /= np.sum(adjusted_weights)
-
-    # Iterate through particles
-    for j in range(n):
-        # Check if particle has probability 0 then do full resampling
-        # i.e. fixed lag approx has failed
-        if weights[j] == 0:
-            out_particles[j] = out_particles[np.random.choice(n, 1, p=weights)[0]]
-            if full_fixed_lag_resample:
-                ess_stitch_track[j] = ess_pf
-            continue
-
-        fixed_particle = fixed_particles[j]
-        last_edge_fixed = fixed_particle[-1]
-        last_edge_fixed_geom = get_geometry(graph, last_edge_fixed[1:4])
-        last_edge_fixed_length = last_edge_fixed_geom.length
-
-        if full_fixed_lag_resample:
-            #### Full resampling
-            out_particles[j], ess_stitch_track[j] = full_fixed_lag_stitch(j, fixed_particle,
-                                                                          last_edge_fixed, last_edge_fixed_length,
-                                                                          new_particles,
-                                                                          weights,
-                                                                          min_resample_time, stitch_time_interval,
-                                                                          min_resample_time_indices,
-                                                                          originial_stitching_distances,
-                                                                          distance_prior_evals,
-                                                                          True)
-
-        else:
-            out_particles[j] = rejection_fixed_lag_stitch(j, fixed_particle, last_edge_fixed, last_edge_fixed_length,
-                                                          new_particles, adjusted_weights,
-                                                          min_resample_time, stitch_time_interval,
-                                                          min_resample_time_indices,
-                                                          distance_prior_bound, max_rejections)
-            if out_particles[j] is None:
-                out_particles[j] = full_fixed_lag_stitch(j, fixed_particle, last_edge_fixed, last_edge_fixed_length,
-                                                         new_particles,
-                                                         weights,
-                                                         min_resample_time, stitch_time_interval,
-                                                         min_resample_time_indices,
-                                                         originial_stitching_distances,
-                                                         distance_prior_evals,
-                                                         False)
-
-        if out_particles[j] is None:
-            out_particles[j] = out_particles[np.random.choice(n, 1, p=weights)[0]]
-            if full_fixed_lag_resample:
-                ess_stitch_track[j] = ess_pf
-
-    if full_fixed_lag_resample:
-        out_particles.ess_stitch = np.append(particles.ess_stitch, np.atleast_2d(ess_stitch_track), axis=0)
+    # Stitch
+    out_particles = fixed_lag_stitch_post_split(graph,
+                                                fixed_particles,
+                                                new_particles,
+                                                weights,
+                                                min_resample_time, min_resample_time_indices,
+                                                originial_stitching_distances,
+                                                max_rejections)
 
     return out_particles
 

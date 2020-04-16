@@ -61,12 +61,12 @@ class TestProposeParticles(TestWithGraphAndData):
 class TestUpdateParticles(TestWithGraphAndData):
     def test_update(self):
         self.particles = smc.initiate_particles(self.graph, self.test_data['POLYLINE_UTM'][0][0], 10)
-        updated_particles = smc.update_particles(self.graph,
-                                                 self.particles,
-                                                 self.test_data['POLYLINE_UTM'][0][1],
-                                                 15,
-                                                 proposal.optimal_proposal,
-                                                 3)
+        updated_particles = smc.update_particles_flpf(self.graph,
+                                                      self.particles,
+                                                      self.test_data['POLYLINE_UTM'][0][1],
+                                                      15,
+                                                      proposal.optimal_proposal,
+                                                      3)
         self.assertIs(updated_particles.n, 10)
 
 

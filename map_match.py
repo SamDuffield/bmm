@@ -11,9 +11,8 @@ import matplotlib.pyplot as plt
 from data.utils import source_data, read_data
 from tools.graph import load_graph
 from tools.edges import plot_particles
-from inference.smc import offline_map_match_fl
+from inference.smc import offline_map_match_fl, offline_map_match
 from inference import proposal
-from inference.offline import offline_map_match
 
 # Source data paths
 _, process_data_path = source_data()
@@ -48,23 +47,24 @@ n_samps = 100
 #                                  max_rejections=20,
 #                                  d_max=None)
 
-# particles = offline_map_match_fl(graph, poly_single[:], n_samps, time_interval=15,
-#                                  lag=3, gps_sd=7,
-#                                  d_refine=1,
-#                                  max_rejections=20,
-#                                  proposal=proposal.auxiliary_distance_proposal,
-#                                  dist_expand=50,
-#                                  var=5)
+particles = offline_map_match_fl(graph, poly_single[:20], n_samps, time_interval=15,
+                                 lag=10, gps_sd=7,
+                                 d_refine=1,
+                                 max_rejections=20,
+                                 proposal=proposal.auxiliary_distance_proposal,
+                                 update='BSi',
+                                 dist_expand=50,
+                                 var=5)
 
 
-particles = offline_map_match(graph, poly_single[:], n_samps, time_interval=15,
-                              gps_sd=7,
-                              d_refine=1,
-                              max_rejections=10,
-                              proposal=proposal.auxiliary_distance_proposal,
-                              ess_threshold=0.5,
-                              dist_expand=50,
-                              var=5)
+# particles = offline_map_match(graph, poly_single[:13], n_samps, time_interval=15,
+#                               gps_sd=7,
+#                               d_refine=1,
+#                               max_rejections=10,
+#                               proposal=proposal.auxiliary_distance_proposal,
+#                               ess_threshold=0.5,
+#                               dist_expand=50,
+#                               var=5)
 
 # particles = offline_map_match(graph, poly_single[:], n_samps, time_interval=15,
 #                               gps_sd=7,
