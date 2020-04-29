@@ -9,7 +9,7 @@ import numpy as np
 from scipy.special import gamma, gammainc
 
 
-intersection_penalisation = 0.2
+intersection_penalisation = 1
 
 
 def default_d_max(d_max, time_interval, max_speed=35):
