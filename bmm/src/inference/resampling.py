@@ -8,9 +8,9 @@
 
 import numpy as np
 
-from inference.model import distance_prior, get_distance_prior_bound
-from inference.particles import MMParticles
-from tools.edges import get_geometry
+from bmm.src.inference.model import distance_prior, get_distance_prior_bound
+from bmm.src.inference.particles import MMParticles
+from bmm.src.tools.edges import get_geometry
 
 
 def multinomial(particles, weights):

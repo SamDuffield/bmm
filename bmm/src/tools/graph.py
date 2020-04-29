@@ -5,13 +5,12 @@
 # Web: https://github.com/SamDuffield/bayesian-traffic
 ################################################################################
 
-import data.utils
-from data.preprocess import bbox_ll
+import bmm.src.data.utils
+from bmm.src.data.preprocess import bbox_ll
 import osmnx as ox
 import geopandas as gpd
 import networkx as nx
 import os
-import matplotlib.pyplot as plt
 import json
 import tkinter.messagebox
 import tkinter.filedialog
@@ -92,12 +91,12 @@ def extract_full_graph_from_osm(osm_path, osm_data_name="external"):
     """
 
     # Source data paths
-    _, process_data_path = data.utils.source_data()
+    _, process_data_path = bmm.src.data.utils.source_data()
 
     # Check extension of data
     if osm_path[-3:] == 'pbf':
         # Convert pbf to xml
-        _, process_data_path = data.utils.source_data()
+        _, process_data_path = bmm.src.data.utils.source_data()
 
         convert_path = process_data_path + '/graphs/' + os.path.basename(osm_path)[:-3] + 'xml'
 
@@ -189,38 +188,9 @@ def polyline_axis(polyline, axis):
     return [coordinate[axis] for coordinate in polyline if coordinate is not None]
 
 
-def plot_graph(graph, polyline=None, edges_to_highlight=None):
-    """
-    Plot OSMnx graph, with optional polyline and highlighted edges.
-    :param graph: networkx object
-    :param polyline: standard format
-    :param edges_to_highlight: edges to highlight in blue
-    :return: fig, ax of plotted road network (plus polyline)
-    """
-    if edges_to_highlight is not None:
-        edge_colours = ['blue' if [u, v] in edges_to_highlight or [v, u] in edges_to_highlight
-                        else 'lightgrey' for u, v, d in graph.edges]
-    else:
-        edge_colours = 'lightgrey'
-
-    fig, ax = ox.plot_graph(graph, show=False, close=False, equal_aspect=True, edge_color=edge_colours,
-                            node_size=0, edge_linewidth=3)
-
-    if polyline is not None:
-        if len(polyline) > 1:
-            ax.scatter(polyline_axis(polyline, 0), polyline_axis(polyline, 1),
-                       marker='x', c='red', s=100, linewidth=3, zorder=10)
-            # ax.scatter(polyline[-1][0], polyline[-1][1], marker='x', c='blue', s=100, linewidth=3)
-        # ax.scatter(polyline[0][0], polyline[0][1], marker='x', c='blue', s=100, linewidth=3)
-
-    plt.tight_layout()
-
-    return fig, ax
-
-
 if __name__ == "__main__":
     # Source data paths
-    _, process_data_path = data.utils.source_data()
+    _, process_data_path = bmm.src.data.utils.source_data()
 
     # Directory to save graphs
     graph_dir = process_data_path + '/graphs/'
@@ -259,7 +229,7 @@ if __name__ == "__main__":
 
 
     # Save full graph
-    graph_base_name = data.utils.project_title + '_graph_' + full_graph.name
+    graph_base_name = bmm.src.data.utils.project_title + '_graph_' + full_graph.name
     save_graph(full_graph, graph_dir + graph_base_name + 'LL_full.graphml')
 
     # Project graph to UTM and save
@@ -276,9 +246,9 @@ if __name__ == "__main__":
     source_file.write(graph_dir + graph_base_name + '_simple.graphml')
     source_file.close()
 
-    # Plot simplified projected graph
-    fig, ax = plot_graph(simplified_graph)
-    plt.show(block=True)
+    # # Plot simplified projected graph
+    # fig, ax = plot_graph(simplified_graph)
+    # plt.show(block=True)
 
     # Load simplified projected graph with
     # from tools.graph import load_graph

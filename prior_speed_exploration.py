@@ -6,9 +6,8 @@
 ################################################################################
 
 import numpy as np
-import data
-from tools.graph import load_graph
-import tools.edges
+from bmm.src.tools.graph import load_graph
+import bmm.src.tools.edges
 import matplotlib.pyplot as plt
 import osmnx as ox
 from scipy import stats
@@ -25,15 +24,15 @@ def polyline_to_euclidean_distance(polyline):
 
 
 # Source data paths
-_, process_data_path = data.utils.source_data()
+_, process_data_path = bmm.src.data.utils.source_data()
 
 # Load networkx graph and edges gdf
 graph = load_graph()
-edges_gdf = tools.edges.graph_edges_gdf(graph)
+edges_gdf = bmm.src.tools.edges.graph_edges_gdf(graph)
 
 # Load taxi data
-data_path = data.utils.choose_data()
-raw_data = data.utils.read_data(data_path)
+data_path = bmm.src.data.utils.choose_data()
+raw_data = bmm.src.data.utils.read_data(data_path)
 
 # Extract distances
 euclidean_dists = []

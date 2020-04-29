@@ -6,9 +6,9 @@
 ########################################################################################################################
 import numpy as np
 
-from inference.model import distance_prior, get_distance_prior_bound
-from inference.resampling import multinomial
-from tools.edges import get_geometry
+from bmm.src.inference.model import distance_prior, get_distance_prior_bound
+from bmm.src.inference.resampling import multinomial
+from bmm.src.tools.edges import get_geometry
 
 
 def full_backward_sample(fixed_particle, first_edge_fixed, first_edge_fixed_length,

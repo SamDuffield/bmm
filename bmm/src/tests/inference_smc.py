@@ -8,13 +8,10 @@
 import unittest
 import os
 
-import numpy as np
-import numpy.testing as npt
-
-from tools.graph import load_graph
-from tools.edges import graph_edges_gdf
-from data.utils import read_data
-from inference import proposal, smc
+from bmm.src.tools.graph import load_graph
+from bmm.src.tools.edges import graph_edges_gdf
+from bmm.src.data.utils import read_data
+from bmm.src.inference import smc, proposal
 
 
 def load_test_data(test_data_path=None, nrows=None):

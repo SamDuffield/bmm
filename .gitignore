@@ -108,8 +108,8 @@ venv.bak/
 .idea/
 
 # Data source files
-/data/data_source
-/tools/graph_source
+/bmm/src/data/data_source
+/bmm/src/tools/graph_source
 
 # Depreciated scripts
 /archive/

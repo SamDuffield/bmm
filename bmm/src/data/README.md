@@ -7,8 +7,8 @@ The utils.py script generates a JSON source file, data_source, that reads as:
 
 data_source is accessed regularly by subsequent scripts using:
 ```python
-import data.utils
-raw_path, process_data_path = data.utils.source_data()
+import bmm.src.data.utils
+raw_path, process_data_path = bmm.src.data.utils.source_data()
 ```
 This enables the storage of larger data files on external disks etc, and subsequent access across different systems.
 Modifications/processed data files are stored in process_data_path/data/,

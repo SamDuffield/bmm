@@ -10,13 +10,12 @@ import unittest
 import numpy as np
 import numpy.testing as npt
 
-import inference.particles
-from inference import smc
+import bmm.src.inference.particles
 
 
 class TestMMParticles(unittest.TestCase):
     def setUp(self):
-        self.mmp = inference.particles.MMParticles(np.zeros((3, 4)))
+        self.mmp = bmm.src.inference.particles.MMParticles(np.zeros((3, 4)))
 
 
 class TestInit(TestMMParticles):

@@ -10,8 +10,8 @@ import unittest
 import numpy as np
 import numpy.testing as npt
 
-import inference.particles
-from inference import resampling, smc
+import bmm.src.inference.particles
+from bmm.src.inference import resampling
 
 
 class TestMultinomial(unittest.TestCase):
@@ -30,7 +30,7 @@ class TestMultinomial(unittest.TestCase):
     def test_mmparticles(self):
         init_array = np.zeros((3, 4))
         init_array += np.arange(3).reshape(3, 1)
-        mmp = inference.particles.MMParticles(init_array)
+        mmp = bmm.src.inference.particles.MMParticles(init_array)
         weights = np.array([0, 1, 0])
         mmp_resampled = resampling.multinomial(mmp, weights)
         for i in range(3):

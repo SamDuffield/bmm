@@ -1,13 +1,13 @@
-################################################################################
-# Module: preprocess.py
+########################################################################################################################
+# Module: data/preprocess.py
 # Description: Trim raw data by timestamp (if required - working on a small data
 #              set initially is advised).
 #              Trim and split to ensure all coordinates within a bounding box.
 #              Convert longitude-latitude coordinates to UTM.
 # Web: https://github.com/SamDuffield/bayesian-traffic
-################################################################################
+########################################################################################################################
 
-import data.utils
+import bmm.src.data.utils
 import os.path
 import pandas as pd
 import geopandas as gpd
@@ -161,7 +161,7 @@ def clean_row_process(row, bbox):
 
 def longlat_polys_to_utm(polylines, to_crs=None):
     """
-    Takes a list of long-lat polylines and returns a list of UTM polylines
+    Takes a list of long-lat polylines and returns a pd.Series of UTM polylines
     :param polylines: pd.Series of [long, lat] elements
     :param to_crs: if crs already known (i.e. from projected OSMNx graph), not essential
     :return: pd.Series of [x,y] elements where x and y are metres from fixed UTM location
@@ -215,19 +215,19 @@ def longlat_polys_to_utm(polylines, to_crs=None):
 if __name__ == '__main__':
 
     # Source data paths
-    raw_path, process_data_path = data.utils.source_data()
+    raw_path, process_data_path = bmm.src.data.utils.source_data()
 
     # Read data in chunks to save memory
     chunksize = 10 ** 3
 
     # Load raw data (csv reader)
-    taxi_data = data.utils.read_data(raw_path, chunksize)
+    taxi_data = bmm.src.data.utils.read_data(raw_path, chunksize)
 
     # Number of chunks in raw data
     num_chunks = sum(1 for chunk in taxi_data)
 
     # Reinitialise generator
-    taxi_data = data.utils.read_data(raw_path, chunksize)
+    taxi_data = bmm.src.data.utils.read_data(raw_path, chunksize)
 
     # Time interval to trim to
     time_start = datetime.datetime(2014, 5, 5, 0, 0, 0)
@@ -238,13 +238,13 @@ if __name__ == '__main__':
     timestamp_end = datetime_to_timestamp(time_end)
 
     # Destination path for preprocessed data file
-    save_data_path = process_data_path + '/data/'\
-        + data.utils.project_title + '_'\
-        + time_start.strftime("%d%m%Y") + '_'\
-        + time_end.strftime("%d%m%Y") + '_'\
-        + 'utm' + '_'\
-        + 'bbox'\
-        + '.csv'
+    save_data_path = process_data_path + '/data/' \
+                     + bmm.src.data.utils.project_title + '_' \
+                     + time_start.strftime("%d%m%Y") + '_' \
+                     + time_end.strftime("%d%m%Y") + '_' \
+                     + 'utm' + '_' \
+                     + 'bbox' \
+                     + '.csv'
 
     # Create data folder in process_data_path if it doesn't already exist
     if not os.path.exists(process_data_path + '/data/'):
@@ -290,7 +290,7 @@ if __name__ == '__main__':
             chunk['POLYLINE_UTM'] = longlat_polys_to_utm(chunk['POLYLINE'])
 
             # Save
-            data.utils.save_chunk(save_data_path, chunk)
+            bmm.src.data.utils.save_chunk(save_data_path, chunk)
 
         # Display progress
         chunk_count += 1

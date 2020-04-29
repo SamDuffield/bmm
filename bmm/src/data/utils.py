@@ -1,11 +1,11 @@
-################################################################################
-# Module: utils.py
+########################################################################################################################
+# Module: data/utils.py
 # Description: Locate raw data and directory to save processed data (so we can
 #              work with the same raw data on different computers/disks).
 #              Store selected paths in data/data_source, along with functions
 #              to load paths, read data and save data.
 # Web: https://github.com/SamDuffield/bayesian-traffic
-################################################################################
+########################################################################################################################
 
 import os
 import json

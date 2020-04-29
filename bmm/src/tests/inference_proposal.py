@@ -8,10 +8,9 @@
 import unittest
 
 import numpy as np
-import numpy.testing as npt
 
-from tests.inference_smc import TestWithGraphAndData
-from inference import proposal
+from bmm.src.tests.inference_smc import TestWithGraphAndData
+from bmm.src.inference import proposal
 
 
 class TestGetRoutes(TestWithGraphAndData):

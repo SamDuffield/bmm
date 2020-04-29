@@ -8,11 +8,11 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from data.utils import source_data, read_data
-from tools.graph import load_graph
-from tools.edges import plot_particles
-from inference.smc import offline_map_match_fl, offline_map_match
-from inference import proposal
+from bmm.src.data.utils import source_data, read_data
+from bmm.src.tools.graph import load_graph
+from bmm.src.inference import proposal
+
+from bmm import offline_map_match, _offline_map_match_fl, plot_particles
 
 # Source data paths
 _, process_data_path = source_data()
@@ -48,25 +48,25 @@ polyline_truncation = None
 # particles = offline_map_match_fl(graph, poly_single[:polyline_truncation], n_samps, time_interval=15,
 #                                  lag=3, gps_sd=7,
 #                                  d_refine=1,
-#                                  max_rejections=20,
+#                                  max_rejections=20, proposal='aux_dist'
 #                                  d_max=None)
 #
-particles = offline_map_match_fl(graph, poly_single[:polyline_truncation], n_samps, time_interval=15,
-                                 lag=10, gps_sd=7,
-                                 d_refine=1,
-                                 max_rejections=20,
-                                 proposal=proposal.optimal_proposal,
-                                 update='BSi',
-                                 # dist_expand=50,
-                                 # var=5
-                                 )
+particles = _offline_map_match_fl(graph, poly_single[:polyline_truncation], n_samps, time_interval=15,
+                                  lag=10, gps_sd=7,
+                                  d_refine=1,
+                                  max_rejections=20,
+                                  proposal='optimal',
+                                  update='BSi',
+                                  # dist_expand=50,
+                                  # var=5
+                                  )
 
 
 # particles = offline_map_match(graph, poly_single[:polyline_truncation], n_samps, time_interval=15,
 #                               gps_sd=7,
 #                               d_refine=1,
 #                               max_rejections=10,
-#                               proposal=proposal.auxiliary_distance_proposal,
+#                               proposal='aux_dist',
 #                               ess_threshold=0.5,
 #                               dist_expand=50,
 #                               var=5)
@@ -75,7 +75,7 @@ particles = offline_map_match_fl(graph, poly_single[:polyline_truncation], n_sam
 #                               gps_sd=7,
 #                               d_refine=1,
 #                               max_rejections=10,
-#                               proposal=proposal.optimal_proposal,
+#                               proposal='optimal',
 #                               ess_threshold=0.5,
 #                               d_max=None)
 
