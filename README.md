@@ -1,2 +1,2 @@
 # bayesian-map-matching
-Bayesian approach to jointly tackle map-matching and traffic congestion inference from sparse vehicle trajectories.
+Bayesian approach to map-matching using (online) particle smoothing methods.
