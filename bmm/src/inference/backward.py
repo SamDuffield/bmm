@@ -6,7 +6,6 @@
 ########################################################################################################################
 import numpy as np
 
-from bmm.src.inference.model import distance_prior, get_distance_prior_bound
 from bmm.src.inference.resampling import multinomial
 from bmm.src.tools.edges import get_geometry
 
@@ -16,6 +15,7 @@ def full_backward_sample(fixed_particle, first_edge_fixed, first_edge_fixed_leng
                          filter_weights,
                          time_interval,
                          next_time_index,
+                         distance_prior_evaluate,
                          return_ess_back=False):
     n = filter_particles.n
 
@@ -46,9 +46,13 @@ def full_backward_sample(fixed_particle, first_edge_fixed, first_edge_fixed_leng
             filter_particles_adjusted[k] = filter_particle
 
     possible_inds = ~np.isnan(smoothing_distances)
+
+    if not np.any(possible_inds):
+        return None
+
     smoothing_weights = np.zeros(n)
     smoothing_weights[possible_inds] = filter_weights[possible_inds] \
-                                       * distance_prior(smoothing_distances[possible_inds], time_interval)
+                                       * distance_prior_evaluate(smoothing_distances[possible_inds], time_interval)
     smoothing_weights /= smoothing_weights.sum()
 
     sampled_index = np.random.choice(n, 1, p=smoothing_weights)[0]
@@ -69,6 +73,7 @@ def rejection_backward_sample(fixed_particle,
                               filter_weights,
                               time_interval,
                               next_time_index,
+                              distance_prior_evaluate,
                               distance_prior_bound,
                               max_rejections):
     n = filter_particles.n
@@ -89,7 +94,7 @@ def rejection_backward_sample(fixed_particle,
 
         smoothing_distance = fixed_particle[next_time_index, -1]
 
-        smoothing_distance_prior = distance_prior(smoothing_distance, time_interval)
+        smoothing_distance_prior = distance_prior_evaluate(smoothing_distance, time_interval)
 
         if np.random.uniform() < smoothing_distance_prior / distance_prior_bound:
             return np.append(filter_particle, fixed_particle[1:], axis=0)
@@ -100,6 +105,7 @@ def rejection_backward_sample(fixed_particle,
 def backward_simulate(graph,
                       filter_particles, filter_weights,
                       time_interval_arr,
+                      mm_model,
                       max_rejections,
                       verbose=False):
     n_samps = filter_particles[-1].n
@@ -113,15 +119,12 @@ def backward_simulate(graph,
     if full_sampling:
         ess_back = np.zeros((num_obs, n_samps))
         ess_back[0] = 1 / (filter_weights[-1] ** 2).sum()
-
-        distance_prior_bound = None
     else:
         ess_back = None
 
-        distance_prior_bound = get_distance_prior_bound()
-
     for i in range(num_obs - 2, -1, -1):
         next_time = filter_particles[i + 1].latest_observation_time
+
         for j in range(n_samps):
             fixed_particle = out_particles[j].copy()
             first_edge_fixed = fixed_particle[0]
@@ -136,6 +139,7 @@ def backward_simulate(graph,
                                                                         filter_weights[i],
                                                                         time_interval_arr[i],
                                                                         fixed_next_time_index,
+                                                                        mm_model.distance_prior_evaluate,
                                                                         True)
             else:
                 out_particles[j] = rejection_backward_sample(fixed_particle,
@@ -144,7 +148,8 @@ def backward_simulate(graph,
                                                              filter_weights[i],
                                                              time_interval_arr[i],
                                                              fixed_next_time_index,
-                                                             distance_prior_bound,
+                                                             mm_model.distance_prior_evaluate,
+                                                             mm_model.distance_prior_bound(time_interval_arr[i]),
                                                              max_rejections)
 
                 if out_particles[j] is None:
@@ -154,7 +159,20 @@ def backward_simulate(graph,
                                                             filter_weights[i],
                                                             time_interval_arr[i],
                                                             fixed_next_time_index,
+                                                            mm_model.distance_prior_evaluate,
                                                             False)
+
+
+        none_inds = np.array([p is None for p in out_particles])
+        good_inds = ~none_inds
+        n_good = good_inds.sum()
+        if n_good < n_samps:
+            none_inds_res_indices = np.random.choice(n_samps, n_samps - n_good, p=good_inds / n_good)
+            for i, j in enumerate(np.where(none_inds)[0]):
+                out_particles[j] = out_particles[none_inds_res_indices[i]]
+            if full_sampling:
+                out_particles.ess_back[i, none_inds] = n_samps
+
 
         if verbose:
             if full_sampling:
@@ -167,3 +185,4 @@ def backward_simulate(graph,
             out_particles.ess_back = ess_back
 
     return out_particles
+

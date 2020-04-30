@@ -1,8 +1,8 @@
 
 """bmm: Bayesian Map-matching"""
 
-from bmm.src.tools.plot import plot_graph, plot_particles
-from bmm.src.tools.plot import plot_graph, plot_particles
+from bmm.src.tools.plot import plot_graph
+from bmm.src.tools.plot import plot_particles
 
 from bmm.src.inference.smc import initiate_particles
 from bmm.src.inference.smc import update_particles

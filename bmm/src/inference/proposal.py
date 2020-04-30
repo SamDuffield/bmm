@@ -12,7 +12,7 @@ import numpy as np
 from numba import njit
 
 from bmm.src.tools.edges import get_geometry, edge_interpolate, discretise_edge
-from bmm.src.inference.model import distance_prior, default_d_max, pdf_gamma_mv, cdf_gamma_mv, intersection_penalisation
+from bmm.src.inference.model import pdf_gamma_mv, cdf_gamma_mv, MapMatchingModel
 
 
 @lru_cache(maxsize=2 ** 8)
@@ -141,7 +141,7 @@ def extend_routes(graph, routes, add_distance, all_routes=True):
 
 
 @njit
-def pre_discretise_route(route):
+def pre_discretise_route(route, intersection_penalisation):
     route_d_min = 0 if route.shape[0] == 1 else route[-2, -1]
 
     # Maximum distance travelled to be in route
@@ -151,9 +151,6 @@ def pre_discretise_route(route):
     intersection_col = route[:-1, 5]
     intersection_choices_prob = np.prod(1 / intersection_col[intersection_col > 1]) \
                                 * intersection_penalisation ** len(intersection_col)
-
-    # Extract last edge
-    last_edge = route[-1, 1:4]
 
     return route_d_min, route_d_max, intersection_choices_prob
 
@@ -176,7 +173,8 @@ def post_discretise_route(route, dis_last_edge_mat, route_d_min, route_d_max, in
     return dis_last_edge_mat
 
 
-def discretise_route(graph, route, d_refine, observation, gps_sd, trim_routes=True):
+def discretise_route(graph, route, d_refine, observation,
+                     mm_model, trim_routes=True):
     """
     Discretise route into copies with all possible end positions given a distance discretisation sequence.
     :param graph: NetworkX MultiDiGraph
@@ -199,9 +197,8 @@ def discretise_route(graph, route, d_refine, observation, gps_sd, trim_routes=Tr
     :param observation: numpy.ndarray, shape = (2,)
         UTM projection
         coordinate of first observation
-    :param gps_sd: float
-        metres
-        standard deviation of GPS noise
+    :param mm_model: MapMatchingModel
+        from inference/model
     :param trim_routes: bool
         if true only discretise up to the final distance in route
         if false discretise entire edge
@@ -211,8 +208,10 @@ def discretise_route(graph, route, d_refine, observation, gps_sd, trim_routes=Tr
             d: metres, distance travelled since previous observation time
             p_inter_likelihood: likelihood times prior edge probability
     """
+    intersection_penalisation = mm_model.intersection_penalisation
+    gps_sd = mm_model.gps_sd
 
-    route_d_min, route_d_max, intersection_choices_prob = pre_discretise_route(route)
+    route_d_min, route_d_max, intersection_choices_prob = pre_discretise_route(route, intersection_penalisation)
 
     # Extract last edge
     last_edge = route[-1, 1:4]
@@ -240,8 +239,10 @@ def process_output(particle, sampled_route, sampled_dis_route, time_interval, fu
         return np.append(particle[-1:], new_route_append, axis=0)
 
 
-def optimal_proposal(graph, particle, new_observation, time_interval, gps_sd, full_smoothing=True,
-                     d_refine=1, d_max=None):
+def optimal_proposal(graph, particle, new_observation, time_interval,
+                     mm_model,
+                     full_smoothing=True,
+                     d_refine=1):
     """
     Samples a single particle from the (distance discretised) optimal proposal.
     :param graph: NetworkX MultiDiGraph
@@ -256,9 +257,8 @@ def optimal_proposal(graph, particle, new_observation, time_interval, gps_sd, fu
     :param time_interval: float
         seconds
         time between last observation and newly received observation
-    :param gps_sd: float
-        metres
-        standard deviation of GPS noise
+    :param mm_model: MapMatchingModel
+        from inference/model
     :param full_smoothing: bool
         if True returns full trajectory
         else returns only x_t-1 to x_t
@@ -266,10 +266,6 @@ def optimal_proposal(graph, particle, new_observation, time_interval, gps_sd, fu
         metres
         resolution of distance discretisation
         increase of speed, decrease for accuracy
-    :param d_max: float
-        metres
-        maximum distance for vehicle to travel in time_interval
-        defaults to time_interval * 35 (35m/s ≈ 78mph)
     :return: tuple, particle with appended proposal and weight
         particle: numpy.ndarray, shape = (_, 7)
         weight: float, not normalised
@@ -277,8 +273,7 @@ def optimal_proposal(graph, particle, new_observation, time_interval, gps_sd, fu
     if particle is None:
         return None, 0.
 
-    # Default d_max
-    d_max = default_d_max(d_max, time_interval)
+    d_max = mm_model.d_max(time_interval)
 
     # Extract all possible routes from previous position
     start_position = particle[-1:].copy()
@@ -289,7 +284,7 @@ def optimal_proposal(graph, particle, new_observation, time_interval, gps_sd, fu
     discretised_routes_list = []
     for i, route in enumerate(possible_routes):
         # All possible end positions of route
-        discretised_route_matrix = discretise_route(graph, route, d_refine, new_observation, gps_sd)
+        discretised_route_matrix = discretise_route(graph, route, d_refine, new_observation, mm_model)
 
         if route.shape[0] == 1:
             discretised_route_matrix = discretised_route_matrix[discretised_route_matrix[:, 0] >= particle[-1, 4]]
@@ -304,7 +299,7 @@ def optimal_proposal(graph, particle, new_observation, time_interval, gps_sd, fu
     discretised_routes = np.concatenate(discretised_routes_list)
 
     # Calculate sample probabilities
-    sample_probs = distance_prior(discretised_routes[:, 2], time_interval) \
+    sample_probs = mm_model.distance_prior_evaluate(discretised_routes[:, 2], time_interval) \
                    * discretised_routes[:, 3]
 
     # Normalising constant = p(y_m | x_m-1^j)
@@ -320,8 +315,8 @@ def optimal_proposal(graph, particle, new_observation, time_interval, gps_sd, fu
     # Append sampled route to old particle
     sampled_route = possible_routes[int(sampled_dis_route[0])]
 
-    return process_output(particle, sampled_route, sampled_dis_route, time_interval, full_smoothing),\
-        sample_probs_norm_const
+    return process_output(particle, sampled_route, sampled_dis_route, time_interval, full_smoothing), \
+           sample_probs_norm_const
 
 
 class DistanceProposal:
@@ -427,11 +422,15 @@ def get_route_ranges(routes):
     return d_ranges_all
 
 
-def auxiliary_distance_proposal(graph, particle, new_observation, time_interval, gps_sd, full_smoothing=True,
+def auxiliary_distance_proposal(graph, particle, new_observation, time_interval, mm_model, full_smoothing=True,
                                 d_refine=1, dist_expand=50,
                                 dist_prop=EuclideanLengthDistanceProposal(), **kwargs):
+
+
     if particle is None:
         return None, 0.
+
+    gps_sd = mm_model.gps_sd
 
     # Extract all possible routes from previous position
     start_position = particle[-1:].copy()
@@ -469,7 +468,7 @@ def auxiliary_distance_proposal(graph, particle, new_observation, time_interval,
     discretised_routes_list = []
     for i, route in enumerate(routes):
         # All possible end positions of route
-        discretised_route_matrix = discretise_route(graph, route, d_refine, new_observation, gps_sd, trim_routes=False)
+        discretised_route_matrix = discretise_route(graph, route, d_refine, new_observation, mm_model, trim_routes=False)
 
         if route.shape[0] == 1:
             discretised_route_matrix = discretised_route_matrix[discretised_route_matrix[:, 0] >= particle[-1, 4]]
@@ -488,7 +487,7 @@ def auxiliary_distance_proposal(graph, particle, new_observation, time_interval,
                                                            discretised_routes[:, 2] < dist_range[1])]
 
     # Calculate sample probabilities
-    sample_probs = distance_prior(discretised_routes[:, 2], time_interval) * discretised_routes[:, 3]
+    sample_probs = mm_model.distance_prior_evaluate(discretised_routes[:, 2], time_interval) * discretised_routes[:, 3]
 
     # Normalising constant
     sample_probs_norm_const = np.sum(sample_probs)
@@ -527,7 +526,7 @@ def auxiliary_distance_proposal(graph, particle, new_observation, time_interval,
     discretised_check_routes_list = []
     for i, route in enumerate(check_routes):
         # All possible end positions of route
-        discretised_route_matrix = discretise_route(graph, route, d_refine, new_observation, gps_sd, trim_routes=False)
+        discretised_route_matrix = discretise_route(graph, route, d_refine, new_observation, mm_model, trim_routes=False)
 
         if route.shape[0] == 1:
             discretised_route_matrix = discretised_route_matrix[discretised_route_matrix[:, 0] >= particle[-1, 4]]
@@ -547,7 +546,8 @@ def auxiliary_distance_proposal(graph, particle, new_observation, time_interval,
                        discretised_check_routes[:, 2] <= dist_check_range[1])]
 
     # Calculate sample probabilities
-    dis_check_probs = distance_prior(discretised_check_routes[:, 2], time_interval) * discretised_check_routes[:, 3]
+    dis_check_probs = mm_model.distance_prior_evaluate(discretised_check_routes[:, 2], time_interval)\
+                      * discretised_check_routes[:, 3]
 
     # All possible (discrete) distances
     all_check_distances = np.unique(discretised_check_routes[:, 2])
@@ -578,7 +578,6 @@ def auxiliary_distance_proposal(graph, particle, new_observation, time_interval,
 @njit
 def aux_dist_expand_weight(discretised_check_routes, dis_check_probs,
                            poss_min_strata, poss_max_strata, mid_strata_cdf_evals):
-
     unnorm_weight_denom = 0
     for i in range(len(poss_min_strata)):
         if mid_strata_cdf_evals[i] == 0:
@@ -596,21 +595,6 @@ def aux_dist_expand_weight(discretised_check_routes, dis_check_probs,
         unnorm_weight_denom += mid_strata_cdf_evals[i] / partial_prob_denom
 
     return unnorm_weight_denom
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 #
 #
@@ -879,4 +863,3 @@ def aux_dist_expand_weight(discretised_check_routes, dis_check_probs,
 #         return np.append(particle, new_route_append, axis=0), 0
 #     else:
 #         return np.append(particle, new_route_append, axis=0), 1 / unnorm_weight_denom
-

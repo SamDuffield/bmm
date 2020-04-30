@@ -174,7 +174,6 @@ def get_bbox_from_graph(graph):
 
     bbox = [max(gdf_nodes['y']), min(gdf_nodes['y']),
             max(gdf_nodes['x']), min(gdf_nodes['x'])]
-
     return bbox
 
 
@@ -226,7 +225,6 @@ if __name__ == "__main__":
         root.destroy()
         # Download full graph (many nodes, each edge a straight line)
         full_graph = download_full_graph()
-
 
     # Save full graph
     graph_base_name = bmm.src.data.utils.project_title + '_graph_' + full_graph.name
