@@ -48,7 +48,7 @@ def full_backward_sample(fixed_particle, first_edge_fixed, first_edge_fixed_leng
     possible_inds = ~np.isnan(smoothing_distances)
 
     if not np.any(possible_inds):
-        return None
+        return None, 0 if return_ess_back else None
 
     smoothing_weights = np.zeros(n)
     smoothing_weights[possible_inds] = filter_weights[possible_inds] \
@@ -62,7 +62,7 @@ def full_backward_sample(fixed_particle, first_edge_fixed, first_edge_fixed_leng
     ess_back = 1 / (smoothing_weights ** 2).sum()
 
     if return_ess_back:
-        return out_particle, ess_back,
+        return out_particle, ess_back
     else:
         return out_particle
 
@@ -107,7 +107,8 @@ def backward_simulate(graph,
                       time_interval_arr,
                       mm_model,
                       max_rejections,
-                      verbose=False):
+                      verbose=False,
+                      store_ess_back=None):
     n_samps = filter_particles[-1].n
     num_obs = len(filter_particles)
 
@@ -115,6 +116,8 @@ def backward_simulate(graph,
         raise ValueError("time_interval_arr must be length one less than that of filter_particles")
 
     full_sampling = max_rejections == 0
+    if store_ess_back is None:
+        store_ess_back = full_sampling
     out_particles = multinomial(filter_particles[-1], filter_weights[-1])
     if full_sampling:
         ess_back = np.zeros((num_obs, n_samps))
@@ -162,17 +165,18 @@ def backward_simulate(graph,
                                                             mm_model.distance_prior_evaluate,
                                                             False)
 
+            # if out_particles[j] is not None and out_particles[j][0, 0] == 0 and i != 1 and i != 0:
+            #     raise ValueError
 
-        none_inds = np.array([p is None for p in out_particles])
+        none_inds = np.array([p is None or p == (None, None) for p in out_particles])
         good_inds = ~none_inds
         n_good = good_inds.sum()
         if n_good < n_samps:
             none_inds_res_indices = np.random.choice(n_samps, n_samps - n_good, p=good_inds / n_good)
             for i, j in enumerate(np.where(none_inds)[0]):
                 out_particles[j] = out_particles[none_inds_res_indices[i]]
-            if full_sampling:
+            if store_ess_back:
                 out_particles.ess_back[i, none_inds] = n_samps
-
 
         if verbose:
             if full_sampling:
@@ -181,7 +185,7 @@ def backward_simulate(graph,
             else:
                 print(str(filter_particles[i].latest_observation_time))
 
-        if full_sampling:
+        if store_ess_back:
             out_particles.ess_back = ess_back
 
     return out_particles

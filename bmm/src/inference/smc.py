@@ -15,7 +15,7 @@ from bmm.src.inference.particles import MMParticles
 from bmm.src.inference.proposal import optimal_proposal, auxiliary_distance_proposal
 from bmm.src.inference.resampling import fixed_lag_stitching, multinomial, fixed_lag_stitch_post_split
 from bmm.src.inference.backward import backward_simulate
-from bmm.src.inference.model import MapMatchingModel, SimpleMapMatchingModel
+from bmm.src.inference.model import SimpleMapMatchingModel
 
 updates = ('PF', 'BSi')
 
@@ -33,7 +33,7 @@ def initiate_particles(graph,
     """
     Initiate start of a trajectory by sampling points around the first observation.
     Note that coordinate system of inputs must be the same, typically a UTM projection (not longtitude-latitude!).
-    See tools/graph.py and data/preprocess.py to ensure both your grapha and polyline data are projected to UTM.
+    See tools/graph.py and data/preprocess.py to ensure both your graph and polyline data are projected to UTM.
     :param graph: NetworkX MultiDiGraph
         UTM projection
         encodes road network
@@ -200,9 +200,6 @@ def update_particles_flbs(graph,
         see inference/proposal
     :param lag: int
         fixed lag for resampling/stitching
-    :param gps_sd: float
-        metres
-        standard deviation of GPS noise
     :param max_rejections: int
         number of rejections before doing full fixed-lag stitching in resampling
         0 will do full fixed-lag stitching and track ess_stitch
@@ -264,7 +261,8 @@ def update_particles_flbs(graph,
     backward_particles = backward_simulate(graph,
                                            out_particles.filter_particles, out_particles.filter_weights,
                                            out_particles.time_intervals[max(m - lag, 0):], mm_model,
-                                           max_rejections)
+                                           max_rejections,
+                                           store_ess_back=False)
 
     if stitching_required:
         # Largest time not to be resampled
@@ -342,17 +340,12 @@ def update_particles(graph,
         BSi = new particles from backward simulation
     :param lag: int
         fixed lag, the number of observations beyond which to stop resampling
-    :param d_refine: float
-        metres
-        discretisation level of distance parameter
-        needed for initiate_particle and potentially proposal
-    :param initial_truncation: float
-        metres
-        distance to truncate for sampling initial position
-        defaults to 3 * gps_sd
     :param max_rejections: int
         number of rejections before doing full fixed-lag stitching in resampling
         0 will do full fixed-lag stitching and track ess_stitch
+    :param update: str
+        'PF' for particle filter fixed-lag update
+        'BSi' for backward simulation fixed-lag update
     :param kwargs: optional parameters to pass to proposal
         i.e. d_max, d_refine or var
         as well as ess_threshold for backward simulation update
@@ -427,9 +420,6 @@ def _offline_map_match_fl(graph,
         BSi = new particles from backward simulation
     :param lag: int
         fixed lag, the number of observations beyond which to stop resampling
-    :param gps_sd: float
-        standard deviation of GPS noise
-        assumes isotropic
     :param d_refine: float
         metres
         discretisation level of distance parameter
@@ -437,7 +427,7 @@ def _offline_map_match_fl(graph,
     :param initial_truncation: float
         metres
         distance to truncate for sampling initial position
-        defaults to 3 * gps_sd
+        defaults to 3 * mm_model.gps_sd
     :param max_rejections: int
         number of rejections before doing full fixed-lag stitching in resampling
         0 will do full fixed-lag stitching and track ess_stitch
@@ -598,6 +588,10 @@ def offline_map_match(graph,
                                                                         mm_model,
                                                                         full_smoothing=False,
                                                                         **kwargs)
+
+            # if filter_particles[i+1][j] is not None and filter_particles[i+1][j][-1, 0] == 0.:
+            #     raise ValueError
+
         temp_weights *= live_weights
         temp_weights /= np.sum(temp_weights)
         filter_weights[i + 1] = temp_weights.copy()
@@ -617,3 +611,6 @@ def offline_map_match(graph,
     end = tm()
     out_particles.time = end - start
     return out_particles
+
+
+

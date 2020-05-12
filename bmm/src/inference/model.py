@@ -49,17 +49,20 @@ class SimpleMapMatchingModel(MapMatchingModel):
     speed_mean = 7.44
     speed_sd = 6.88
 
+    asymp_min_zero_prob = 0.01
+
     def zero_dist_prob(self, time_interval):
-        return 0.044
+        exp_param = (np.log(1 - self.asymp_min_zero_prob) - np.log(0.044 - self.asymp_min_zero_prob)) / 15
+        return self.asymp_min_zero_prob + (1 - self.asymp_min_zero_prob) * np.exp(- exp_param * time_interval)
 
     def distance_prior_sample(self, time_interval):
         zero_dist_prob = self.zero_dist_prob(time_interval)
         if np.random.uniform() < zero_dist_prob:
             return 0.
 
-        gamma_beta = self.speed_mean / self.speed_sd ** 2
-        gamma_alpha = self.speed_mean * gamma_beta
-        return np.random.gamma(gamma_alpha, 1 / gamma_beta)
+        gamma_speed_beta = self.speed_mean / self.speed_sd ** 2
+        gamma_speed_alpha = self.speed_mean * gamma_speed_beta
+        return np.random.gamma(gamma_speed_alpha, 1 / gamma_speed_beta) * time_interval
 
     def distance_prior_evaluate(self, distance, time_interval):
         zero_dist_prob = self.zero_dist_prob(time_interval)

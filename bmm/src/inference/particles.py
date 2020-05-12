@@ -6,6 +6,8 @@
 ########################################################################################################################
 
 import copy
+from itertools import groupby
+
 
 import numpy as np
 
@@ -56,8 +58,11 @@ class MMParticles:
 
     @property
     def _first_non_none_particle(self):
-        return self.particles[0] if self.particles[0] is not None\
-            else next(particle for particle in self.particles if particle is not None)
+        try:
+            return self.particles[0] if self.particles[0] is not None\
+                else next(particle for particle in self.particles if particle is not None)
+        except StopIteration:
+            raise StopIteration("All particles are none")
 
     @property
     def latest_observation_time(self):
@@ -114,4 +119,16 @@ class MMParticles:
             replacement value(s)
         """
         self.particles[key] = value
+
+    def route_nodes(self):
+        """
+        Returns n series of nodes describing the routes
+        :return: length n list of numpy.ndarrays, shape (_,)
+        """
+        nodes = []
+        for p in self.particles:
+            edges = p[:, 1:4]
+            pruned_edges = np.array([e for i, e in enumerate(edges) if i == 0 or not np.array_equal(e, edges[i-1])])
+            nodes += [np.append(pruned_edges[:, 0], pruned_edges[-1, 1])]
+        return nodes
 

@@ -426,11 +426,8 @@ def auxiliary_distance_proposal(graph, particle, new_observation, time_interval,
                                 d_refine=1, dist_expand=50,
                                 dist_prop=EuclideanLengthDistanceProposal(), **kwargs):
 
-
     if particle is None:
         return None, 0.
-
-    gps_sd = mm_model.gps_sd
 
     # Extract all possible routes from previous position
     start_position = particle[-1:].copy()

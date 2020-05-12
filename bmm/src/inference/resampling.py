@@ -184,7 +184,7 @@ def fixed_lag_stitch_post_split(graph,
 
     out_particles = fixed_particles.copy()
 
-    max_fixed_time = fixed_particles[0][-1, 0]
+    max_fixed_time = fixed_particles._first_non_none_particle[-1,0]
 
     stitch_time_interval = min_resample_time - max_fixed_time
 

@@ -295,7 +295,7 @@ def interpolate_path(graph, path, d_refine=1, t_column=False):
     return out_arr
 
 
-def cartesianise_path(graph, path, t_column=False):
+def cartesianise_path(graph, path, t_column=True, observation_time_only=False):
     """
     Converts particle or array of edges and alphas into cartesian points.
     :param path: numpy.ndarray, shape=(_, 5+)
@@ -307,6 +307,9 @@ def cartesianise_path(graph, path, t_column=False):
     """
     start_col = 1*t_column
 
+    if observation_time_only:
+        path = observation_time_rows(path)
+
     cart_points = np.zeros(shape=(path.shape[0], 2))
 
     for i, point in enumerate(path):
@@ -316,15 +319,20 @@ def cartesianise_path(graph, path, t_column=False):
     return cart_points
 
 
-def observation_time_rows(path):
+def observation_time_rows(path,  t_column=True):
     """
     Returns rows of path only at observation times (not intersections)
     :param path: numpy.ndarray, shape=(_, 5+)
         columns - (t), u, v, k, alpha, ...
+    :param t_column: boolean
+        boolean describing if input has a first column for the time variable
     :return: trimmed path
         numpy.ndarray, shape like path
     """
-    return path[path[:, 4] != 1]
+    if t_column:
+        return path[np.logical_or(path[:, 0] != 0, np.arange(len(path)) == 0.)]
+    else:
+        return path[path[:, 3] != 1]
 
 #
 #
