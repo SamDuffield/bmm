@@ -7,6 +7,7 @@
 
 import numpy as np
 from scipy.special import gamma, gammainc
+from scipy.stats import gamma as gamma_dist
 
 
 intersection_penalisation = 1
@@ -109,13 +110,13 @@ def pdf_gamma_mv(vals, mean, var):
     gamma_beta = mean / var
     gamma_alpha = mean * gamma_beta
 
-    gamma_func_alpha = gamma(gamma_alpha)
-
     if any(np.atleast_1d(vals) <= 0):
         print(vals)
         raise ValueError("Gamma pdf takes only positive values")
 
-    return gamma_beta ** gamma_alpha / gamma_func_alpha * vals ** (gamma_alpha - 1) * np.exp(-gamma_beta * vals)
+    # gamma_func_alpha = gamma(gamma_alpha)
+    # return gamma_beta ** gamma_alpha / gamma_func_alpha * vals ** (gamma_alpha - 1) * np.exp(-gamma_beta * vals)
+    return gamma_dist.pdf(vals, a=gamma_alpha, scale=1/gamma_beta)
 
 
 def cdf_gamma_mv(vals, mean, var):

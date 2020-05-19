@@ -110,7 +110,7 @@ def full_fixed_lag_stitch(j, fixed_particle, last_edge_fixed, last_edge_fixed_le
     res_weights /= res_weights.sum()
 
     # If only particle on fixed edge resample full trajectory
-    if max(res_weights) == 1 or max(res_weights) == 0:
+    if max(res_weights) == 1 or max(res_weights) == 0 or np.all(np.isnan(res_weights)):
         out_particle = None
         ess_stitch = 1 / np.sum(pf_weights ** 2)
 
@@ -143,7 +143,7 @@ def rejection_fixed_lag_stitch(j, fixed_particle, last_edge_fixed, last_edge_fix
         new_index = np.random.choice(n, 1, p=adjusted_weights)[0]
         new_particle = new_particles[new_index].copy()
 
-        # Reject if new_particle starts from differen edge
+        # Reject if new_particle starts from different edge
         if not np.array_equal(last_edge_fixed[1:4], new_particle[0, 1:4]):
             continue
         # Reject if new_particle doesn't overtake fixed_particles
@@ -184,7 +184,7 @@ def fixed_lag_stitch_post_split(graph,
 
     out_particles = fixed_particles.copy()
 
-    max_fixed_time = fixed_particles._first_non_none_particle[-1,0]
+    max_fixed_time = fixed_particles._first_non_none_particle[-1, 0]
 
     stitch_time_interval = min_resample_time - max_fixed_time
 
@@ -329,7 +329,7 @@ def fixed_lag_stitching(graph, mm_model, particles, weights, lag, max_rejections
     originial_stitching_distances = np.zeros(n)
 
     for j in range(n):
-        if weights[j] == 0:
+        if out_particles[j] is None:
             continue
 
         max_fixed_time_indices[j] = np.where(out_particles[j][:, 0] == max_fixed_time)[0][0]

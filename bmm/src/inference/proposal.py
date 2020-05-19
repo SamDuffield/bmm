@@ -399,6 +399,7 @@ class EuclideanLengthDistanceProposal(DistanceProposal):
             variance
         :return: float or np.array (>0)
         """
+
         return pdf_gamma_mv(x, euclidean_distance, var)
 
     @staticmethod
@@ -593,114 +594,130 @@ def aux_dist_expand_weight(discretised_check_routes, dis_check_probs,
 
     return unnorm_weight_denom
 
-#
-#
-# def dist_then_edge_proposal(graph, particle, new_observation, time_interval, gps_sd,
-#                             dist_prop=EuclideanLengthDistanceProposal(), **kwargs):
-#     """
-#     Samples distance first then chooses edges travelled. Outputs updated particle and (unnormalised) weight.
-#     :param graph: NetworkX MultiDiGraph
-#         UTM projection
-#         encodes road network
-#         generating using OSMnx, see tools.graph.py
-#     :param particle: numpy.ndarray, shape = (_, 7)
-#         single element of MMParticles.particles
-#     :param new_observation: numpy.ndarray, shape = (2,)
-#         UTM projection
-#         coordinate of first observation
-#     :param time_interval: float
-#         seconds
-#         time between last observation and newly received observation
-#     :param gps_sd: float
-#         metres
-#         standard deviation of GPS noise
-#     :param dist_prop: DistanceProposal
-#         class that can propose a distance and evaluate pdf of said proposal
-#     :param kwargs: optional parameters to pass to distance proposal
-#         i.e. variance of proposal (var=10)
-#     :return: tuple, particle with appended proposal and weight
-#         particle: numpy.ndarray, shape = (_, 7)
-#         weight: float, not normalised
-#     """
-#     if particle is None:
-#         return None, 0.
-#
-#     # Extract position at last observation time
-#     start_position = particle[-1:].copy()
-#     start_position[0, -1] = 0
-#
-#     # Get geometry
-#     start_geom = get_geometry(graph, start_position[0, 1:4])
-#
-#     # Cartesianise
-#     cart_start = edge_interpolate(start_geom, start_position[0, 4])
-#
-#     # Get Euclidean distance between particle and new observation
-#     euclid_dist = np.linalg.norm(cart_start - new_observation)
-#
-#     # Sample distance
-#     dist_samp = dist_prop.sample(euclid_dist, **kwargs)
-#
-#     # Get possible routes of length dist_samp
-#     routes = get_possible_routes(graph, start_position, dist_samp, all_routes=False)
-#
-#     # No routes implies reached dead end
-#     if len(routes) == 0:
-#         start_position[-1, 0] = particle[-1, 0] + time_interval
-#         start_position[-1, 5] = 0
-#         start_position[-1, -1] = 0
-#         out_particle = np.append(particle, start_position, axis=0)
-#         return out_particle, 0
-#
-#     # Initiate cartesian position of end of routes
-#     routes_end_cart_pos = np.zeros((len(routes), 2))
-#
-#     # Initiate prod 1/number of choices at intersection
-#     intersection_probs = np.zeros(len(routes))
-#
-#     # Iterate through routes
-#     for i, route in enumerate(routes):
-#
-#         if route is None:
-#             continue
-#
-#         end_position = route[-1]
-#
-#         end_geom = get_geometry(graph, end_position[1:4])
-#
-#         routes_end_cart_pos[i] = edge_interpolate(end_geom, end_position[4])
-#
-#         intersection_col = route[:-1, 5]
-#         intersection_probs[i] = np.prod(1 / intersection_col[intersection_col > 1]) \
-#                                 * intersection_penalisation ** len(intersection_col)
-#
-#     # Distances of end points to new observation
-#     obs_distances_sqr = np.sum((routes_end_cart_pos - new_observation) ** 2, axis=1)
-#
-#     # Unnormalised sample probablilites
-#     route_sample_weights = np.exp(- 0.5 / gps_sd ** 2 * obs_distances_sqr) * intersection_probs
-#
-#     # Normalising constant
-#     prob_y_given_x_prev_d = np.sum(route_sample_weights)
-#
-#     # Normalise
-#     route_sample_weights /= prob_y_given_x_prev_d
-#
-#     # Sample route
-#     sampled_route_ind = np.random.choice(len(routes), 1, p=route_sample_weights)[0]
-#     sampled_route = routes[sampled_route_ind]
-#
-#     # Append to old particle
-#     sampled_route[0, 0] = 0
-#     sampled_route[-1, 0] = particle[-1, 0] + time_interval
-#     sampled_route[-1, 5] = 0
-#     out_particle = np.append(particle, sampled_route, axis=0)
-#
-#     # Weight
-#     weight = prob_y_given_x_prev_d * distance_prior(dist_samp, time_interval) \
-#              / dist_prop.pdf(dist_samp, euclid_dist, **kwargs)
-#
-#     return out_particle, weight
+
+def dist_then_edge_proposal(graph, particle, new_observation, time_interval, mm_model, full_smoothing=True,
+                            dist_prop=EuclideanLengthDistanceProposal(), **kwargs):
+    """
+    Samples distance first then chooses edges travelled. Outputs updated particle and (unnormalised) weight.
+    :param graph: NetworkX MultiDiGraph
+        UTM projection
+        encodes road network
+        generating using OSMnx, see tools.graph.py
+    :param particle: numpy.ndarray, shape = (_, 7)
+        single element of MMParticles.particles
+    :param new_observation: numpy.ndarray, shape = (2,)
+        UTM projection
+        coordinate of first observation
+    :param time_interval: float
+        seconds
+        time between last observation and newly received observation
+    :param mm_model: MapMatchingModel
+        from inference/model
+    :param full_smoothing: bool
+        if True returns full trajectory
+        else returns only x_t-1 to x_t
+    :param dist_prop: DistanceProposal
+        class that can propose a distance and evaluate pdf of said proposal
+    :param kwargs: optional parameters to pass to distance proposal
+        i.e. variance of proposal (var=10)
+    :return: tuple, particle with appended proposal and weight
+        particle: numpy.ndarray, shape = (_, 7)
+        weight: float, not normalised
+    """
+    if particle is None:
+        return None, 0.
+
+    gps_sd = mm_model.gps_sd
+    intersection_penalisation = mm_model.intersection_penalisation
+
+    # Extract position at last observation time
+    start_position = particle[-1:].copy()
+    start_position[0, -1] = 0
+
+    # Get geometry
+    start_geom = get_geometry(graph, start_position[0, 1:4])
+
+    # Cartesianise
+    cart_start = edge_interpolate(start_geom, start_position[0, 4])
+
+    # Get Euclidean distance between particle and new observation
+    euclid_dist = np.linalg.norm(cart_start - new_observation)
+
+    # Sample distance
+    dist_samp = dist_prop.sample(euclid_dist, **kwargs)
+
+    # Get possible routes of length dist_samp
+    routes = get_possible_routes(graph, start_position, dist_samp, all_routes=False)
+
+    # No routes implies reached dead end
+    if len(routes) == 0:
+        start_position[-1, 0] = particle[-1, 0] + time_interval
+        start_position[-1, 5] = 0
+        start_position[-1, -1] = 0
+        out_particle = np.append(particle, start_position, axis=0)
+        return out_particle, 0
+
+    # Initiate cartesian position of end of routes
+    routes_end_cart_pos = np.zeros((len(routes), 2))
+
+    # Initiate prod 1/number of choices at intersection
+    intersection_probs = np.zeros(len(routes))
+
+    # Iterate through routes
+    for i, route in enumerate(routes):
+
+        if route is None:
+            continue
+
+        end_position = route[-1]
+
+        end_geom = get_geometry(graph, end_position[1:4])
+
+        routes_end_cart_pos[i] = edge_interpolate(end_geom, end_position[4])
+
+        intersection_col = route[:-1, 5]
+        intersection_probs[i] = np.prod(1 / intersection_col[intersection_col > 1]) \
+                                * intersection_penalisation ** len(intersection_col)
+
+    # Distances of end points to new observation
+    obs_distances_sqr = np.sum((routes_end_cart_pos - new_observation) ** 2, axis=1)
+
+    # Unnormalised sample probablilites
+    route_sample_weights = np.exp(- 0.5 / gps_sd ** 2 * obs_distances_sqr) * intersection_probs
+
+    # Normalising constant
+    prob_y_given_x_prev_d = np.sum(route_sample_weights)
+
+    if prob_y_given_x_prev_d == 0:
+        return None, 0
+
+    # Normalise
+    route_sample_weights /= prob_y_given_x_prev_d
+
+    # Sample route
+    sampled_route_ind = np.random.choice(len(routes), 1, p=route_sample_weights)[0]
+    sampled_route = routes[sampled_route_ind]
+
+    # Append to old particle
+    sampled_route[0, 0] = 0
+    sampled_route[-1, 0] = particle[-1, 0] + time_interval
+    sampled_route[-1, 5] = 0
+
+    if full_smoothing:
+        out_particle = np.append(particle, sampled_route, axis=0)
+    else:
+        out_particle = np.append(particle[-1:], sampled_route, axis=0)
+
+    dist_samp_prop_eval = 0.000001 if dist_samp == 0 else dist_samp
+
+    # Weight
+    weight = prob_y_given_x_prev_d * mm_model.distance_prior_evaluate(dist_samp, time_interval) \
+             / dist_prop.pdf(dist_samp_prop_eval, euclid_dist, **kwargs)
+
+    if np.isnan(weight):
+        weight = 0.
+
+    return out_particle, weight
 #
 #
 # def auxiliary_distance_proposal_edge(graph, particle, new_observation, time_interval, gps_sd,

@@ -12,7 +12,7 @@ import numpy as np
 
 import bmm.src.tools.edges
 from bmm.src.inference.particles import MMParticles
-from bmm.src.inference.proposal import optimal_proposal, auxiliary_distance_proposal
+from bmm.src.inference.proposal import optimal_proposal, auxiliary_distance_proposal, dist_then_edge_proposal
 from bmm.src.inference.resampling import fixed_lag_stitching, multinomial, fixed_lag_stitch_post_split
 from bmm.src.inference.backward import backward_simulate
 from bmm.src.inference.model import SimpleMapMatchingModel
@@ -149,13 +149,18 @@ def update_particles_flpf(graph,
 
     # print(sum([p is None for p in out_particles]))
 
+    unn_weights = weights.copy()
+
     # Normalise weights
     weights /= sum(weights)
+
+    ############################## ADD CATCH FOR ALL NONE (i.e. reinitiate particles at new_observation = start new route)
+    if np.any(np.isnan(weights)):
+        raise ValueError
 
     # Store ESS
     out_particles.ess_pf = np.append(out_particles.ess_pf, 1 / np.sum(weights ** 2))
 
-    ############################## ADD CATCH FOR ALL NONE (i.e. reinitiate particles at new_observation = start new route)
 
     # Update time intervals
     out_particles.time_intervals = np.append(out_particles.time_intervals, time_interval)
@@ -355,6 +360,8 @@ def update_particles(graph,
         proposal_func = optimal_proposal
     elif proposal == 'aux_dist':
         proposal_func = auxiliary_distance_proposal
+    elif proposal == 'dist_then_edge':
+        proposal_func = dist_then_edge_proposal
     else:
         raise ValueError("Proposal " + str(proposal) + " not recognised, see bmm.proposals for valid options")
 
@@ -440,6 +447,8 @@ def _offline_map_match_fl(graph,
         proposal_func = optimal_proposal
     elif proposal == 'aux_dist':
         proposal_func = auxiliary_distance_proposal
+    elif proposal == 'dist_then_edge':
+        proposal_func = dist_then_edge_proposal
     else:
         raise ValueError("Proposal " + str(proposal) + "not recognised, see bmm.proposals for valid options")
 
@@ -475,7 +484,7 @@ def _offline_map_match_fl(graph,
     # Update particles
     for i in range(num_obs - 1):
         particles = update_func(graph, mm_model, particles, polyline[1 + i], time_interval=time_interval_arr[i],
-                                proposal_func=proposal_func, lag=lag,max_rejections=max_rejections,
+                                proposal_func=proposal_func, lag=lag, max_rejections=max_rejections,
                                 **kwargs)
 
         print(str(particles.latest_observation_time) + " PF ESS: " + str(np.mean(particles.ess_pf[-1])))
@@ -538,6 +547,8 @@ def offline_map_match(graph,
         proposal_func = optimal_proposal
     elif proposal == 'aux_dist':
         proposal_func = auxiliary_distance_proposal
+    elif proposal == 'dist_then_edge':
+        proposal_func = dist_then_edge_proposal
     else:
         raise ValueError("Proposal " + str(proposal) + "not recognised, see bmm.proposals for valid options")
 

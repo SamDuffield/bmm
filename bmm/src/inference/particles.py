@@ -62,7 +62,7 @@ class MMParticles:
             return self.particles[0] if self.particles[0] is not None\
                 else next(particle for particle in self.particles if particle is not None)
         except StopIteration:
-            raise StopIteration("All particles are none")
+            raise ValueError("All particles are none")
 
     @property
     def latest_observation_time(self):

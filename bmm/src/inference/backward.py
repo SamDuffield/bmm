@@ -19,16 +19,18 @@ def full_backward_sample(fixed_particle, first_edge_fixed, first_edge_fixed_leng
                          return_ess_back=False):
     n = filter_particles.n
 
-    filter_particles_adjusted = [None] * n
+    # filter_particles_adjusted = [None] * n
 
     smoothing_distances = np.empty(n)
     smoothing_distances[:] = np.nan
+
+    distances_j_to_k = np.empty(n)
 
     for k in range(n):
         if filter_weights[k] == 0:
             continue
 
-        filter_particle = filter_particles[k].copy()
+        filter_particle = filter_particles[k]
 
         # Check first fixed edge and last filter edge coincide
         if np.array_equal(first_edge_fixed[1:4], filter_particle[-1, 1:4]):
@@ -37,18 +39,18 @@ def full_backward_sample(fixed_particle, first_edge_fixed, first_edge_fixed_leng
                     filter_particle[-1, 4] > fixed_particle[next_time_index, 4]:
                 continue
 
-            distance_j_to_k = (first_edge_fixed[4] - filter_particle[-1, 4]) * first_edge_fixed_length
+            distances_j_to_k[k] = (first_edge_fixed[4] - filter_particle[-1, 4]) * first_edge_fixed_length
 
-            fixed_particle[1:next_time_index, -1] += distance_j_to_k
+            # fixed_particle[1:(next_time_index + 1), -1] += distance_j_to_k
 
-            smoothing_distances[k] = fixed_particle[next_time_index, -1]
+            smoothing_distances[k] = fixed_particle[next_time_index, -1] + distances_j_to_k[k]
 
-            filter_particles_adjusted[k] = filter_particle
+            # filter_particles_adjusted[k] = filter_particle
 
     possible_inds = ~np.isnan(smoothing_distances)
 
     if not np.any(possible_inds):
-        return None, 0 if return_ess_back else None
+        return (None, 0) if return_ess_back else None
 
     smoothing_weights = np.zeros(n)
     smoothing_weights[possible_inds] = filter_weights[possible_inds] \
@@ -57,7 +59,9 @@ def full_backward_sample(fixed_particle, first_edge_fixed, first_edge_fixed_leng
 
     sampled_index = np.random.choice(n, 1, p=smoothing_weights)[0]
 
-    out_particle = np.append(filter_particles_adjusted[sampled_index], fixed_particle[1:], axis=0)
+    fixed_particle[1:(next_time_index + 1), -1] += distances_j_to_k[sampled_index]
+
+    out_particle = np.append(filter_particles[sampled_index], fixed_particle[1:], axis=0)
 
     ess_back = 1 / (smoothing_weights ** 2).sum()
 
@@ -80,7 +84,7 @@ def rejection_backward_sample(fixed_particle,
 
     for k in range(max_rejections):
         filter_index = np.random.choice(n, 1, p=filter_weights)[0]
-        filter_particle = filter_particles[filter_index].copy()
+        filter_particle = filter_particles[filter_index]
 
         if not np.array_equal(first_edge_fixed[1:4], filter_particle[-1, 1:4]):
             continue
@@ -90,13 +94,12 @@ def rejection_backward_sample(fixed_particle,
 
         distance_j_to_k = (first_edge_fixed[4] - filter_particle[-1, 4]) * first_edge_fixed_length
 
-        fixed_particle[1:next_time_index, -1] += distance_j_to_k
-
-        smoothing_distance = fixed_particle[next_time_index, -1]
+        smoothing_distance = fixed_particle[next_time_index, -1] + distance_j_to_k
 
         smoothing_distance_prior = distance_prior_evaluate(smoothing_distance, time_interval)
 
         if np.random.uniform() < smoothing_distance_prior / distance_prior_bound:
+            fixed_particle[1:(next_time_index + 1), -1] += distance_j_to_k
             return np.append(filter_particle, fixed_particle[1:], axis=0)
 
     return None
@@ -165,10 +168,7 @@ def backward_simulate(graph,
                                                             mm_model.distance_prior_evaluate,
                                                             False)
 
-            # if out_particles[j] is not None and out_particles[j][0, 0] == 0 and i != 1 and i != 0:
-            #     raise ValueError
-
-        none_inds = np.array([p is None or p == (None, None) for p in out_particles])
+        none_inds = np.array([p is None or None in p for p in out_particles])
         good_inds = ~none_inds
         n_good = good_inds.sum()
         if n_good < n_samps:
