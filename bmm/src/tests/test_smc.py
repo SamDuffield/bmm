@@ -1,5 +1,5 @@
 ########################################################################################################################
-# Module: tests/inference_smc.py
+# Module: tests/test_smc.py
 # Description: Tests for SMC implementation.
 #
 # Web: https://github.com/SamDuffield/bayesian-traffic

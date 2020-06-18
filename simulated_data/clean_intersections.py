@@ -4,15 +4,13 @@ import logging as lg
 
 
 import numpy as np
-import pandas as pd
 from geopandas import gpd
-from shapely.geometry import Point, Polygon, LineString, MultiLineString
-from shapely.ops import linemerge
-from osmnx import graph_to_gdfs, gdfs_to_graph, count_streets_per_node, project_graph, log, settings, get_nearest_nodes
+from shapely.geometry import Point, Polygon, LineString
+from osmnx import graph_to_gdfs, log, settings, get_nearest_nodes
 import networkx as nx
 
 
-def clean_intersections_graph(G, rebuild_graph=False, tolerance=15, dead_ends=False, method='kdtree'):
+def clean_intersections_graph(G, rebuild_graph=False, tolerance=15, method='kdtree'):
     """
     From https://github.com/gboeing/osmnx/blob/clean_intersections/osmnx/simplify.py
     Clean-up intersections comprising clusters of nodes by merging them and
@@ -63,17 +61,6 @@ def clean_intersections_graph(G, rebuild_graph=False, tolerance=15, dead_ends=Fa
     # Let's make a copy of G
     G = G.copy()
 
-    # if dead_ends is False, discard dead-end nodes to only work with edge
-    # intersections
-    if not dead_ends:
-        if 'streets_per_node' in G.graph:
-            streets_per_node = G.graph['streets_per_node']
-        else:
-            streets_per_node = count_streets_per_node(G)
-
-        dead_end_nodes = [node for node, count in streets_per_node.items() if count <= 1]
-        G.remove_nodes_from(dead_end_nodes)
-
     # create a GeoDataFrame of nodes, buffer to passed-in distance, merge
     # overlaps
     gdf_nodes = graph_to_gdfs(G, edges=False)
@@ -113,8 +100,7 @@ def clean_intersections_graph(G, rebuild_graph=False, tolerance=15, dead_ends=Fa
             data['geometry'] = LineString([(x1, y1), (x2, y2)])
 
     # Let's first create the Graph first
-    G__ = nx.MultiDiGraph(name = G.graph['name'],
-                          crs  = G.graph['crs'])
+    G__ = nx.MultiDiGraph(crs  = G.graph['crs'])
 
     # And add the nodes (without the osmid attributes just yet)
     # The centroids are given new ids = 0 .. total_centroids-1

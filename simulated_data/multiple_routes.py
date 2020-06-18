@@ -3,10 +3,10 @@ import os
 import numpy as np
 import osmnx as ox
 import matplotlib.pyplot as plt
-from simulated_data.clean_intersections import clean_intersections_graph
 
 import bmm
 
+from simulated_data.clean_intersections import clean_intersections_graph
 from simulated_data.utils import sample_route, rmse
 
 ########################################################################################################################
@@ -73,7 +73,7 @@ if not os.path.exists(graph_path):
     simplified_clean_int_rde_graph = clean_int_simplified_graph
 
     # Removing dead-ends creates more dead-ends - so repeat a few times
-    prune_iters = 100
+    prune_iters = 10
     for i in range(prune_iters):
         simplified_clean_int_rde_graph = remove_dead_ends(simplified_clean_int_rde_graph)
 
@@ -87,7 +87,7 @@ else:
     graph = ox.load_graphml(graph_path)
 
 # Initiate map-matching probabilistic model
-mm_model = bmm.SimpleMapMatchingModel()
+mm_model = bmm.GammaMapMatchingModel()
 mm_model.gps_sd = gps_sd
 
 end_time = time_interval * (route_length - 1)

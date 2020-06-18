@@ -176,7 +176,8 @@ def fixed_lag_stitch_post_split(graph,
                                 new_particles,
                                 new_weights,
                                 mm_model,
-                                min_resample_time, min_resample_time_indices,
+                                min_resample_time,
+                                min_resample_time_indices,
                                 originial_stitching_distances,
                                 max_rejections):
     n = len(fixed_particles)
@@ -258,6 +259,11 @@ def fixed_lag_stitch_post_split(graph,
     none_inds = np.array([p is None for p in out_particles])
     good_inds = ~none_inds
     n_good = good_inds.sum()
+
+    if n_good == 0:
+        raise ValueError("Map-matching failed: all stitching probabilities zero,"
+                         "try increasing the lag or number of particles")
+
     if n_good < n:
         none_inds_res_indices = np.random.choice(n, n - n_good, p=good_inds/n_good)
         for i, j in enumerate(np.where(none_inds)[0]):
@@ -301,7 +307,7 @@ def fixed_lag_stitching(graph, mm_model, particles, weights, lag, max_rejections
 
     # Extract basic quantities
     observation_times = particles.observation_times
-    m = len(observation_times)
+    m = len(observation_times) - 1
     n = particles.n
     ess_pf = 1 / np.sum(weights ** 2)
 

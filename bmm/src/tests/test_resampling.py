@@ -1,5 +1,5 @@
 ########################################################################################################################
-# Module: tests/inference_resampling.py
+# Module: tests/test_resampling.py
 # Description: Tests for resampling schemes.
 #
 # Web: https://github.com/SamDuffield/bayesian-traffic

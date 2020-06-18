@@ -1,5 +1,5 @@
 ########################################################################################################################
-# Module: tests/inference_MMParticles.py
+# Module: tests/test_MMParticles.py
 # Description: Tests for MMParticles class.
 #
 # Web: https://github.com/SamDuffield/bayesian-traffic

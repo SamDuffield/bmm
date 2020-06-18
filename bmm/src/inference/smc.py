@@ -15,7 +15,7 @@ from bmm.src.inference.particles import MMParticles
 from bmm.src.inference.proposal import optimal_proposal, auxiliary_distance_proposal, dist_then_edge_proposal
 from bmm.src.inference.resampling import fixed_lag_stitching, multinomial, fixed_lag_stitch_post_split
 from bmm.src.inference.backward import backward_simulate
-from bmm.src.inference.model import SimpleMapMatchingModel
+from bmm.src.inference.model import GammaMapMatchingModel
 
 updates = ('PF', 'BSi')
 
@@ -25,7 +25,7 @@ proposals = ('optimal', 'aux_dist')
 def initiate_particles(graph,
                        first_observation,
                        n_samps,
-                       mm_model=SimpleMapMatchingModel(),
+                       mm_model=GammaMapMatchingModel(),
                        d_refine=1,
                        truncation_distance=None,
                        ess_all=True,
@@ -52,7 +52,7 @@ def initiate_particles(graph,
     :param truncation_distance: float
         metres
         distance beyond which to assume zero likelihood probability
-        required only for first observation
+        defaults to 5 * mm_model.gps_sd
     :param ess_all: bool
         if true initiate effective sample size for each particle for each observation
         otherwise initiate effective sample size only for each observation
@@ -63,13 +63,16 @@ def initiate_particles(graph,
     gps_sd = mm_model.gps_sd
 
     if truncation_distance is None:
-        truncation_distance = gps_sd * 3
+        truncation_distance = gps_sd * 5
 
     start = tm()
 
     # Discretize edges within truncation
     dis_points = bmm.src.tools.edges.get_truncated_discrete_edges(graph, first_observation, d_refine,
                                                                   truncation_distance)
+
+    if dis_points.size == 0:
+        raise ValueError("No edges found near initial observation: try increasing the initial_truncation")
 
     # Likelihood weights
     weights = np.exp(-0.5 / gps_sd ** 2 * dis_points[:, 4] ** 2)
@@ -147,16 +150,12 @@ def update_particles_flpf(graph,
         out_particles[j], weights[j] = proposal_func(graph, out_particles[j], new_observation,
                                                      time_interval, mm_model, **kwargs)
 
-    # print(sum([p is None for p in out_particles]))
-
-    unn_weights = weights.copy()
-
     # Normalise weights
     weights /= sum(weights)
 
     ############################## ADD CATCH FOR ALL NONE (i.e. reinitiate particles at new_observation = start new route)
     if np.any(np.isnan(weights)):
-        raise ValueError
+        raise ZeroDivisionError('Map-matching failed (all weights zero)')
 
     # Store ESS
     out_particles.ess_pf = np.append(out_particles.ess_pf, 1 / np.sum(weights ** 2))
@@ -220,15 +219,15 @@ def update_particles_flbs(graph,
 
     # Extract basic quantities
     n = particles.n
-    observation_times = particles.observation_times
-    m = len(observation_times)
+    observation_times = np.append(particles.observation_times, particles.observation_times[-1] + time_interval)
+    m = len(observation_times) - 1
     stitching_required = m > lag
 
     # Initiate particle output
     out_particles = particles.copy()
 
     # Initiate weight output
-    weights = np.zeros(particles.n)
+    weights = np.zeros(n)
 
     # Initiate new filter particles
     latest_filter_particles = out_particles.filter_particles[-1].copy()
@@ -264,8 +263,10 @@ def update_particles_flbs(graph,
 
     # Run backward simulation
     backward_particles = backward_simulate(graph,
-                                           out_particles.filter_particles, out_particles.filter_weights,
-                                           out_particles.time_intervals[max(m - lag, 0):], mm_model,
+                                           out_particles.filter_particles,
+                                           out_particles.filter_weights,
+                                           out_particles.time_intervals[-lag:] if lag != 0 else [],
+                                           mm_model,
                                            max_rejections,
                                            store_ess_back=False)
 
@@ -313,7 +314,7 @@ def update_particles(graph,
                      particles,
                      new_observation,
                      time_interval,
-                     mm_model=SimpleMapMatchingModel(),
+                     mm_model=GammaMapMatchingModel(),
                      proposal='optimal',
                      lag=3,
                      max_rejections=20,
@@ -393,7 +394,7 @@ def _offline_map_match_fl(graph,
                           polyline,
                           n_samps,
                           time_interval,
-                          mm_model=SimpleMapMatchingModel(),
+                          mm_model=GammaMapMatchingModel(),
                           proposal='optimal',
                           update='PF',
                           lag=3,
@@ -496,7 +497,7 @@ def offline_map_match(graph,
                       polyline,
                       n_samps,
                       time_interval,
-                      mm_model=SimpleMapMatchingModel(),
+                      mm_model=GammaMapMatchingModel(),
                       proposal='optimal',
                       d_refine=1,
                       initial_truncation=None,
@@ -532,7 +533,7 @@ def offline_map_match(graph,
     :param initial_truncation: float
         metres
         distance to truncate for sampling initial position
-        defaults to 3 * gps_sd
+        defaults to 5 * gps_sd
     :param max_rejections: int
         number of rejections before doing full fixed-lag stitching in resampling
         0 will do full fixed-lag stitching and track ess_stitch

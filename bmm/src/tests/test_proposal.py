@@ -1,5 +1,5 @@
 ########################################################################################################################
-# Module: tests/inference_proposal.py
+# Module: tests/test_proposal.py
 # Description: Tests for the propagate and reweighting steps of our SMC implementation.
 #
 # Web: https://github.com/SamDuffield/bayesian-traffic
@@ -9,7 +9,7 @@ import unittest
 
 import numpy as np
 
-from bmm.src.tests.inference_smc import TestWithGraphAndData
+from bmm.src.tests.test_smc import TestWithGraphAndData
 from bmm.src.inference import proposal
 
 

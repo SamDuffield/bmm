@@ -41,7 +41,7 @@ class MapMatchingModel:
         return self.max_speed * time_interval
 
 
-class SimpleMapMatchingModel(MapMatchingModel):
+class GammaMapMatchingModel(MapMatchingModel):
 
     gps_sd = 7
     max_speed = 35

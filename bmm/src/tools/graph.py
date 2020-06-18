@@ -160,7 +160,7 @@ def load_graph(path=None):
         path = source_file.read()
         source_file.close()
 
-    return ox.load_graphml(folder=os.path.dirname(path), filename=os.path.basename(path))
+    return ox.load_graphml(filepath=path)
 
 
 def get_bbox_from_graph(graph):

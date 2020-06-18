@@ -12,11 +12,15 @@ from bmm.src.inference.smc import updates
 from bmm.src.inference.smc import proposals
 
 from bmm.src.inference.model import MapMatchingModel
-from bmm.src.inference.model import SimpleMapMatchingModel
+from bmm.src.inference.model import GammaMapMatchingModel
 
 from bmm.src.inference.proposal import get_possible_routes
 
 from bmm.src.tools.edges import cartesianise_path
+from bmm.src.tools.edges import get_geometry
+from bmm.src.tools.edges import discretise_edge
+
+from bmm.src.inference.particles import MMParticles
 
 # try:
 #   del src

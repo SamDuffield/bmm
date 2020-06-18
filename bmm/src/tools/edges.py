@@ -86,7 +86,7 @@ def discretise_edge(graph, edge, d_refine, observation=None, gps_sd=None):
         UTM projection
         encodes road network
         generating using OSMnx, see tools.graph.py
-    :param edge_tuple: list-like, length = 3
+    :param edge: list-like, length = 3
         elements u, v, k
             u: int, edge start node
             v: int, edge end node
@@ -196,7 +196,7 @@ def get_edges_within_dist(graph_edges, coord, dist):
     graph_edges_dist = graph_edges.copy()
 
     graph_edges_dist['distance_to_obs'] = graph_edges['geometry'].apply(
-        lambda geom: ox.Point(tuple(coord)).distance(geom))
+        lambda geom: Point(tuple(coord)).distance(geom))
 
     edges_within_dist = graph_edges_dist[graph_edges_dist['distance_to_obs'] < dist]
 
@@ -250,7 +250,7 @@ def get_truncated_discrete_edges(graph, coord, edge_refinement, dist_retain):
     for _, row in close_edges.iterrows():
         for a in row['alpha']:
             xy = edge_interpolate(row['geometry'], a)
-            dist = ox.euclidean_dist_vec(coord[1], coord[0], xy[1], xy[0])
+            dist = np.sqrt(np.square(coord - xy).sum())
             if dist < dist_retain:
                 add_row = row.copy()
                 add_row['alpha'] = a

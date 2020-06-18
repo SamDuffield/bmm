@@ -5,7 +5,7 @@ from matplotlib import pyplot as plt
 from bmm.src.tools.edges import interpolate_path, cartesianise_path, observation_time_rows
 
 
-def plot(graph, particles=None, polyline=None, particles_alpha=None):
+def plot(graph, particles=None, polyline=None, particles_alpha=None, label_start_end=True):
     """
     Plots particle approximation of trajectory
     :param graph: NetworkX MultiDiGraph
@@ -20,14 +20,20 @@ def plot(graph, particles=None, polyline=None, particles_alpha=None):
     :param particles_alpha: float in [0, 1]
         plotting parameter
         opacity of routes
+    :param label_start_end: bool
+        whether to label the start and end points of the route
     :return: fig, ax
     """
     fig, ax = ox.plot_graph(graph, show=False, close=False, equal_aspect=True, edge_color='lightgrey',
                             node_size=0, edge_linewidth=3)
 
+    start_end_points = None
+
     if particles is not None:
         if isinstance(particles, np.ndarray):
             particles = [particles]
+
+        start_end_points = np.zeros((2, 2))
 
         alpha_min = 0.3
 
@@ -52,20 +58,15 @@ def plot(graph, particles=None, polyline=None, particles_alpha=None):
 
             ax.scatter(cart_path[:, 0], cart_path[:, 1], color='orange', alpha=particles_alpha, zorder=2)
 
+            start_end_points[0] += cart_path[0] / len(particles)
+            start_end_points[1] += cart_path[-1] / len(particles)
+
             xlim[0] = np.min(cart_path[:, 0]) if xlim[0] is None else min(np.min(cart_path[:, 0]), xlim[0])
             xlim[1] = np.max(cart_path[:, 0]) if xlim[1] is None else max(np.max(cart_path[:, 0]), xlim[1])
             ylim[0] = np.min(cart_path[:, 1]) if ylim[0] is None else min(np.min(cart_path[:, 1]), ylim[0])
             ylim[1] = np.max(cart_path[:, 1]) if ylim[1] is None else max(np.max(cart_path[:, 1]), ylim[1])
 
-        expand_coef = 0.1
-
-        x_range = max(xlim[1] - xlim[0], 200)
-        xlim[0] -= x_range * expand_coef
-        xlim[1] += x_range * expand_coef
-
-        y_range = max(ylim[1] - ylim[0], 200)
-        ylim[0] -= y_range * expand_coef
-        ylim[1] += y_range * expand_coef
+        xlim, ylim = expand_lims(xlim, ylim, 0.1)
 
         ax.set_xlim(xlim[0], xlim[1])
         ax.set_ylim(ylim[0], ylim[1])
@@ -76,9 +77,34 @@ def plot(graph, particles=None, polyline=None, particles_alpha=None):
                    poly_arr[:, 1],
                    marker='x', c='red', s=100, linewidth=3, zorder=10)
 
+        if particles is None:
+            start_end_points = poly_arr[np.array([0, -1])]
+
+            xlim = [np.min(poly_arr[:, 0]), np.max(poly_arr[:, 0])]
+            ylim = [np.min(poly_arr[:, 1]), np.max(poly_arr[:, 1])]
+
+            xlim, ylim = expand_lims(xlim, ylim, 0.1)
+
+            ax.set_xlim(xlim[0], xlim[1])
+            ax.set_ylim(ylim[0], ylim[1])
+
+    if start_end_points is not None and label_start_end:
+        plt.annotate('Start', start_end_points[0] + 25, zorder=12)
+        plt.annotate('End', start_end_points[1] + 25, zorder=12)
+
     plt.tight_layout()
 
     return fig, ax
 
 
+def expand_lims(xlim, ylim, inflation):
+    x_range = max(xlim[1] - xlim[0], 200)
+    xlim[0] -= x_range * inflation
+    xlim[1] += x_range * inflation
+
+    y_range = max(ylim[1] - ylim[0], 200)
+    ylim[0] -= y_range * inflation
+    ylim[1] += y_range * inflation
+
+    return xlim, ylim
 

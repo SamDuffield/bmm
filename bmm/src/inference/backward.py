@@ -128,6 +128,9 @@ def backward_simulate(graph,
     else:
         ess_back = None
 
+    if num_obs < 2:
+        return out_particles
+
     for i in range(num_obs - 2, -1, -1):
         next_time = filter_particles[i + 1].latest_observation_time
 
