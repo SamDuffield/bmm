@@ -8,7 +8,7 @@ with open('README.md') as f:
     long_description = f.read()
 
 METADATA = dict(
-    name="bmm-SamDuffield",
+    name="bmm",
     version='0.1',
     url='http://github.com/SamDuffield/bayesian-map-matching',
     author='Sam Duffield',

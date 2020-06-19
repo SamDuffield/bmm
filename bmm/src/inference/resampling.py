@@ -55,7 +55,7 @@ def multinomial(particles, weights):
 def full_fixed_lag_stitch(j, fixed_particle, last_edge_fixed, last_edge_fixed_length,
                           new_particles, pf_weights,
                           min_resample_time, stitch_time_interval,
-                          min_resample_time_indices, originial_stitching_distances, distance_prior_evals,
+                          min_resample_time_indices, distance_prior_evals,
                           distance_prior_evaluate,
                           return_ess_stitch=False):
     n = len(new_particles)
@@ -68,11 +68,6 @@ def full_fixed_lag_stitch(j, fixed_particle, last_edge_fixed, last_edge_fixed_le
     new_stitching_distances[:] = np.nan
 
     for k in range(n):
-        if k == j:
-            newer_particles_adjusted[k] = new_particles[k][1:]
-            new_stitching_distances[k] = originial_stitching_distances[k]
-            continue
-
         if pf_weights[k] == 0:
             continue
 
@@ -166,6 +161,7 @@ def rejection_fixed_lag_stitch(j, fixed_particle, last_edge_fixed, last_edge_fix
 
         if np.random.uniform() < new_stitching_distance_prior / distance_prior_bound:
             out_particle = np.append(fixed_particle, new_particle[1:], axis=0)
+
             return out_particle
 
     return None
@@ -228,7 +224,6 @@ def fixed_lag_stitch_post_split(graph,
                                                                           new_weights,
                                                                           min_resample_time, stitch_time_interval,
                                                                           min_resample_time_indices,
-                                                                          originial_stitching_distances,
                                                                           distance_prior_evals,
                                                                           mm_model.distance_prior_evaluate,
                                                                           True)
@@ -247,7 +242,6 @@ def fixed_lag_stitch_post_split(graph,
                                                          new_weights,
                                                          min_resample_time, stitch_time_interval,
                                                          min_resample_time_indices,
-                                                         originial_stitching_distances,
                                                          distance_prior_evals,
                                                          mm_model.distance_prior_evaluate,
                                                          False)

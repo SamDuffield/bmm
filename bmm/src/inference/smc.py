@@ -153,7 +153,6 @@ def update_particles_flpf(graph,
     # Normalise weights
     weights /= sum(weights)
 
-    ############################## ADD CATCH FOR ALL NONE (i.e. reinitiate particles at new_observation = start new route)
     if np.any(np.isnan(weights)):
         raise ZeroDivisionError('Map-matching failed (all weights zero)')
 

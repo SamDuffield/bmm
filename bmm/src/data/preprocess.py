@@ -194,7 +194,7 @@ def longlat_polys_to_utm(polylines, to_crs=None):
     polylines_elong['geometry'] = polylines_elong.apply(lambda row: Point(row['x'], row['y']), axis=1)
 
     # Use OSMNx to convert to UTM
-    polylines_elong_utm = ox.project_gdf(polylines_elong, to_crs=to_crs)
+    polylines_elong_utm = ox.projection.project_gdf(polylines_elong, to_crs=to_crs)
 
     # Extract UTM x and y values
     polylines_elong_utm['x'] = polylines_elong_utm['geometry'].map(lambda point: point.x)
