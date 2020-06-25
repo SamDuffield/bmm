@@ -2,29 +2,51 @@
 # Module: inference/backward.py
 # Description: Implementation of backward simulation for particle smoothing.
 #
-# Web: https://github.com/SamDuffield/bayesian-traffic
+# Web: https://github.com/SamDuffield/bmm
 ########################################################################################################################
+
+from typing import Union, Tuple, Optional
+
 import numpy as np
+from networkx.classes import MultiDiGraph
 
 from bmm.src.inference.resampling import multinomial
 from bmm.src.tools.edges import get_geometry
+from bmm.src.inference.particles import MMParticles
+from bmm.src.inference.model import MapMatchingModel
 
 
-def full_backward_sample(fixed_particle, first_edge_fixed, first_edge_fixed_length,
-                         filter_particles,
-                         filter_weights,
-                         time_interval,
-                         next_time_index,
-                         distance_prior_evaluate,
-                         return_ess_back=False):
+def full_backward_sample(fixed_particle: np.ndarray,
+                         first_edge_fixed: np.ndarray,
+                         first_edge_fixed_length: float,
+                         filter_particles: MMParticles,
+                         filter_weights: Union[list, np.ndarray],
+                         time_interval: float,
+                         next_time_index: int,
+                         mm_model: MapMatchingModel,
+                         return_ess_back: bool = False) \
+        -> Union[Optional[np.ndarray], Tuple[Optional[np.ndarray], float]]:
+    """
+    Evaluate full interacting weights, normalise and backwards sample a past coordinate
+    for a single fixed particle of future coordinates
+    :param fixed_particle: trajectory post backwards sampling time
+    :param first_edge_fixed: first row of fixed particle
+    :param first_edge_fixed_length: metres
+    :param filter_particles: proposal particles to be sampled
+    :param filter_weights: weights for filter_particles
+    :param time_interval: time between observations at backwards sampling time
+    :param next_time_index: index of second observation time in fixed_particle
+    :param mm_model: MapMatchingModel
+    :param return_ess_back: whether to calculate and return the ESS of the full interacting weights
+    :return: appended particle (and ess_back if return_ess_back)
+    """
     n = filter_particles.n
-
-    # filter_particles_adjusted = [None] * n
 
     smoothing_distances = np.empty(n)
     smoothing_distances[:] = np.nan
 
     distances_j_to_k = np.empty(n)
+    new_prev_cart_coords = np.empty((n, 2))
 
     for k in range(n):
         if filter_weights[k] == 0:
@@ -40,12 +62,9 @@ def full_backward_sample(fixed_particle, first_edge_fixed, first_edge_fixed_leng
                 continue
 
             distances_j_to_k[k] = (first_edge_fixed[4] - filter_particle[-1, 4]) * first_edge_fixed_length
-
-            # fixed_particle[1:(next_time_index + 1), -1] += distance_j_to_k
-
             smoothing_distances[k] = fixed_particle[next_time_index, -1] + distances_j_to_k[k]
 
-            # filter_particles_adjusted[k] = filter_particle
+            new_prev_cart_coords[k] = filter_particle[-1, 5:7]
 
     possible_inds = ~np.isnan(smoothing_distances)
 
@@ -54,7 +73,11 @@ def full_backward_sample(fixed_particle, first_edge_fixed, first_edge_fixed_leng
 
     smoothing_weights = np.zeros(n)
     smoothing_weights[possible_inds] = filter_weights[possible_inds] \
-                                       * distance_prior_evaluate(smoothing_distances[possible_inds], time_interval)
+                                       * mm_model.distance_prior_evaluate(smoothing_distances[possible_inds],
+                                                                          time_interval) \
+                                       * mm_model.deviation_prior_evaluate(new_prev_cart_coords[possible_inds],
+                                                                 fixed_particle[None, next_time_index, 5:7],
+                                                                 smoothing_distances[possible_inds])
     smoothing_weights /= smoothing_weights.sum()
 
     sampled_index = np.random.choice(n, 1, p=smoothing_weights)[0]
@@ -71,15 +94,28 @@ def full_backward_sample(fixed_particle, first_edge_fixed, first_edge_fixed_leng
         return out_particle
 
 
-def rejection_backward_sample(fixed_particle,
-                              first_edge_fixed, first_edge_fixed_length,
-                              filter_particles,
-                              filter_weights,
-                              time_interval,
-                              next_time_index,
-                              distance_prior_evaluate,
-                              distance_prior_bound,
-                              max_rejections):
+def rejection_backward_sample(fixed_particle: np.ndarray,
+                              first_edge_fixed: np.ndarray,
+                              first_edge_fixed_length: float,
+                              filter_particles: MMParticles,
+                              filter_weights: np.ndarray,
+                              time_interval: float,
+                              next_time_index: int,
+                              mm_model: MapMatchingModel,
+                              max_rejections) -> Optional[np.ndarray]:
+    """
+    Attempt up to max_rejections of rejection sampling to backwards sample a single particle
+    :param fixed_particle: trajectory prior to stitching time
+    :param first_edge_fixed: first row of fixed particle
+    :param first_edge_fixed_length: metres
+    :param filter_particles: proposal particles to be sampled
+    :param filter_weights: weights for filter_particles
+    :param time_interval: time between observations at backwards sampling time
+    :param next_time_index: index of second observation time in fixed_particle
+    :param mm_model: MapMatchingModel
+    :param max_rejections: number of rejections to attempt, if none succeed return None
+    :return: appended particle
+    """
     n = filter_particles.n
 
     for k in range(max_rejections):
@@ -96,22 +132,40 @@ def rejection_backward_sample(fixed_particle,
 
         smoothing_distance = fixed_particle[next_time_index, -1] + distance_j_to_k
 
-        smoothing_distance_prior = distance_prior_evaluate(smoothing_distance, time_interval)
+        smoothing_distance_prior = mm_model.distance_prior_evaluate(smoothing_distance, time_interval)
+        smoothing_deviation_prior = mm_model.deviation_prior_evaluate(filter_particle[-1, 5:7],
+                                                                      fixed_particle[None, next_time_index, 5:7],
+                                                                      smoothing_distance)
 
-        if np.random.uniform() < smoothing_distance_prior / distance_prior_bound:
+        if np.random.uniform() < smoothing_distance_prior * smoothing_deviation_prior\
+                / mm_model.prior_bound(time_interval):
             fixed_particle[1:(next_time_index + 1), -1] += distance_j_to_k
             return np.append(filter_particle, fixed_particle[1:], axis=0)
 
     return None
 
 
-def backward_simulate(graph,
-                      filter_particles, filter_weights,
-                      time_interval_arr,
-                      mm_model,
-                      max_rejections,
-                      verbose=False,
-                      store_ess_back=None):
+def backward_simulate(graph: MultiDiGraph,
+                      filter_particles: MMParticles,
+                      filter_weights: np.ndarray,
+                      time_interval_arr: np.ndarray,
+                      mm_model: MapMatchingModel,
+                      max_rejections: int,
+                      verbose: bool = False,
+                      store_ess_back: bool = None) -> MMParticles:
+    """
+    Given particle filter output, run backwards simulation to output smoothed trajectories
+    :param graph: encodes road network, simplified and projected to UTM
+    :param filter_particles: marginal outputs from particle filter
+    :param filter_weights: weights
+    :param time_interval_arr: times between observations, must be length one less than filter_particles
+    :param mm_model: MapMatchingModel
+    :param max_rejections: number of rejections to attempt before doing full fixed-lag stitching
+        0 will do full backward simulation and track ess_back
+    :param verbose: print ess_pf or ess_back
+    :param store_ess_back: whether to store ess_back (if possible) in MMParticles object
+    :return: MMParticles object
+    """
     n_samps = filter_particles[-1].n
     num_obs = len(filter_particles)
 
@@ -148,7 +202,7 @@ def backward_simulate(graph,
                                                                         filter_weights[i],
                                                                         time_interval_arr[i],
                                                                         fixed_next_time_index,
-                                                                        mm_model.distance_prior_evaluate,
+                                                                        mm_model,
                                                                         True)
             else:
                 out_particles[j] = rejection_backward_sample(fixed_particle,
@@ -157,8 +211,7 @@ def backward_simulate(graph,
                                                              filter_weights[i],
                                                              time_interval_arr[i],
                                                              fixed_next_time_index,
-                                                             mm_model.distance_prior_evaluate,
-                                                             mm_model.distance_prior_bound(time_interval_arr[i]),
+                                                             mm_model,
                                                              max_rejections)
 
                 if out_particles[j] is None:
@@ -168,7 +221,7 @@ def backward_simulate(graph,
                                                             filter_weights[i],
                                                             time_interval_arr[i],
                                                             fixed_next_time_index,
-                                                            mm_model.distance_prior_evaluate,
+                                                            mm_model,
                                                             False)
 
         none_inds = np.array([p is None or None in p for p in out_particles])
@@ -192,4 +245,3 @@ def backward_simulate(graph,
             out_particles.ess_back = ess_back
 
     return out_particles
-

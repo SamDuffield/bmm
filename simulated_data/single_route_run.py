@@ -103,7 +103,7 @@ if __name__ == '__main__':
                                                            lag=lag,
                                                            update='PF',
                                                            max_rejections=max_rejections,
-                                                           initial_truncation=initial_truncation,
+                                                           initial_d_truncate=initial_truncation,
                                                            **proposal_dict)
             print(fl_pf_routes[k, j].time)
             clear_cache()
@@ -116,7 +116,7 @@ if __name__ == '__main__':
                                                             lag=lag,
                                                             update='BSi',
                                                             max_rejections=max_rejections,
-                                                            initial_truncation=initial_truncation,
+                                                            initial_d_truncate=initial_truncation,
                                                             **proposal_dict)
             print(fl_bsi_routes[k, j].time)
             clear_cache()
@@ -127,7 +127,7 @@ if __name__ == '__main__':
                                                 time_interval=time_interval,
                                                 mm_model=mm_model,
                                                 max_rejections=max_rejections,
-                                                initial_truncation=initial_truncation,
+                                                initial_d_truncate=initial_truncation,
                                                 **proposal_dict)
 
         print(ffbsi_routes[j].time)

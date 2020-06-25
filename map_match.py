@@ -13,6 +13,10 @@ from bmm.src.tools.graph import load_graph
 
 from bmm import offline_map_match, _offline_map_match_fl, plot
 
+np.random.seed(0)
+
+np.seterr(divide='raise', invalid='raise')
+
 # Source data paths
 _, process_data_path = source_data()
 
@@ -40,20 +44,20 @@ print(single_index)
 # Number of particles
 n_samps = 100
 
-polyline_truncation = 20
+polyline_truncation = None
 
 max_rejects = 10
 
 # Run offline map-matching
-
 # particles = _offline_map_match_fl(graph, poly_single[:polyline_truncation], n_samps, time_interval=15,
 #                                   lag=3,
 #                                   d_refine=1,
-#                                   max_rejections=max,
-#                                   proposal='aux_dist')
+#                                   max_rejections=max_rejects,
+#                                   update='BSi',
+#                                   proposal='optimal')
 
 # particles = _offline_map_match_fl(graph, poly_single[:polyline_truncation], n_samps, time_interval=15,
-#                                   lag=10,
+#                                   lag=3,
 #                                   d_refine=1,
 #                                   max_rejections=max_rejects,
 #                                   proposal='optimal',
@@ -62,6 +66,12 @@ max_rejects = 10
 #                                   # var=5
 #                                   )
 
+# particles = offline_map_match(graph, poly_single[:polyline_truncation], n_samps, time_interval=15,
+#                               d_refine=1,
+#                               max_rejections=max_rejects,
+#                               proposal='dist_then_edge',
+#                               ess_threshold=0.5,
+#                               var=5)
 
 # particles = offline_map_match(graph, poly_single[:polyline_truncation], n_samps, time_interval=15,
 #                               d_refine=1,
@@ -70,7 +80,7 @@ max_rejects = 10
 #                               ess_threshold=0.5,
 #                               dist_expand=50,
 #                               var=5)
-#
+
 particles = offline_map_match(graph, poly_single[:polyline_truncation], n_samps, time_interval=15,
                               d_refine=1,
                               max_rejections=max_rejects,

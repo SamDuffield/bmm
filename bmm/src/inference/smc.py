@@ -2,87 +2,93 @@
 # Module: inference/smc.py
 # Description: Implementation of sequential Monte Carlo map-matching. Both offline and online.
 #
-# Web: https://github.com/SamDuffield/bayesian-traffic
+# Web: https://github.com/SamDuffield/bmm
 ########################################################################################################################
 
 from time import time as tm
 import inspect
+from typing import Callable, Union
 
 import numpy as np
+from networkx.classes import MultiDiGraph
 
 import bmm.src.tools.edges
 from bmm.src.inference.particles import MMParticles
 from bmm.src.inference.proposal import optimal_proposal, auxiliary_distance_proposal, dist_then_edge_proposal
 from bmm.src.inference.resampling import fixed_lag_stitching, multinomial, fixed_lag_stitch_post_split
 from bmm.src.inference.backward import backward_simulate
-from bmm.src.inference.model import GammaMapMatchingModel
+from bmm.src.inference.model import MapMatchingModel, GammaMapMatchingModel
 
 updates = ('PF', 'BSi')
 
-proposals = ('optimal', 'aux_dist')
+proposals = ('optimal', 'aux_dist', 'dist_then_edge')
 
 
-def initiate_particles(graph,
-                       first_observation,
-                       n_samps,
-                       mm_model=GammaMapMatchingModel(),
-                       d_refine=1,
-                       truncation_distance=None,
-                       ess_all=True,
-                       filter_store=False):
+def get_proposal(proposal_str: str) -> Callable:
+    """
+    Converts string to proposal function
+    :param proposal_str: string indicating which proposal to use, see bmm.proposals for included proposals
+    :return: proposal function
+    """
+    if proposal_str == 'optimal':
+        proposal_func = optimal_proposal
+    elif proposal_str == 'aux_dist':
+        proposal_func = auxiliary_distance_proposal
+    elif proposal_str == 'dist_then_edge':
+        proposal_func = dist_then_edge_proposal
+    else:
+        raise ValueError(f"Proposal {proposal_str} not recognised, see bmm.proposals for valid options")
+
+    return proposal_func
+
+
+def initiate_particles(graph: MultiDiGraph,
+                       first_observation: np.ndarray,
+                       n_samps: int,
+                       mm_model: MapMatchingModel = GammaMapMatchingModel(),
+                       d_refine: float = 1,
+                       d_truncate: float = None,
+                       ess_all: bool = True,
+                       filter_store: bool = False) -> MMParticles:
     """
     Initiate start of a trajectory by sampling points around the first observation.
     Note that coordinate system of inputs must be the same, typically a UTM projection (not longtitude-latitude!).
-    See tools/graph.py and data/preprocess.py to ensure both your graph and polyline data are projected to UTM.
-    :param graph: NetworkX MultiDiGraph
-        UTM projection
-        encodes road network
-        generating using OSMnx, see tools.graph.py
+    :param graph: encodes road network, simplified and projected to UTM
     :param mm_model: MapMatchingModel
-        from inference/model
-    :param first_observation: numpy.ndarray, shape = (2,)
-        UTM projection
-        coordinate of first observation
-    :param n_samps: int
-        number of samples to generate
-    :param d_refine: float
-        metres
-        resolution of distance discretisation
-        increase of speed, decrease for accuracy
-    :param truncation_distance: float
-        metres
-        distance beyond which to assume zero likelihood probability
+    :param first_observation: cartesian coordinate in UTM
+    :param n_samps: number of samples to generate
+    :param d_refine: metres, resolution of distance discretisation
+    :param d_truncate: metres, distance beyond which to assume zero likelihood probability
         defaults to 5 * mm_model.gps_sd
-    :param ess_all: bool
-        if true initiate effective sample size for each particle for each observation
+    :param ess_all: if true initiate effective sample size for each particle for each observation
         otherwise initiate effective sample size only for each observation
-    :param filter_store: bool
-        whether to initiate storage of filter particles and weights
-    :return: MMParticles object (from inference.smc)
+    :param filter_store: whether to initiate storage of filter particles and weights
+    :return: MMParticles object
     """
     gps_sd = mm_model.gps_sd
 
-    if truncation_distance is None:
-        truncation_distance = gps_sd * 5
+    if d_truncate is None:
+        d_truncate = gps_sd * 5
 
     start = tm()
 
     # Discretize edges within truncation
-    dis_points = bmm.src.tools.edges.get_truncated_discrete_edges(graph, first_observation, d_refine,
-                                                                  truncation_distance)
+    dis_points, dists_to_first_obs = bmm.src.tools.edges.get_truncated_discrete_edges(graph, first_observation,
+                                                                                      d_refine,
+                                                                                      d_truncate, True)
 
     if dis_points.size == 0:
         raise ValueError("No edges found near initial observation: try increasing the initial_truncation")
 
     # Likelihood weights
-    weights = np.exp(-0.5 / gps_sd ** 2 * dis_points[:, 4] ** 2)
+    weights = np.exp(-0.5 / gps_sd ** 2 * dists_to_first_obs ** 2)
     weights /= np.sum(weights)
 
     # Sample indices according to weights
     sampled_indices = np.random.choice(len(weights), n_samps, replace=True, p=weights)
 
     # Output
-    out_particles = MMParticles(dis_points[sampled_indices, :4])
+    out_particles = MMParticles(dis_points[sampled_indices])
 
     # Initiate ESS
     if ess_all:
@@ -99,43 +105,31 @@ def initiate_particles(graph,
     return out_particles
 
 
-def update_particles_flpf(graph,
-                          mm_model,
-                          particles,
-                          new_observation,
-                          time_interval,
-                          proposal_func,
-                          lag=3,
-                          max_rejections=20,
-                          **kwargs):
+def update_particles_flpf(graph: MultiDiGraph,
+                          particles: MMParticles,
+                          new_observation: np.ndarray,
+                          time_interval: float,
+                          mm_model: MapMatchingModel,
+                          proposal_func: Callable,
+                          lag: int = 3,
+                          max_rejections: int = 20,
+                          **kwargs) -> MMParticles:
     """
-    Joint fixed-lag update in light of a newly received observation, using raw particle filter output for stitching.
+    Joint fixed-lag update in light of a newly received observation, uses particle filter trajectories for stitching
     Propose + reweight then fixed-lag stitching.
-    :param graph: NetworkX MultiDiGraph
-        UTM projection
-        encodes road network
-        generating using OSMnx, see tools.graph.py
+    :param graph: encodes road network, simplified and projected to UTM
+    :param particles: unweighted particle approximation up to the previous observation time
+    :param new_observation: cartesian coordinate in UTM
+    :param time_interval: time between last observation and newly received observation
     :param mm_model: MapMatchingModel
-        from inference/model
-    :param particles: MMParticles object (from inference.particles)
-        unweighted particle approximation up to the previous observation time
-    :param new_observation: numpy.ndarray, shape = (2,)
-        UTM projection
-        coordinate of new observation]
-    :param time_interval: float
-        seconds
-        time between last observation and newly received observation
-    :param proposal_func: func
-        see inference/proposal
-    :param lag: int
-        fixed lag for resampling/stitching
-    :param max_rejections: int
-        number of rejections before doing full fixed-lag stitching in resampling
+    :param proposal_func: function to propagate and weight particles
+    :param lag: fixed lag for resampling/stitching
+    :param max_rejections: number of rejections to attempt before doing full fixed-lag stitching
         0 will do full fixed-lag stitching and track ess_stitch
     :param kwargs:
         any additional arguments to be passed to proposal
         i.e. d_refine or d_max for optimal proposal
-    :return: MMParticles object (from inference.smc)
+    :return: MMParticles object
     """
     start = tm()
 
@@ -148,7 +142,7 @@ def update_particles_flpf(graph,
     # Propose and weight for each particle
     for j in range(particles.n):
         out_particles[j], weights[j] = proposal_func(graph, out_particles[j], new_observation,
-                                                     time_interval, mm_model, **kwargs)
+                                                     time_interval, mm_model, full_smoothing=True, **kwargs)
 
     # Normalise weights
     weights /= sum(weights)
@@ -158,7 +152,6 @@ def update_particles_flpf(graph,
 
     # Store ESS
     out_particles.ess_pf = np.append(out_particles.ess_pf, 1 / np.sum(weights ** 2))
-
 
     # Update time intervals
     out_particles.time_intervals = np.append(out_particles.time_intervals, time_interval)
@@ -172,47 +165,33 @@ def update_particles_flpf(graph,
     return out_particles
 
 
-def update_particles_flbs(graph,
-                          mm_model,
-                          particles,
-                          new_observation,
-                          time_interval,
-                          proposal_func,
-                          lag=3,
-                          max_rejections=20,
-                          ess_threshold=1,
-                          **kwargs):
+def update_particles_flbs(graph: MultiDiGraph,
+                          particles: MMParticles,
+                          new_observation: np.ndarray,
+                          time_interval: float,
+                          mm_model: MapMatchingModel,
+                          proposal_func: Callable,
+                          lag: int = 3,
+                          max_rejections: int = 20,
+                          ess_threshold: float = 1.,
+                          **kwargs) -> MMParticles:
     """
-    Joint fixed-lag update in light of a newly received observation, using raw particle filter output for stitching.
+    Joint fixed-lag update in light of a newly received observation, uses partial backward simulation runs for stitching
     Propose + reweight then backward simulation + fixed-lag stitching.
-    :param graph: NetworkX MultiDiGraph
-        UTM projection
-        encodes road network
-        generating using OSMnx, see tools.graph.py
+    :param graph: encodes road network, simplified and projected to UTM
+    :param particles: unweighted particle approximation up to the previous observation time
+    :param new_observation: cartesian coordinate in UTM
+    :param time_interval: time between last observation and newly received observation
     :param mm_model: MapMatchingModel
-        from inference/model
-    :param particles: MMParticles object (from inference.particles)
-        unweighted particle approximation up to the previous observation time
-    :param new_observation: numpy.ndarray, shape = (2,)
-        UTM projection
-        coordinate of new observation]
-    :param time_interval: float
-        seconds
-        time between last observation and newly received observation
-    :param proposal_func: func
-        see inference/proposal
-    :param lag: int
-        fixed lag for resampling/stitching
-    :param max_rejections: int
-        number of rejections before doing full fixed-lag stitching in resampling
+    :param proposal_func: function to propagate and weight particles
+    :param lag: fixed lag for resampling/stitching
+    :param max_rejections: number of rejections to attempt before doing full fixed-lag stitching
         0 will do full fixed-lag stitching and track ess_stitch
-    :param ess_threshold: float in [0,1]
-        when to resample particle filter
-        will resample if ess < ess_threshold * n_samps
+    :param ess_threshold: in [0,1], particle filter resamples if ess < ess_threshold * n_samps
     :param kwargs:
         any additional arguments to be passed to proposal
         i.e. d_refine or d_max for optimal proposal
-    :return: MMParticles object (from inference.smc)
+    :return: MMParticles object
     """
     start = tm()
 
@@ -273,13 +252,6 @@ def update_particles_flbs(graph,
         # Largest time not to be resampled
         max_fixed_time = observation_times[m - lag - 1]
 
-        # Smallest time to be resampled
-        min_resample_time = observation_times[m - lag]
-
-        # Initiate
-        min_resample_time_indices = np.zeros(n, dtype=int)
-        originial_stitching_distances = np.zeros(n)
-
         # Extract fixed particles
         fixed_particles = out_particles.copy()
         for j in range(n):
@@ -287,8 +259,6 @@ def update_particles_flbs(graph,
                 continue
             max_fixed_time_index = np.where(out_particles[j][:, 0] == max_fixed_time)[0][0]
             fixed_particles[j] = out_particles[j][:(max_fixed_time_index + 1)]
-            min_resample_time_indices[j] = np.where(backward_particles[j][:, 0] == min_resample_time)[0][0]
-            originial_stitching_distances[j] = backward_particles[j][min_resample_time_indices[j], -1]
 
         # Stitch
         out_particles = fixed_lag_stitch_post_split(graph,
@@ -296,8 +266,6 @@ def update_particles_flbs(graph,
                                                     backward_particles,
                                                     np.ones(n) / n,
                                                     mm_model,
-                                                    min_resample_time, min_resample_time_indices,
-                                                    originial_stitching_distances,
                                                     max_rejections)
 
     else:
@@ -309,78 +277,56 @@ def update_particles_flbs(graph,
     return out_particles
 
 
-def update_particles(graph,
-                     particles,
-                     new_observation,
-                     time_interval,
-                     mm_model=GammaMapMatchingModel(),
-                     proposal='optimal',
-                     lag=3,
-                     max_rejections=20,
-                     update='PF',
-                     **kwargs):
+def update_particles(graph: MultiDiGraph,
+                     particles: MMParticles,
+                     new_observation: np.ndarray,
+                     time_interval: float,
+                     mm_model: MapMatchingModel = GammaMapMatchingModel(),
+                     proposal: str = 'optimal',
+                     update: str = 'PF',
+                     lag: int = 3,
+                     max_rejections: int = 20,
+                     **kwargs) -> MMParticles:
     """
-    Runs offline map-matching. I.e. receives a full polyline and returns an equal probability collection
-    of trajectories (particles).
-    :param graph: NetworkX MultiDiGraph
-        UTM projection
-        encodes road network
-        generating using OSMnx, see tools.graph.py
-    :param particles: MMParticles object (from inference.particles)
-        unweighted particle approximation up to the previous observation time
-    :param new_observation: numpy.ndarray, shape = (2,)
-        UTM projection
-        coordinate of new observation]
-    :param time_interval: float or list-like (length M-1)
-        seconds
-        time between observations
+    Updates particle approximation in receipt of new observation
+    :param graph: encodes road network, simplified and projected to UTM
+    :param particles: unweighted particle approximation up to the previous observation time
+    :param new_observation: cartesian coordinate in UTM
+    :param time_interval: time between last observation and newly received observation
     :param mm_model: MapMatchingModel
-        from inference/model
-    :param proposal: str
-        either 'optimal' or 'aux_dist'
-        see inference/proposal
+    :param proposal: either 'optimal' or 'aux_dist'
         defaults to optimal (discretised) proposal
-    :param update: str
-        PF = new particles from particle filter
-        BSi = new particles from backward simulation
-    :param lag: int
-        fixed lag, the number of observations beyond which to stop resampling
-    :param max_rejections: int
-        number of rejections before doing full fixed-lag stitching in resampling
-        0 will do full fixed-lag stitching and track ess_stitch
-    :param update: str
+    :param update:
         'PF' for particle filter fixed-lag update
         'BSi' for backward simulation fixed-lag update
+        must be consistent across updates
+    :param lag: fixed lag for resampling/stitching
+    :param max_rejections: number of rejections to attempt before doing full fixed-lag stitching
+        0 will do full fixed-lag stitching and track ess_stitch
     :param kwargs: optional parameters to pass to proposal
         i.e. d_max, d_refine or var
         as well as ess_threshold for backward simulation update
-    :return: MMParticles object (from inference.smc)
+    :return: MMParticles object
     """
-    if proposal == 'optimal':
-        proposal_func = optimal_proposal
-    elif proposal == 'aux_dist':
-        proposal_func = auxiliary_distance_proposal
-    elif proposal == 'dist_then_edge':
-        proposal_func = dist_then_edge_proposal
-    else:
-        raise ValueError("Proposal " + str(proposal) + " not recognised, see bmm.proposals for valid options")
+
+    proposal_func = get_proposal(proposal)
 
     if update == 'PF':
         return update_particles_flpf(graph,
-                                     mm_model,
                                      particles,
                                      new_observation,
                                      time_interval,
+                                     mm_model,
                                      proposal_func,
                                      lag,
                                      max_rejections,
                                      **kwargs)
     elif update == 'BSi':
         return update_particles_flbs(graph,
-                                     mm_model,
                                      particles,
                                      new_observation,
                                      time_interval,
+                                     mm_model,
                                      proposal_func,
                                      lag,
                                      max_rejections,
@@ -389,68 +335,46 @@ def update_particles(graph,
         raise ValueError("update " + update + " not recognised, see bmm.updates for valid options")
 
 
-def _offline_map_match_fl(graph,
-                          polyline,
-                          n_samps,
-                          time_interval,
-                          mm_model=GammaMapMatchingModel(),
-                          proposal='optimal',
-                          update='PF',
-                          lag=3,
-                          d_refine=1,
-                          initial_truncation=None,
-                          max_rejections=20,
-                          **kwargs):
+def _offline_map_match_fl(graph: MultiDiGraph,
+                          polyline: np.ndarray,
+                          n_samps: int,
+                          time_interval: Union[float, np.ndarray],
+                          mm_model: MapMatchingModel = GammaMapMatchingModel(),
+                          proposal: str = 'optimal',
+                          update: str = 'PF',
+                          lag: int = 3,
+                          d_refine: int = 1,
+                          initial_d_truncate: float = None,
+                          max_rejections: int = 20,
+                          **kwargs) -> MMParticles:
     """
-    Runs offline map-matching. I.e. receives a full polyline and returns an equal probability collection
-    of trajectories (particles).
-    :param graph: NetworkX MultiDiGraph
-        UTM projection
-        encodes road network
-        generating using OSMnx, see tools.graph.py
-    :param polyline: list-like, length M
-        UTM projection
-        series of 2D coordinates
+    Runs offline map-matching but uses online fixed-lag techniques.
+    Only recommended for simulation purposes.
+    :param graph: encodes road network, simplified and projected to UTM
+    :param polyline: series of cartesian cooridnates in UTM
     :param n_samps: int
         number of particles
-    :param time_interval: float or list-like (length M-1)
-        seconds
-        time between observations
+    :param time_interval: time(s) between observations
+        either float or array of length one less than polyline
     :param mm_model: MapMatchingModel
-        from inference/model
-    :param proposal: str
-        either 'optimal' or 'aux_dist'
-        see inference/proposal
+    :param proposal: either 'optimal' or 'aux_dist'
         defaults to optimal (discretised) proposal
-    :param update: str
-        PF = new particles from particle filter
-        BSi = new particles from backward simulation
-    :param lag: int
-        fixed lag, the number of observations beyond which to stop resampling
-    :param d_refine: float
-        metres
-        discretisation level of distance parameter
-        needed for initiate_particle and potentially proposal
-    :param initial_truncation: float
-        metres
-        distance to truncate for sampling initial position
-        defaults to 3 * mm_model.gps_sd
-    :param max_rejections: int
-        number of rejections before doing full fixed-lag stitching in resampling
+    :param update:
+        'PF' for particle filter fixed-lag update
+        'BSi' for backward simulation fixed-lag update
+        must be consistent across updates
+    :param lag: fixed lag for resampling/stitching
+    :param d_refine: metres, resolution of distance discretisation
+    :param initial_d_truncate: distance beyond which to assume zero likelihood probability at time zero
+        defaults to 5 * mm_model.gps_sd
+    :param max_rejections: number of rejections to attempt before doing full fixed-lag stitching
         0 will do full fixed-lag stitching and track ess_stitch
     :param kwargs: optional parameters to pass to proposal
         i.e. d_max, d_refine or var
         as well as ess_threshold for backward simulation update
-    :return: MMParticles object (from inference.smc)
+    :return: MMParticles object
     """
-    if proposal == 'optimal':
-        proposal_func = optimal_proposal
-    elif proposal == 'aux_dist':
-        proposal_func = auxiliary_distance_proposal
-    elif proposal == 'dist_then_edge':
-        proposal_func = dist_then_edge_proposal
-    else:
-        raise ValueError("Proposal " + str(proposal) + "not recognised, see bmm.proposals for valid options")
+    proposal_func = get_proposal(proposal)
 
     num_obs = len(polyline)
 
@@ -458,7 +382,7 @@ def _offline_map_match_fl(graph,
 
     # Initiate particles
     particles = initiate_particles(graph, polyline[0], n_samps, mm_model=mm_model,
-                                   d_refine=d_refine, truncation_distance=initial_truncation,
+                                   d_refine=d_refine, d_truncate=initial_d_truncate,
                                    ess_all=ess_all,
                                    filter_store=update == 'BSi')
 
@@ -483,8 +407,8 @@ def _offline_map_match_fl(graph,
 
     # Update particles
     for i in range(num_obs - 1):
-        particles = update_func(graph, mm_model, particles, polyline[1 + i], time_interval=time_interval_arr[i],
-                                proposal_func=proposal_func, lag=lag, max_rejections=max_rejections,
+        particles = update_func(graph, particles, polyline[1 + i], time_interval=time_interval_arr[i],
+                                mm_model=mm_model, proposal_func=proposal_func, lag=lag, max_rejections=max_rejections,
                                 **kwargs)
 
         print(str(particles.latest_observation_time) + " PF ESS: " + str(np.mean(particles.ess_pf[-1])))
@@ -492,56 +416,40 @@ def _offline_map_match_fl(graph,
     return particles
 
 
-def offline_map_match(graph,
-                      polyline,
-                      n_samps,
-                      time_interval,
-                      mm_model=GammaMapMatchingModel(),
-                      proposal='optimal',
-                      d_refine=1,
-                      initial_truncation=None,
-                      max_rejections=20,
-                      ess_threshold=1,
-                      **kwargs):
+def offline_map_match(graph: MultiDiGraph,
+                      polyline: np.ndarray,
+                      n_samps: int,
+                      time_interval: Union[float, np.ndarray],
+                      mm_model: MapMatchingModel = GammaMapMatchingModel(),
+                      proposal: str = 'optimal',
+                      d_refine: int = 1,
+                      initial_d_truncate: float = None,
+                      max_rejections: int = 20,
+                      ess_threshold: float = 1,
+                      **kwargs) -> MMParticles:
     """
     Runs offline map-matching. I.e. receives a full polyline and returns an equal probability collection
-    of trajectories (filter_particles).
-    Forward-filtering backward-simulation implementation - therefore no fixed-lag approximation.
-    :param graph: NetworkX MultiDiGraph
-        UTM projection
-        encodes road network
-        generating using OSMnx, see tools.graph.py
-    :param polyline: list-like, length M
-        UTM projection
-        series of 2D coordinates
+    of trajectories.
+    Forward-filtering backward-simulation implementation - no fixed-lag approximation needed for offline inference.
+    :param graph: encodes road network, simplified and projected to UTM
+    :param polyline: series of cartesian cooridnates in UTM
     :param n_samps: int
-        number of filter_particles
-    :param time_interval: float or list-like (length M-1)
-        seconds
-        time between observations
+        number of particles
+    :param time_interval: time(s) between observations
+        either float or array of length one less than polyline
     :param mm_model: MapMatchingModel
-        from inference/model
-    :param proposal: str
-        either 'optimal' or 'aux_dist'
-        see inference/proposal
+    :param proposal: either 'optimal' or 'aux_dist'
         defaults to optimal (discretised) proposal
-    :param d_refine: float
-        metres
-        discretisation level of distance parameter
-        needed for initiate_particle and potentially proposal
-    :param initial_truncation: float
-        metres
-        distance to truncate for sampling initial position
-        defaults to 5 * gps_sd
-    :param max_rejections: int
-        number of rejections before doing full fixed-lag stitching in resampling
+    :param d_refine: metres, resolution of distance discretisation
+    :param initial_d_truncate: distance beyond which to assume zero likelihood probability at time zero
+        defaults to 5 * mm_model.gps_sd
+    :param max_rejections: number of rejections to attempt before doing full fixed-lag stitching
         0 will do full fixed-lag stitching and track ess_stitch
-    :param ess_threshold: float in [0,1]
-        when to resample particle filter
-        will resample if ess < ess_threshold * n_samps
+    :param ess_threshold: in [0,1], particle filter resamples if ess < ess_threshold * n_samps
     :param kwargs: optional parameters to pass to proposal
         i.e. d_max, d_refine or var
-    :return: MMParticles object (from inference.smc)
+        as well as ess_threshold for backward simulation update
+    :return: MMParticles object
     """
     if proposal == 'optimal':
         proposal_func = optimal_proposal
@@ -563,7 +471,7 @@ def offline_map_match(graph,
 
     # Initiate filter_particles
     filter_particles[0] = initiate_particles(graph, polyline[0], n_samps, mm_model=mm_model,
-                                             d_refine=d_refine, truncation_distance=initial_truncation,
+                                             d_refine=d_refine, d_truncate=initial_d_truncate,
                                              ess_all=ess_all)
     filter_weights[0] = 1 / n_samps
     live_weights = filter_weights[0].copy()
@@ -622,6 +530,3 @@ def offline_map_match(graph,
     end = tm()
     out_particles.time = end - start
     return out_particles
-
-
-

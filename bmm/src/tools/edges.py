@@ -1,67 +1,62 @@
-################################################################################
+########################################################################################################################
 # Module: edges.py
-# Description: Some tools including interpolation along a proportion of a
-#              given edge, selecting edges within a distance of a point and
-#              discretisation of an edge for sampling.
-# Web: https://github.com/SamDuffield/bayesian-traffic
-################################################################################
+# Description: Some tools including interpolation along a proportion of a given edge, selecting edges within a distance
+#              of a point and discretisation of an edge for sampling.
+#
+# Web: https://github.com/SamDuffield/bmm
+########################################################################################################################
 
 from functools import lru_cache
+from typing import Union, Tuple
 
 import numpy as np
 import osmnx as ox
 from shapely.geometry import Point
 from shapely.geometry import LineString
+from networkx.classes import MultiDiGraph
+from geopandas import GeoDataFrame
 
 
-def edge_interpolate(geometry, alpha):
+def edge_interpolate(geometry: LineString,
+                     alpha: float) -> np.ndarray:
     """
     Given edge and proportion travelled, return (x,y) coordinate.
     :param geometry: edge geometry
-    :param alpha: proportion of edge travelled
-    :return: coordinate
+    :param alpha: in (0,1] proportion of edge travelled
+    :return: cartesian coordinate
     """
-    length_arb = geometry.length
-    coord = np.array(geometry.interpolate(alpha * length_arb))
-    return coord
+    return np.array(geometry.interpolate(alpha, normalized=True))
 
 
-def get_geometry(graph, edge):
+def get_geometry(graph: MultiDiGraph,
+                 edge: np.ndarray) -> LineString:
     """
     Extract geometry of an edge from global graph object. If geometry doesn't exist set to straight line.
-    :param graph: NetworkX MultiDiGraph
-        UTM projection
-        encodes road network
-        generating using OSMnx, see tools.graph.py
-    :param edge: list_like, length = 3
+    :param graph: encodes road network, simplified and projected to UTM
+    :param edge: length = 3
         elements u, v, k
             u: int, edge start node
             v: int, edge end node
             k: int, edge key
-    :return: NetowrkX geometry object
+    :return: edge geometry
     """
     edge_tuple = tuple(int(e) for e in edge)
-
-    out_geom = get_geometry_cached(graph, edge_tuple)
-
-    return out_geom
+    return get_geometry_cached(graph, edge_tuple)
 
 
-@lru_cache(maxsize=2**8)
-def get_geometry_cached(graph, edge_tuple):
+@lru_cache(maxsize=2 ** 8)
+def get_geometry_cached(graph: MultiDiGraph,
+                        edge_tuple: tuple) -> LineString:
     """
     Cacheable
     Extract geometry of an edge from global graph object. If geometry doesn't exist set to straight line.
-    :param graph: NetworkX MultiDiGraph
-        UTM projection
-        encodes road network
-        generating using OSMnx, see tools.graph.py
-    :param edge_tuple: tuple (hashable for lru_cache), length = 3
+    :param graph: encodes road network, simplified and projected to UTM
+    :param edge_tuple: (hashable for lru_cache), length = 3
         elements u, v, k
             u: int, edge start node
             v: int, edge end node
             k: int, edge key
-    :return: NetowrkX geometry object
+    :return: edge geometry
     """
 
     # Extract edge data, in particular the geometry
@@ -78,119 +73,107 @@ def get_geometry_cached(graph, edge_tuple):
     return edge_geom
 
 
-def discretise_edge(graph, edge, d_refine, observation=None, gps_sd=None):
+def discretise_geometry(geom: LineString,
+                        d_refine: float,
+                        return_dists: bool = False) -> Union[Tuple[np.ndarray, np.ndarray], np.ndarray]:
+    """
+    Given edge, return series of [edge, alpha] points at determined discretisation increments along edge.
+    alpha is proportion of edge traversed.
+    :param geom: edge geometry
+    :param d_refine: metres, resolution of distance discretisation
+    :param return_dists: if true return distance along edge as well as alpha (proportion)
+    :return: list of alphas at each discretisation point
+    """
+    ds = np.arange(geom.length, d_refine / 10, -d_refine)
+    alphas = ds / geom.length
+    return (alphas, ds) if return_dists else alphas
+
+
+def discretise_edge(graph: MultiDiGraph,
+                    edge: np.ndarray,
+                    d_refine: float) -> np.ndarray:
     """
     Discretises edge to given edge refinement parameter.
-    Will also return observation likelihood if received.
-    :param graph: NetworkX MultiDiGraph
-        UTM projection
-        encodes road network
-        generating using OSMnx, see tools.graph.py
+    Returns array of proportions along edge, xy cartesian coordinates and distances along edge
+    :param graph: encodes road network, simplified and projected to UTM
     :param edge: list-like, length = 3
         elements u, v, k
             u: int, edge start node
             v: int, edge end node
             k: int, edge key
-    :param d_refine: float
-        metres
-        resolution of distance discretisation
-        increase of speed, decrease for accuracy
-    :param observation: numpy.ndarray, shape = (2,)
-        UTM projection
-        coordinate of first observation
-    :param gps_sd: float
-        metres
-        standard deviation of GPS noise
-    :return: numpy.ndarray, shape = (_, 2 or 3)
+    :param d_refine: metres, resolution of distance discretisation
+    :return: shape = (_, 4)
         columns
             alpha: float in (0,1], position along edge
+            x: float, metres, cartesian x coordinate
+            y: float, metres, cartesian y coordinate
             distance: float, distance from start of edge
-            likelihood: float, unnormalised Gaussian likelihood of observation (only if observeration and gps_sd given)
     """
     edge_tuple = tuple(int(e) for e in edge)
-    if observation is not None:
-        observation = tuple(float(o) for o in observation)
-    return discretise_edge_cached(graph, edge_tuple, d_refine, observation, gps_sd).copy()
+    return discretise_edge_cached(graph, edge_tuple, d_refine).copy()
 
 
-@lru_cache(maxsize=2**8)
-def discretise_edge_cached(graph, edge_tuple, d_refine, observation=None, gps_sd=None):
+@lru_cache(maxsize=2 ** 8)
+def discretise_edge_cached(graph: MultiDiGraph,
+                           edge_tuple: tuple,
+                           d_refine: float) -> np.ndarray:
     """
     Cacheable
     Discretises edge to given edge refinement parameter.
-    Will also return observation likelihood if received.
-    :param graph: NetworkX MultiDiGraph
-        UTM projection
-        encodes road network
-        generating using OSMnx, see tools.graph.py
+    Returns array of proportions along edge, xy cartesian coordinates and distances along edge
+    :param graph: encodes road network, simplified and projected to UTM
     :param edge_tuple: tuple (hashable for lru_cache), length = 3
         elements u, v, k
             u: int, edge start node
             v: int, edge end node
             k: int, edge key
-    :param d_refine: float
-        metres
-        resolution of distance discretisation
-        increase of speed, decrease for accuracy
-    :param observation: tuple, shape = (2,)
-        UTM projection
-        coordinate of first observation
-    :param gps_sd: float
-        metres
-        standard deviation of GPS noise
-    :return: numpy.ndarray, shape = (_, 2 or 3)
+    :param d_refine: metres, resolution of distance discretisation
+    :return: shape = (_, 4)
         columns
             alpha: float in (0,1], position along edge
+            x: float, metres, cartesian x coordinate
+            y: float, metres, cartesian y coordinate
             distance: float, distance from start of edge
-            likelihood: float, unnormalised Gaussian likelihood of observation (only if observeration and gps_sd given)
     """
-    if observation is None and gps_sd is not None:
-        raise ValueError("Received gps_sd but not observation")
 
-    if observation is not None and gps_sd is None:
-        raise ValueError("Received observation but not gps_sd")
+    edge_geom = get_geometry_cached(graph, edge_tuple)
 
-    edge_geom = get_geometry(graph, edge_tuple)
-
-    edge_length = edge_geom.length
-
-    distances = np.arange(edge_length, d_refine/10, -d_refine)
+    alphas, distances = discretise_geometry(edge_geom, d_refine, True)
 
     n_distances = len(distances)
 
-    out_mat = np.zeros((n_distances, 2)) if observation is None else np.zeros((len(distances), 3))
+    out_mat = np.zeros((n_distances, 4))
 
-    out_mat[:, 0] = distances / edge_length
-    out_mat[:, 1] = distances
+    out_mat[:, 0] = alphas
+    out_mat[:, 3] = distances
 
-    if observation is not None:
-        cart_coords = np.zeros((n_distances, 2))
-        for i in range(n_distances):
-            cart_coords[i] = edge_geom.interpolate(distances[i])
-
-        out_mat[:, 2] = np.exp(-0.5 / gps_sd**2 * np.sum((observation - cart_coords)**2, axis=1))
+    for i in range(n_distances):
+        out_mat[i, 1:3] = edge_geom.interpolate(distances[i])
 
     return out_mat
 
 
-def graph_edges_gdf(graph):
+def graph_edges_gdf(graph: MultiDiGraph) -> GeoDataFrame:
     """
     Converts networkx graph to geopandas data frame and then returns geopandas dataframe. (Fast!)
-    :param graph: networkx object
-    :return: list of edges, [u, v, k, geometry]
+    :param graph: encodes road network, simplified and projected to UTM
+    :return: gdf of edges with columns [u, v, k, geometry]
     """
     gdf = ox.graph_to_gdfs(graph, nodes=False, fill_edge_geometry=True)
     edge_gdf = gdf[["u", "v", "key", "geometry"]]
     return edge_gdf
 
 
-def get_edges_within_dist(graph_edges, coord, dist):
+def get_edges_within_dist(graph_edges: GeoDataFrame,
+                          coord: np.ndarray,
+                          dist_retain: float) -> GeoDataFrame:
     """
     Given a point returns all edges that fall within a radius of dist.
-    :param graph_edges: simplified graph edges (either gdf or list)
+    :param graph_edges: gdf of edges with columns [u, v, k, geometry]
     :param coord: central point
-    :param dist: radius
-    :return: geopandas dataframe (gdf) of edges, columns: u, v, k, geometry, dist from coord
+    :param dist_retain: metres, retain radius
+    :return: gdf of edges with columns [u, v, k, geometry, distance_to_obs]
+        all with distance_to_obs < dist_retain
     """
 
     graph_edges_dist = graph_edges.copy()
@@ -198,74 +181,107 @@ def get_edges_within_dist(graph_edges, coord, dist):
     graph_edges_dist['distance_to_obs'] = graph_edges['geometry'].apply(
         lambda geom: Point(tuple(coord)).distance(geom))
 
-    edges_within_dist = graph_edges_dist[graph_edges_dist['distance_to_obs'] < dist]
+    edges_within_dist = graph_edges_dist[graph_edges_dist['distance_to_obs'] < dist_retain]
 
     return edges_within_dist
 
 
-def discretise_edge_alphas(geom, edge_refinement, return_dists=False):
-    """
-    Given edge return, series of [edge, alpha] points at determined discretisation increments along edge.
-    alpha is proportion of edge traversed.
-    :param geom: edge geometry
-    :param return_dists: bool
-    :return: list of alphas at each discretisation point
-    """
-    ds = np.arange(geom.length, edge_refinement/10, -edge_refinement)
-    alphas = ds / geom.length
-    if return_dists:
-        return alphas, ds
-    else:
-        return alphas
-
-
-def get_truncated_discrete_edges(graph, coord, edge_refinement, dist_retain):
+def get_truncated_discrete_edges(graph: MultiDiGraph,
+                                 coord: np.ndarray,
+                                 d_refine: float,
+                                 d_truncate: float,
+                                 return_dists_to_coord: bool = False)\
+        -> Union[Tuple[np.ndarray, np.ndarray], np.ndarray]:
     """
     Discretises edges within dist_retain of coord
-    :param graph: simplified graph
+    :param graph: encodes road network, simplified and projected to UTM
     :param coord: conformal with graph (i.e. UTM)
-    :param edge_refinement: float, discretisation increment of edges (metres)
-    :return: numpy.ndarray, shape = (number of points within truncation, 5)
+    :param d_refine: metres, resolution of distance discretisation
+    :param d_truncate: metres, distance within which of coord to retain points
+    :param return_dists_to_coord: if true additionally return array of distances to coord
+    :return: numpy.ndarray, shape = (number of points within truncation, 6)
         columns: u, v, k, alpha, distance_to_coord
             u: int, edge start node
             v: int, edge end node
             k: int, edge key
             alpha: in [0,1], position along edge
-            distance_to_coord: metres, distance to input coord
+            x: float, metres, cartesian x coordinate
+            y: float, metres, cartesian y coordinate
+        if return_dists_to_coord also return np.ndarray, shape = (number of points within truncation,)
+            with distance of each point to coord
     """
+
     # Extract geodataframe
     graph_edges = graph_edges_gdf(graph)
 
     # Remove edges with closest point outside truncation
-    close_edges = get_edges_within_dist(graph_edges, coord, dist_retain)
+    close_edges = get_edges_within_dist(graph_edges, coord, d_truncate)
 
     # Discretise edges
-    close_edges['alpha'] = close_edges['geometry'].apply(discretise_edge_alphas, edge_refinement=edge_refinement)
+    close_edges['alpha'] = close_edges['geometry'].apply(discretise_geometry, d_refine=d_refine)
 
     # Remove distance from closest point on edge column
+    # (as this refers to closest point of edge and now we want specific point on edge)
     close_edges = close_edges.drop(columns='distance_to_obs')
 
     # Elongate, remove points outside truncation and store in list of lists
-    discretised_edges = []
+    points = []
+    dists = []
     for _, row in close_edges.iterrows():
         for a in row['alpha']:
             xy = edge_interpolate(row['geometry'], a)
             dist = np.sqrt(np.square(coord - xy).sum())
-            if dist < dist_retain:
+            if dist < d_truncate:
                 add_row = row.copy()
                 add_row['alpha'] = a
                 add_row['distance_to_obs'] = dist
-                discretised_edges += [[row['u'], row['v'], row['key'], a, dist]]
+                points += [[row['u'], row['v'], row['key'], a, *xy]]
+                dists += [dist]
 
     # Convert to numpy.ndarray
-    discretised_edges = np.array(discretised_edges)
+    points_arr = np.array(points)
+    dists_arr = np.array(dists)
 
-    return discretised_edges
+    return (points_arr, dists_arr) if return_dists_to_coord else points_arr
 
 
-def interpolate_path(graph, path, d_refine=1, t_column=False):
+def observation_time_indices(times: np.ndarray) -> np.ndarray:
+    """
+    Remove zeros (other than the initial zero) from a series
+    :param times: series of timestamps
+    :return: bool array of timestamps that are either non-zero or the first timestamp
+    """
+    return np.logical_or(times != 0, np.arange(len(times)) == 0.)
+
+
+def observation_time_rows(path: np.ndarray) -> np.ndarray:
+    """
+    Returns rows of path only at observation times (not intersections)
+    :param path: numpy.ndarray, shape=(_, 5+)
+        columns - t, u, v, k, alpha, ...
+    :return: trimmed path
+        numpy.ndarray, shape like path
+    """
+    return path[observation_time_indices(path[:, 0])]
+
+
+
+
+
+
+
+
+
+
+
+
+def interpolate_path(graph: MultiDiGraph,
+                     path: np.ndarray,
+                     d_refine: float = 1,
+                     t_column: bool = False) -> np.ndarray:
     """
     Turns path into a discrete collection of positions to be plotted
+    :param graph: simplified graph
     :param path: numpy.ndarray, shape = (_, 4)
     :param d_refine: float
         metres
@@ -283,9 +299,9 @@ def interpolate_path(graph, path, d_refine=1, t_column=False):
         edge_length = edge_geom.length
         if np.array_equal(point[start_col:(start_col + 3)], prev_point[start_col:(start_col + 3)]):
             edge_metres = np.arange(prev_point[start_col + 3] * edge_length
-                                    + d_refine, point[start_col + 3]*edge_length, d_refine)
+                                    + d_refine, point[start_col + 3] * edge_length, d_refine)
         else:
-            edge_metres = np.arange(0, point[start_col + 3]*edge_length, d_refine)
+            edge_metres = np.arange(0, point[start_col + 3] * edge_length, d_refine)
         edge_alphas = edge_metres / edge_length
         append_arr = np.zeros((len(edge_alphas), out_arr.shape[1]))
         append_arr[:, start_col:(start_col + 3)] = point[start_col:(start_col + 3)]
@@ -305,7 +321,7 @@ def cartesianise_path(graph, path, t_column=True, observation_time_only=False):
     :return: numpy.ndarray, shape = (_, 2)
         cartesian points
     """
-    start_col = 1*t_column
+    start_col = 1 * t_column
 
     if observation_time_only:
         path = observation_time_rows(path)
@@ -313,49 +329,12 @@ def cartesianise_path(graph, path, t_column=True, observation_time_only=False):
     cart_points = np.zeros(shape=(path.shape[0], 2))
 
     for i, point in enumerate(path):
-        edge_geom = get_geometry(graph, point[start_col:(3+start_col)])
-        cart_points[i, :] = edge_interpolate(edge_geom, point[3+start_col])
+        edge_geom = get_geometry(graph, point[start_col:(3 + start_col)])
+        cart_points[i, :] = edge_interpolate(edge_geom, point[3 + start_col])
 
-    return cart_points
+    return np.atleast_2d(cart_points)
 
 
-def observation_time_rows(path,  t_column=True):
-    """
-    Returns rows of path only at observation times (not intersections)
-    :param path: numpy.ndarray, shape=(_, 5+)
-        columns - (t), u, v, k, alpha, ...
-    :param t_column: boolean
-        boolean describing if input has a first column for the time variable
-    :return: trimmed path
-        numpy.ndarray, shape like path
-    """
-    if t_column:
-        return path[np.logical_or(path[:, 0] != 0, np.arange(len(path)) == 0.)]
-    else:
-        return path[path[:, 3] != 1]
 
-#
-#
-# if __name__ == '__main__':
-#     # Source data paths
-#     _, process_data_path = data.utils.source_data()
-#
-#     # Load networkx graph
-#     graph = load_graph()
-#
-#     # Load taxi data
-#     data_path = data.utils.choose_data()
-#     raw_data = data.utils.read_data(data_path, 100).get_chunk()
-#
-#     # Select single polyline
-#     single_index = 0
-#     poly_single = raw_data['POLYLINE_UTM'][single_index]
-#
-#     # Discretise edges close to start point of polyline
-#     dis_edges = get_truncated_discrete_edges(graph, poly_single[0], 1)
-#
-#     # Plot
-#     fig, ax = plot_graph_with_weighted_points(graph, poly_single, points=dis_edges)
-#     truncate_circle = plt.Circle(tuple(poly_single[0]), dist_retain, color='orange', fill=False)
-#     ax.add_patch(truncate_circle)
-#     plt.show()
+
+

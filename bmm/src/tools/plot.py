@@ -1,3 +1,10 @@
+########################################################################################################################
+# Module: plot.py
+# Description: Plot graph, inferred route and/or polyline.
+#
+# Web: https://github.com/SamDuffield/bmm
+########################################################################################################################
+
 import numpy as np
 import osmnx as ox
 from matplotlib import pyplot as plt
@@ -54,7 +61,7 @@ def plot(graph, particles=None, polyline=None, particles_alpha=None, label_start
 
                 cart_path = cartesianise_path(graph, observation_time_rows(particle), t_column=True)
             else:
-                cart_path = cartesianise_path(graph, particle, t_column=True)[None, :]
+                cart_path = cartesianise_path(graph, particle, t_column=True)
 
             ax.scatter(cart_path[:, 0], cart_path[:, 1], color='orange', alpha=particles_alpha, zorder=2)
 

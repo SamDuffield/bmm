@@ -97,7 +97,7 @@ ffbsi_route = bmm.offline_map_match(graph,
                                     time_interval=time_interval,
                                     mm_model=mm_model,
                                     max_rejections=max_rejections,
-                                    initial_truncation=initial_truncation,
+                                    initial_d_truncate=initial_truncation,
                                     **proposal_dict)
 clear_cache()
 
@@ -120,7 +120,7 @@ for i in range(num_repeats):
                                                                   lag=lag,
                                                                   update='PF',
                                                                   max_rejections=max_rejections,
-                                                                  initial_truncation=initial_truncation,
+                                                                  initial_d_truncate=initial_truncation,
                                                                   **proposal_dict)
                 print(f'FL PF {i} {j} {k}: {fl_pf_routes[i, k, j].time}')
             except:
@@ -141,7 +141,7 @@ for i in range(num_repeats):
                                                                        lag=lag,
                                                                        update='BSi',
                                                                        max_rejections=max_rejections,
-                                                                       initial_truncation=initial_truncation,
+                                                                       initial_d_truncate=initial_truncation,
                                                                        **proposal_dict)
                     print(f'FL BSi {i} {j} {k}:', fl_bsi_routes[i, k, j].time)
                 except:

@@ -132,7 +132,7 @@ for i in range(num_routes):
                                                                  lag=lag,
                                                                  update='PF',
                                                                  max_rejections=max_rejections,
-                                                                 initial_truncation=initial_truncation)
+                                                                 initial_d_truncate=initial_truncation)
                 fl_pf_rmse[i, k, j] = rmse(graph, fl_pf_inferred_route, cartesianised_routes[i])
                 fl_pf_time[i, k, j] = fl_pf_inferred_route.time
                 print(i, j, k)
@@ -144,7 +144,7 @@ for i in range(num_routes):
                                                                   lag=lag,
                                                                   update='BSi',
                                                                   max_rejections=max_rejections,
-                                                                  initial_truncation=initial_truncation)
+                                                                  initial_d_truncate=initial_truncation)
                 fl_bsi_rmse[i, k, j] = rmse(graph, fl_bsi_inferred_route, cartesianised_routes[i])
                 fl_bsi_time[i, k, j] = fl_bsi_inferred_route.time
 
@@ -155,7 +155,7 @@ for i in range(num_routes):
                                                          n,
                                                          time_interval=time_interval,
                                                          max_rejections=max_rejections,
-                                                         initial_truncation=initial_truncation)
+                                                         initial_d_truncate=initial_truncation)
             ffbsi_rmse[i, j] = rmse(graph, ffbsi_inferred_route, cartesianised_routes[i])
             ffbsi_time[i, j] = ffbsi_inferred_route.time
     except:
