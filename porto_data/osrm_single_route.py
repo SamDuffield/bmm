@@ -33,7 +33,7 @@ bmm.plot(graph, polyline=utm_mm_polyline)
 
 mm_model = bmm.GammaMapMatchingModel()
 mm_model.gps_sd = 0.5
-particles = bmm.offline_map_match(graph, utm_mm_polyline, 50, time_interval=15, mm_model=mm_model)
+particles = bmm.offline_map_match(graph, utm_mm_polyline, 50, timestamps=15, mm_model=mm_model)
 
 bmm.plot(graph, particles[0], utm_mm_polyline)
 

@@ -42,6 +42,25 @@ def get_proposal(proposal_str: str) -> Callable:
     return proposal_func
 
 
+def get_time_interval_array(timestamps: Union[float, np.ndarray],
+                            num_obs: int) -> np.ndarray:
+    """
+    Preprocess timestamp in put
+    :param timestamps: either float if all observations equally spaced, list of timestamps (length of polyline)
+    or list of time intervals (length of polyline - 1)
+    :param num_obs: length of polyline
+    :return: array of time intervals (length of polyline - 1)
+    """
+    if isinstance(timestamps, (int, float)):
+        return np.ones(num_obs - 1) * timestamps
+    elif len(timestamps) == num_obs:
+        return timestamps[1:] - timestamps[:-1]
+    elif len(timestamps) == (num_obs - 1):
+        return timestamps
+    else:
+        raise ValueError("timestamps input not understood")
+
+
 def initiate_particles(graph: MultiDiGraph,
                        first_observation: np.ndarray,
                        n_samps: int,
@@ -338,7 +357,7 @@ def update_particles(graph: MultiDiGraph,
 def _offline_map_match_fl(graph: MultiDiGraph,
                           polyline: np.ndarray,
                           n_samps: int,
-                          time_interval: Union[float, np.ndarray],
+                          timestamps: Union[float, np.ndarray],
                           mm_model: MapMatchingModel = GammaMapMatchingModel(),
                           proposal: str = 'optimal',
                           update: str = 'PF',
@@ -354,8 +373,8 @@ def _offline_map_match_fl(graph: MultiDiGraph,
     :param polyline: series of cartesian cooridnates in UTM
     :param n_samps: int
         number of particles
-    :param time_interval: time(s) between observations
-        either float or array of length one less than polyline
+    :param timestamps: seconds
+        either float if all times between observations are the same, or a series of timestamps in seconds/UNIX timestamp
     :param mm_model: MapMatchingModel
     :param proposal: either 'optimal' or 'aux_dist'
         defaults to optimal (discretised) proposal
@@ -391,12 +410,7 @@ def _offline_map_match_fl(graph: MultiDiGraph,
     if 'd_refine' in inspect.getfullargspec(proposal_func)[0]:
         kwargs['d_refine'] = d_refine
 
-    if isinstance(time_interval, (int, float)):
-        time_interval_arr = np.ones(num_obs - 1) * time_interval
-    elif len(time_interval) == (num_obs - 1):
-        time_interval_arr = time_interval
-    else:
-        raise ValueError("time_interval must be either float or list-like of length one less than polyline")
+    time_interval_arr = get_time_interval_array(timestamps, num_obs)
 
     if update == 'PF':
         update_func = update_particles_flpf
@@ -419,7 +433,7 @@ def _offline_map_match_fl(graph: MultiDiGraph,
 def offline_map_match(graph: MultiDiGraph,
                       polyline: np.ndarray,
                       n_samps: int,
-                      time_interval: Union[float, np.ndarray],
+                      timestamps: Union[float, np.ndarray],
                       mm_model: MapMatchingModel = GammaMapMatchingModel(),
                       proposal: str = 'optimal',
                       d_refine: int = 1,
@@ -435,8 +449,8 @@ def offline_map_match(graph: MultiDiGraph,
     :param polyline: series of cartesian cooridnates in UTM
     :param n_samps: int
         number of particles
-    :param time_interval: time(s) between observations
-        either float or array of length one less than polyline
+    :param timestamps: seconds
+        either float if all times between observations are the same, or a series of timestamps in seconds/UNIX timestamp
     :param mm_model: MapMatchingModel
     :param proposal: either 'optimal' or 'aux_dist'
         defaults to optimal (discretised) proposal
@@ -484,12 +498,7 @@ def offline_map_match(graph: MultiDiGraph,
     if 'd_refine' in inspect.getfullargspec(proposal_func)[0]:
         kwargs['d_refine'] = d_refine
 
-    if isinstance(time_interval, (int, float)):
-        time_interval_arr = np.ones(num_obs - 1) * time_interval
-    elif len(time_interval) == (num_obs - 1):
-        time_interval_arr = time_interval
-    else:
-        raise ValueError("time_interval must be either float or list-like of length one less than polyline")
+    time_interval_arr = get_time_interval_array(timestamps, num_obs)
 
     # Forward filtering, storing x_t-1, x_t ~ p(x_t-1:t|y_t)
     for i in range(num_obs - 1):

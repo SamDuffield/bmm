@@ -128,7 +128,7 @@ for i in range(num_routes):
                 fl_pf_inferred_route = bmm._offline_map_match_fl(graph,
                                                                  observations[i],
                                                                  n,
-                                                                 time_interval=time_interval,
+                                                                 timestamps=time_interval,
                                                                  lag=lag,
                                                                  update='PF',
                                                                  max_rejections=max_rejections,
@@ -140,7 +140,7 @@ for i in range(num_routes):
                 fl_bsi_inferred_route = bmm._offline_map_match_fl(graph,
                                                                   observations[i],
                                                                   n,
-                                                                  time_interval=time_interval,
+                                                                  timestamps=time_interval,
                                                                   lag=lag,
                                                                   update='BSi',
                                                                   max_rejections=max_rejections,
@@ -153,7 +153,7 @@ for i in range(num_routes):
             ffbsi_inferred_route = bmm.offline_map_match(graph,
                                                          observations[i],
                                                          n,
-                                                         time_interval=time_interval,
+                                                         timestamps=time_interval,
                                                          max_rejections=max_rejections,
                                                          initial_d_truncate=initial_truncation)
             ffbsi_rmse[i, j] = rmse(graph, ffbsi_inferred_route, cartesianised_routes[i])

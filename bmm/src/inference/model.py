@@ -16,6 +16,11 @@ from scipy.stats import gamma as gamma_dist
 @njit
 def _intersection_prior_evaluate(between_obs_route: np.ndarray,
                                  intersection_penalisation: float) -> float:
+    """
+    Evaluate intersection prior - njitted
+    :param between_obs_route: edges traversed between observation times
+    :return: intersection prior density evaluation
+    """
     intersection_col = between_obs_route[:-1, -2]
     return (1 / intersection_col[intersection_col > 0] * intersection_penalisation).prod()
 
@@ -25,6 +30,14 @@ def _likelihood_evaluate(route_cart_coords: np.ndarray,
                          observation: np.ndarray,
                          gps_sd: float,
                          likelihood_d_truncate: float) -> Union[float, np.ndarray]:
+    """
+    Evaluate probability of generating observation from cartesian coords - njitted
+    Vectorised to evaluate over many cart_coords for a single observation
+    Isotropic Gaussian with standard dev self.gps_sd
+    :param route_cart_coords: shape = (_, 2), cartesian coordinates - positions along road network
+    :param observation: shape = (2,) observed GPS cartesian coordinate
+    :return: shape = (_,) likelihood evaluations
+    """
     squared_deviations = np.sum((observation - route_cart_coords) ** 2, axis=1)
     evals = np.exp(-0.5 / gps_sd ** 2 * squared_deviations)
 
@@ -35,15 +48,16 @@ def _likelihood_evaluate(route_cart_coords: np.ndarray,
 
 
 class MapMatchingModel:
-    gps_sd = 7.
+    gps_sd = 25
     intersection_penalisation = 1
-    deviation_beta = 10.
+    deviation_beta = 10
     max_speed = 35
     likelihood_d_truncate = np.inf
+    distance_params = {}
 
     def distance_prior_evaluate(self,
                                 distance: Union[float, np.ndarray],
-                                time_interval: float) -> Union[float, np.ndarray]:
+                                time_interval: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
         """
         Evaluate distance prior/transition density
         Vectorised to handle multiple evaluations at once
@@ -93,16 +107,6 @@ class MapMatchingModel:
         diffs = np.abs(deviations - distances)
         return np.exp(-diffs / self.deviation_beta) / self.deviation_beta
 
-    # def intersection_prior_evaluate(self,
-    #                                 between_obs_route: np.ndarray) -> float:
-    #     """
-    #     Evaluate intersection prior.
-    #     :param between_obs_route: edges traversed between observation times
-    #     :return: intersection prior density evaluation
-    #     """
-    #     intersection_col = between_obs_route[:-1, -2]
-    #     return (1 / intersection_col[intersection_col > 0] * self.intersection_penalisation).prod()
-
     def intersection_prior_evaluate(self,
                                     between_obs_route: np.ndarray) -> float:
         """
@@ -112,24 +116,6 @@ class MapMatchingModel:
         """
         return _intersection_prior_evaluate(between_obs_route, self.intersection_penalisation)
 
-    # def likelihood_evaluate(self,
-    #                         route_cart_coords: np.ndarray,
-    #                         observation: np.ndarray) -> Union[float, np.ndarray]:
-    #     """
-    #     Evaluate probability of generating observation from cartesian coords
-    #     Vectorised to evaluate over many cart_coords for a single observation
-    #     Isotropic Gaussian with standard dev self.gps_sd
-    #     :param route_cart_coords: shape = (_, 2), cartesian coordinates - positions along road network
-    #     :param observation: shape = (2,) observed GPS cartesian coordinate
-    #     :return: shape = (_,) likelihood evaluations
-    #     """
-    #     squared_deviations = np.sum((observation - route_cart_coords) ** 2, axis=1)
-    #     evals = np.exp(-0.5 / self.gps_sd ** 2 * squared_deviations)
-    #
-    #     if self.likelihood_d_truncate < np.inf:
-    #         evals *= squared_deviations < self.likelihood_d_truncate ** 2
-    #
-    #     return evals
     def likelihood_evaluate(self,
                             route_cart_coords: np.ndarray,
                             observation: np.ndarray) -> Union[float, np.ndarray]:
@@ -148,17 +134,29 @@ class GammaMapMatchingModel(MapMatchingModel):
     speed_mean = 7.44
     speed_sd = 6.88
 
-    asymp_min_zero_prob = 0.01
+    distance_params = {'b_speed': speed_mean / speed_sd ** 2}
+    distance_params['a_speed'] = speed_mean * distance_params['b_speed']
+    distance_params['zero_dist_prob_neg_exponent'] = 0.25
+
+    # asymp_min_zero_prob = 0.01
+    # def zero_dist_prob(self,
+    #                    time_interval: float) -> float:
+    #     """
+    #     Probability of travelling a distance of exactly zero
+    #     :param time_interval: time between last observation and newly received observation
+    #     :return: probability of travelling zero metres in time_interval
+    #     """
+    #     exp_param = (np.log(1 - self.asymp_min_zero_prob) - np.log(0.044 - self.asymp_min_zero_prob)) / 15
+    #     return self.asymp_min_zero_prob + (1 - self.asymp_min_zero_prob) * np.exp(- exp_param * time_interval)
 
     def zero_dist_prob(self,
-                       time_interval: float) -> float:
+                       time_interval: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
         """
         Probability of travelling a distance of exactly zero
         :param time_interval: time between last observation and newly received observation
         :return: probability of travelling zero metres in time_interval
         """
-        exp_param = (np.log(1 - self.asymp_min_zero_prob) - np.log(0.044 - self.asymp_min_zero_prob)) / 15
-        return self.asymp_min_zero_prob + (1 - self.asymp_min_zero_prob) * np.exp(- exp_param * time_interval)
+        return np.exp(- self.distance_params['zero_dist_prob_neg_exponent'] * time_interval)
 
     def distance_prior_sample(self,
                               time_interval: float) -> float:
@@ -170,14 +168,11 @@ class GammaMapMatchingModel(MapMatchingModel):
         zero_dist_prob = self.zero_dist_prob(time_interval)
         if np.random.uniform() < zero_dist_prob:
             return 0.
-
-        gamma_speed_beta = self.speed_mean / self.speed_sd ** 2
-        gamma_speed_alpha = self.speed_mean * gamma_speed_beta
-        return np.random.gamma(gamma_speed_alpha, 1 / gamma_speed_beta) * time_interval
+        return np.random.gamma(self.distance_params['a_speed'], 1 / self.distance_params['b_speed']) * time_interval
 
     def distance_prior_evaluate(self,
                                 distance: Union[float, np.ndarray],
-                                time_interval: float) -> Union[float, np.ndarray]:
+                                time_interval: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
         """
         Evaluate distance prior/transition density
         Vectorised to handle multiple evaluations at once
@@ -195,14 +190,17 @@ class GammaMapMatchingModel(MapMatchingModel):
         non_zero_inds = distance > 0
 
         if np.sum(non_zero_inds) > 0:
-
-            if np.any(np.atleast_1d(distance[non_zero_inds]) <= 0):
+            if np.any(np.atleast_1d(distance[non_zero_inds]) < 0):
                 raise ValueError("Gamma pdf takes only positive values")
 
-            out_arr[non_zero_inds] = pdf_gamma_mv(distance[non_zero_inds] / time_interval,
-                                                  self.speed_mean,
-                                                  self.speed_sd ** 2) \
-                                     * (1 - zero_dist_prob)
+            time_int_check = time_interval[non_zero_inds] if isinstance(time_interval, np.ndarray) else time_interval
+            zero_dist_prob_check = zero_dist_prob[non_zero_inds] if isinstance(time_interval, np.ndarray)\
+                else zero_dist_prob
+
+            out_arr[non_zero_inds] = gamma_dist.pdf(distance[non_zero_inds] / time_int_check,
+                                                    a=self.distance_params['a_speed'],
+                                                    scale=1 / self.distance_params['b_speed'])\
+                                     * (1 - zero_dist_prob_check)
 
         return np.squeeze(out_arr)
 
@@ -214,15 +212,15 @@ class GammaMapMatchingModel(MapMatchingModel):
         :return: bound on distance prior density
         """
         zero_dist_prob = self.zero_dist_prob(time_interval)
-        gamma_beta = self.speed_mean / self.speed_sd ** 2
-        gamma_alpha = self.speed_mean * gamma_beta
 
-        if gamma_alpha < 1:
+        if self.distance_params['a_speed'] < 1:
             raise ValueError("Distance prior not bounded")
 
-        gamma_mode = (gamma_alpha - 1) / gamma_beta
+        gamma_mode = (self.distance_params['a_speed'] - 1) / self.distance_params['b_speed']
 
-        distance_bound = max(pdf_gamma_mv(gamma_mode, self.speed_mean, self.speed_sd ** 2) * (1 - zero_dist_prob),
+        distance_bound = max(gamma_dist.pdf(gamma_mode,
+                                            a=self.distance_params['a_speed'],
+                                            scale=1 / self.distance_params['b_speed']) * (1 - zero_dist_prob),
                              zero_dist_prob)
 
         return distance_bound if self.deviation_beta == np.inf else distance_bound / self.deviation_beta

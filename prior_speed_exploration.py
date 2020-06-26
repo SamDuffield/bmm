@@ -9,7 +9,6 @@ import numpy as np
 from bmm.src.tools.graph import load_graph
 import bmm.src.tools.edges
 import matplotlib.pyplot as plt
-import osmnx as ox
 from scipy import stats
 
 
@@ -19,9 +18,8 @@ def polyline_to_euclidean_distance(polyline):
     :param polyline: UTM polyline
     :return: list of distances in metres
     """
-    return [ox.euclidean_dist_vec(polyline[i][1], polyline[i][0], polyline[i+1][1], polyline[i+1][0])
-            for i in range(len(polyline) - 1)]
-
+    poly_arr = np.asarray(polyline)
+    return np.sqrt(np.sum(np.square(poly_arr[1:] - poly_arr[:-1]), axis=1))
 
 # Source data paths
 _, process_data_path = bmm.src.data.utils.source_data()
@@ -35,10 +33,9 @@ data_path = bmm.src.data.utils.choose_data()
 raw_data = bmm.src.data.utils.read_data(data_path)
 
 # Extract distances
-euclidean_dists = []
+euclidean_dists = np.array([])
 for poly in raw_data['POLYLINE_UTM']:
-    euclidean_dists += polyline_to_euclidean_distance(poly)
-euclidean_dists = np.asarray(euclidean_dists)
+    euclidean_dists = np.append(euclidean_dists, polyline_to_euclidean_distance(poly))
 
 # Inter-observation time
 delta_obs = 15
@@ -52,7 +49,7 @@ v_max = 32
 euclidean_speeds = euclidean_speeds[euclidean_speeds < v_max]
 
 # Probability of zero speed
-zero_cut_off = 1/15
+zero_cut_off = 2
 zero_prob = sum(euclidean_speeds < zero_cut_off) / len(euclidean_speeds)
 
 # Remove zero values

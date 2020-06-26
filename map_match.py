@@ -13,9 +13,7 @@ from bmm.src.tools.graph import load_graph
 
 from bmm import offline_map_match, _offline_map_match_fl, plot
 
-np.random.seed(0)
-
-np.seterr(divide='raise', invalid='raise')
+# np.random.seed(0)
 
 # Source data paths
 _, process_data_path = source_data()
@@ -30,9 +28,9 @@ raw_data = read_data(data_path, 100).get_chunk()
 
 # Select single polyline
 single_index = np.random.choice(100, 1)[0]
-single_index = 0
+single_index = 77
 # single_index = 44         # map incorrect?
-# single_index = 76           # dead end with too high probability issue
+# single_index = 76         # dead end with too high probability issue
 # single_index = 86         # times out
 # sinlge_index = 11         # can't initialise
 # single_index = 46
@@ -81,7 +79,7 @@ max_rejects = 10
 #                               dist_expand=50,
 #                               var=5)
 
-particles = offline_map_match(graph, poly_single[:polyline_truncation], n_samps, time_interval=15,
+particles = offline_map_match(graph, poly_single[:polyline_truncation], n_samps, timestamps=15,
                               d_refine=1,
                               max_rejections=max_rejects,
                               proposal='optimal',
