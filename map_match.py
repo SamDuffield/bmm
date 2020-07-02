@@ -27,12 +27,12 @@ data_path = process_data_path + "/data/portotaxi_06052014_06052014_utm_1730_1745
 raw_data = read_data(data_path, 100).get_chunk()
 
 # Select single polyline
-single_index = np.random.choice(100, 1)[0]
-single_index = 77
+# single_index = np.random.choice(100, 1)[0]
+single_index = 13
 # single_index = 44         # map incorrect?
 # single_index = 76         # dead end with too high probability issue
 # single_index = 86         # times out
-# sinlge_index = 11         # can't initialise
+# single_index = 11         # can't initialise
 # single_index = 46
 poly_single_list = raw_data['POLYLINE_UTM'][single_index]
 poly_single = np.asarray(poly_single_list)

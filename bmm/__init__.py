@@ -13,6 +13,7 @@ from bmm.src.inference.smc import proposals
 
 from bmm.src.inference.model import MapMatchingModel
 from bmm.src.inference.model import GammaMapMatchingModel
+from bmm.src.inference.model import LogNormalMapMatchingModel
 
 from bmm.src.inference.proposal import get_possible_routes
 
@@ -21,6 +22,8 @@ from bmm.src.tools.edges import get_geometry
 from bmm.src.tools.edges import discretise_edge
 
 from bmm.src.inference.particles import MMParticles
+
+from bmm.src.inference.parameters import offline_em
 
 # try:
 #   del src

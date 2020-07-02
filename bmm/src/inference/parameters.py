@@ -6,9 +6,9 @@
 ########################################################################################################################
 
 from typing import Union, Tuple
+import pickle
 
 import numpy as np
-from numba import njit
 from networkx.classes import MultiDiGraph
 from scipy.optimize import minimize
 
@@ -33,14 +33,19 @@ def offline_em(graph: MultiDiGraph,
         either float if all times between observations are the same, or a series of timestamps in seconds/UNIX timestamp
         if timestamps given, must be in a list matching dimensions of polylines
     :param polylines: UTM polylines
+    :param n_ffbsi: number of samples for FFBSi algorithm
     :param n_iter: number of EM iterations
     :return: dict of optimised parameters
     """
 
+    params_track = {'distance_params': {key: np.asarray(value) for key, value in mm_model.distance_params.items()},
+                    'deviation_beta': np.asarray(mm_model.deviation_beta),
+                    'gps_sd': np.asarray(mm_model.gps_sd)}
+
     if isinstance(polylines, np.ndarray):
         polylines = [polylines]
 
-    if isinstance(timestamps, float):
+    if isinstance(timestamps, (float, int)):
         timestamps = [timestamps] * len(polylines)
 
     time_interval_arrs = [get_time_interval_array(timestamps_single, len(polyline))
@@ -53,12 +58,35 @@ def offline_em(graph: MultiDiGraph,
                                            n_ffbsi,
                                            time_ints_single,
                                            mm_model,
-                                           n_samps=n_ffbsi,
                                            **kwargs)
                          for time_ints_single, polyline in zip(time_interval_arrs, polylines)]
 
         # Optimise hyperparameters
-        optimise_hyperparameters(mm_model, map_matchings, timestamps, polylines)
+        optimise_hyperparameters(mm_model, map_matchings, time_interval_arrs, polylines)
+
+        # Update tracking of hyperparameters
+        params_track = update_params_track(params_track, mm_model)
+
+        print(f'EM iter: {k}')
+        print(params_track)
+        pickle.dump(params_track, open('param_track.pickle', 'wb'))
+
+    return params_track
+
+
+def update_params_track(params_track: dict,
+                        mm_model: MapMatchingModel) -> dict:
+    """
+    Appends latest value to tracking of hyperparameter tuning
+    :param params_track: dict of hyperparameters
+    :param mm_model: MapMatchingModel with hyperparameters updated
+    :return: params_track with new hyperparameters updated
+    """
+    params_track['distance_params'] = {key: np.append(params_track['distance_params'][key], value)
+                                       for key, value in mm_model.distance_params.items()}
+    params_track['deviation_beta'] = np.append(params_track['deviation_beta'], mm_model.deviation_beta)
+    params_track['gps_sd'] = np.append(params_track['gps_sd'], mm_model.gps_sd)
+    return params_track
 
 
 def extract_mm_quantities(map_matching: list,
@@ -99,7 +127,6 @@ def optimise_hyperparameters(mm_model: MapMatchingModel,
     :param time_interval_arrs: time interval arrays for each route
     :param polylines: observations for each route
     """
-
     # Get key quantities
     distances = np.array([])
     time_interval_arrs_concat = np.array([])
@@ -117,20 +144,30 @@ def optimise_hyperparameters(mm_model: MapMatchingModel,
 
     # Optimise distance params
     def distance_optim_func(distance_params_vals: np.ndarray) -> float:
-        for i, k in enumerate(mm_model.distance_params.keys):
+        for i, k in enumerate(mm_model.distance_params.keys()):
             mm_model.distance_params[k] = distance_params_vals[i]
-
-        return -np.sum(mm_model.distance_prior_evaluate(distances, time_interval_arrs_concat))\
-               / len(map_matchings[0])
+        return -np.sum(np.log(mm_model.distance_prior_evaluate(distances, time_interval_arrs_concat)))
 
     # Optimise distance params
     optim_dist_params = minimize(distance_optim_func,
-                                 np.array([a for a in mm_model.distance_params.values()]))
-    for i, k in enumerate(mm_model.distance_params.keys):
+                                 np.array([a for a in mm_model.distance_params.values()]),
+                                 method='powell',
+                                 bounds=[(1e-20, np.inf)] * len(mm_model.distance_params))
+                                 # bounds=[(1 + 1e-20, 2 - 1e-20), (1e-20, np.inf), (1e-20, np.inf)])
+
+    for i, k in enumerate(mm_model.distance_params.keys()):
         mm_model.distance_params[k] = optim_dist_params.x[i]
 
     # Optimise deviation beta
-    mm_model.deviation_beta = np.mean(devs)
+    mm_model.deviation_beta = max(devs.mean(), 10)
 
     # Optimise GPS noise
-    mm_model.deviation_beta = np.mean(sq_obs_dists) / 2
+    mm_model.gps_sd = min(np.sqrt(np.mean(sq_obs_dists) / 2), 7.5)
+    # gps_roots = np.roots([mm_model.gps_sd_lambda/len(sq_obs_dists) * len(map_matchings[0]),
+    #                       1,
+    #                       0,
+    #                       -np.mean(sq_obs_dists) / 2])
+    # gps_roots = gps_roots[np.isreal(gps_roots)]
+    # gps_roots = gps_roots[gps_roots > 0]
+    # mm_model.gps_sd = float(gps_roots[0])
+

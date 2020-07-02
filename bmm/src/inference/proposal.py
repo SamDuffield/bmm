@@ -32,7 +32,8 @@ def get_out_edges(graph: MultiDiGraph,
 def get_possible_routes(graph: MultiDiGraph,
                         in_route: np.ndarray,
                         dist: float,
-                        all_routes: bool = False) -> list:
+                        all_routes: bool = False,
+                        num_inter_cut_off: int = np.inf) -> list:
     """
     Given a route so far and maximum distance to travel, calculate and return all possible routes on graph.
     :param graph: encodes road network, simplified and projected to UTM
@@ -50,6 +51,7 @@ def get_possible_routes(graph: MultiDiGraph,
     :param dist: metres, maximum possible distance to travel
     :param all_routes: if true return all routes possible <= d
         otherwise return only routes of length d
+    :param num_inter_cut_off: maximum number of intersections to cross in the time interval
     :return: list of arrays
         each array with shape = (_, 9) as in_route
         each array describes a possible route
@@ -98,13 +100,16 @@ def get_possible_routes(graph: MultiDiGraph,
     else:
         new_routes = []
         for new_edge in intersection_edges:
-            if new_edge[1] != start_edge_and_position[1]:
+            # If not u-turn or loop continue route search on new edge
+            if new_edge[1] != start_edge_and_position[1]\
+                    and not (new_edge == in_route[:, 1:4]).all(1).any()\
+                    and len(in_route) < num_inter_cut_off:
                 add_edge = np.array([[0, *new_edge, 0, 0, 0, 0, start_edge_and_position[-1]]])
                 new_route = np.append(in_route,
                                       add_edge,
                                       axis=0)
 
-                new_routes += get_possible_routes(graph, new_route, dist, all_routes)
+                new_routes += get_possible_routes(graph, new_route, dist, all_routes, num_inter_cut_off)
         if all_routes:
             return [in_route] + new_routes
         else:
@@ -192,7 +197,8 @@ def optimal_proposal(graph: MultiDiGraph,
                      time_interval: float,
                      mm_model: MapMatchingModel,
                      full_smoothing: bool = True,
-                     d_refine: float = 1.) -> Tuple[Union[None, np.ndarray], float]:
+                     d_refine: float = 1.,
+                     num_inter_cut_off: int = None) -> Tuple[Union[None, np.ndarray], float]:
     """
     Samples a single particle from the (distance discretised) optimal proposal.
     :param graph: encodes road network, simplified and projected to UTM
@@ -203,17 +209,22 @@ def optimal_proposal(graph: MultiDiGraph,
     :param full_smoothing: if True returns full trajectory
         otherwise returns only x_t-1 to x_t
     :param d_refine: metres, resolution of distance discretisation
+    :param num_inter_cut_off: maximum number of intersections to cross in the time interval
     :return: tuple, (particle, unnormalised weight)
     """
     if particle is None:
         return None, 0.
+
+    if num_inter_cut_off is None:
+        num_inter_cut_off = max(int(time_interval / 1.5), 10)
 
     d_max = mm_model.d_max(time_interval)
 
     # Extract all possible routes from previous position
     start_position = particle[-1:].copy()
     start_position[0, -1] = 0
-    possible_routes = get_possible_routes(graph, start_position, d_max, all_routes=True)
+    possible_routes = get_possible_routes(graph, start_position, d_max, all_routes=True,
+                                          num_inter_cut_off=num_inter_cut_off)
 
     # Get all possible positions on each route
     discretised_routes_indices_list = []

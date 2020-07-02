@@ -7,9 +7,11 @@
 
 import numpy as np
 from bmm.src.tools.graph import load_graph
+from bmm.src.data.utils import source_data, read_data
 import bmm.src.tools.edges
 import matplotlib.pyplot as plt
 from scipy import stats
+from tweedie import tweedie
 
 
 def polyline_to_euclidean_distance(polyline):
@@ -22,15 +24,18 @@ def polyline_to_euclidean_distance(polyline):
     return np.sqrt(np.sum(np.square(poly_arr[1:] - poly_arr[:-1]), axis=1))
 
 # Source data paths
-_, process_data_path = bmm.src.data.utils.source_data()
+_, process_data_path = source_data()
 
 # Load networkx graph and edges gdf
 graph = load_graph()
 edges_gdf = bmm.src.tools.edges.graph_edges_gdf(graph)
 
 # Load taxi data
-data_path = bmm.src.data.utils.choose_data()
-raw_data = bmm.src.data.utils.read_data(data_path)
+# data_path = bmm.src.data.utils.choose_data()
+# raw_data = bmm.src.data.utils.read_data(data_path)
+data_path = process_data_path + "/data/portotaxi_06052014_06052014_utm_1730_1745.csv"
+raw_data = read_data(data_path)
+# raw_data = read_data(data_path, 100).get_chunk()
 
 # Extract distances
 euclidean_dists = np.array([])
@@ -49,7 +54,7 @@ v_max = 32
 euclidean_speeds = euclidean_speeds[euclidean_speeds < v_max]
 
 # Probability of zero speed
-zero_cut_off = 2
+zero_cut_off = 0
 zero_prob = sum(euclidean_speeds < zero_cut_off) / len(euclidean_speeds)
 
 # Remove zero values
@@ -68,22 +73,37 @@ mean_v = np.mean(euclidean_speeds)
 print(mean_v)
 var_v = np.var(euclidean_speeds)
 print(var_v)
+
+
 bg = mean_v / var_v
 ag = mean_v * bg
 pdf_gamma = stats.gamma.pdf(linsp, ag, loc=0, scale=1/bg)
 plt.plot(linsp, pdf_gamma, label="Fitted Gamma")
 
 # Log data
-log_euclidean_speeds = np.log(euclidean_speeds)
+log_euclidean_speeds = np.log(euclidean_speeds[euclidean_speeds > 0])
 
 # # Fit Gaussian to log data (logGaussian to raw data)
 mean_log_v = np.mean(log_euclidean_speeds)
 var_log_v = np.var(log_euclidean_speeds)
-pdf_loggaussian = stats.lognorm.pdf(linsp, s=np.sqrt(var_log_v), scale=np.exp(mean_log_v))
+pdf_loggaussian = stats.lognorm.pdf(linsp, scale=np.exp(mean_log_v), s=np.sqrt(var_log_v))
 plt.plot(linsp, pdf_loggaussian, label="Fitted logGaussian")
+
+
+
+# Add tweedie
+# pdf_tweedie = tweedie.pdf(linsp, p=1.91, mu=8.09, phi=3.18)
+pdf_tweedie = tweedie.pdf(linsp, p=1.5, mu=10, phi=1.55)
+plt.plot(linsp, pdf_tweedie, label='Fitted Tweedie')
+
+for p in np.linspace(1.1, 1.9, 9):
+    pdf_tweedie = tweedie.pdf(linsp, p=p, mu=mean_v, phi=var_v / mean_v ** p)
+    plt.plot(linsp, pdf_tweedie, label=f'p={p}')
+
+
 
 # Add legend
 plt.legend()
 
-plt.show(block=True)
+plt.show()
 
