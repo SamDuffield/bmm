@@ -7,11 +7,13 @@ from networkx import write_gpickle, read_gpickle, relabel_nodes
 import matplotlib.pyplot as plt
 
 import bmm
+from bmm.src.data.utils import source_data, read_data
 
 
 # Load graph of Cambridge
 def cambridge_graph():
-    graph_dir = '/Users/samddd/Main/Data/bayesian-map-matching/graphs/Cambridge/'
+    _, process_data_path = source_data()
+    graph_dir = process_data_path + '/graphs/Cambridge/'
     graph_name = 'cambridge_latest_utm_cleaned'
     graph_path = graph_dir + graph_name + '.graphml'
 
@@ -35,7 +37,8 @@ def remove_dead_ends(graph):
 
 
 def download_simplify_cambridge_graph():
-    graph_dir = '/Users/samddd/Main/Data/bayesian-map-matching/graphs/Cambridge/'
+    _, process_data_path = source_data()
+    graph_dir = process_data_path + '/graphs/Cambridge/'
     graph_name = 'cambridge_latest_utm_cleaned'
     graph_path = graph_dir + graph_name + '.graphml'
 
