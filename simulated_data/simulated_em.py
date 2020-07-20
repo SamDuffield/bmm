@@ -22,7 +22,7 @@ gen_model.gps_sd = 7
 timestamps = 15
 
 # Generate simulated routes
-num_routes = 5
+num_routes = 1
 route_length = 50
 sample_d_refine = 3
 
@@ -47,8 +47,8 @@ observations = [po + gen_model.gps_sd * np.random.normal(size=po.shape) for po i
 ###
 distances = np.concatenate([a[1:, -1] for a in routes_obs_rows])
 print(np.mean(distances == 0))
-for route, obs in zip(routes, observations):
-    bmm.plot(cam_graph, route, obs)
+# for route, obs in zip(routes, observations):
+#     bmm.plot(cam_graph, route, obs)
 
 # Run EM
 n_iter = 100

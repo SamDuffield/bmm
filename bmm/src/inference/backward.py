@@ -246,8 +246,8 @@ def backward_simulate(graph: MultiDiGraph,
 
                 if dev_norm:
                     out_particles[j], ess_back[i, j], sampled_inds[j] = back_output
-                    # if dev_norm_quants[i, sampled_inds[j], 0] == 0:
-                    #     raise
+                    if dev_norm_quants[i, sampled_inds[j], 0] == 0:
+                        raise
                 else:
                     out_particles[j], ess_back[i, j] = back_output
 

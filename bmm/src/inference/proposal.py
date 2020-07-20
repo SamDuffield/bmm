@@ -89,11 +89,13 @@ def get_possible_routes(graph: MultiDiGraph,
         else:
             return [None]
 
-    n_inter = max(1, np.sum(intersection_edges[:, 1] != start_edge_and_position[1]))
+    n_inter = max(1, np.sum(~((intersection_edges[:, 1] == start_edge_and_position[1]) *
+                              (intersection_edges[:, 2] == start_edge_and_position[3]))))
 
     start_edge_and_position[-2] = n_inter
 
-    if len(intersection_edges) == 1 and intersection_edges[0][1] == start_edge_and_position[0]:
+    if len(intersection_edges) == 1 and intersection_edges[0][1] == start_edge_and_position[1]\
+            and intersection_edges[0][2] == start_edge_and_position[3]:
         # Dead-end and two-way -> Only option is u-turn
         if all_routes:
             return [in_route]
@@ -101,7 +103,7 @@ def get_possible_routes(graph: MultiDiGraph,
         new_routes = []
         for new_edge in intersection_edges:
             # If not u-turn or loop continue route search on new edge
-            if new_edge[1] != start_edge_and_position[1] \
+            if not (new_edge[1] == start_edge_and_position[1] and new_edge[2] == start_edge_and_position[3])\
                     and not (new_edge == in_route[:, 1:4]).all(1).any() \
                     and len(in_route) < num_inter_cut_off:
                 add_edge = np.array([[0, *new_edge, 0, 0, 0, 0, start_edge_and_position[-1]]])
@@ -275,7 +277,7 @@ def optimal_proposal(graph: MultiDiGraph,
     distance_prior_evals = mm_model.distance_prior_evaluate(distances, time_interval)
 
     # Intersection prior evals
-    route_intersection_prior_evals = intersection_prior_evaluate(possible_routes, mm_model)
+    route_intersection_prior_evals = intersection_prior_evaluate(possible_routes, mm_model)[discretised_routes_indices]
 
     # Deviation prior evals
     deviation_prior_evals = mm_model.deviation_prior_evaluate(particle[-1, 5:7],
@@ -284,12 +286,13 @@ def optimal_proposal(graph: MultiDiGraph,
 
     # Normalise prior/transition probabilities
     prior_probs = distance_prior_evals \
-                  * route_intersection_prior_evals[discretised_routes_indices] \
+                  * route_intersection_prior_evals \
                   * deviation_prior_evals
 
     if store_dev_norm_quants:
         prior_probs_norm_const = prior_probs[distances > 0].sum()
         prior_probs[distances > 0] *= (1 - prior_probs[distances == 0][0]) / prior_probs_norm_const
+
     else:
         prior_probs_norm_const = prior_probs.sum()
         prior_probs /= prior_probs_norm_const
@@ -320,7 +323,7 @@ def optimal_proposal(graph: MultiDiGraph,
 
         # Z, dz/d alpha, dZ/d beta (alpha is all distance parameters, beta is deviation parameter)
         dev_norm_quants = np.array([prior_probs_norm_const,
-                                    *np.sum(mm_model.distance_prior_gradient(discretised_routes[:, -1], time_interval)
+                                    *np.sum(mm_model.distance_prior_gradient(distances, time_interval)
                                             * route_intersection_prior_evals[discretised_routes_indices]
                                             * deviation_prior_evals, axis=-1),
                                     -np.sum(deviations
