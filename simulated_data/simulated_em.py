@@ -60,7 +60,7 @@ tune_model.distance_params['zero_dist_prob_neg_exponent'] = 0.15
 tune_model.deviation_beta = 1/12
 tune_model.gps_sd = 10
 
-tune_model.deviation_beta_bounds = (0, 0)
+# tune_model.deviation_beta_bounds = (0, 0)
 
 params_track = bmm.offline_em(cam_graph, tune_model, timestamps, observations, n_iter=n_iter, max_rejections=0,
                               initial_d_truncate=50,
