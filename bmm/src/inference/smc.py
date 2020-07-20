@@ -517,9 +517,6 @@ def offline_map_match(graph: MultiDiGraph,
                                                                         full_smoothing=False,
                                                                         **kwargs)
 
-            # if filter_particles[i+1][j] is not None and filter_particles[i+1][j][-1, 0] == 0.:
-            #     raise ValueError
-
         temp_weights *= live_weights
         temp_weights /= np.sum(temp_weights)
         filter_weights[i + 1] = temp_weights.copy()

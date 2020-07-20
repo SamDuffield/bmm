@@ -89,18 +89,14 @@ var_log_v = np.var(log_euclidean_speeds)
 pdf_loggaussian = stats.lognorm.pdf(linsp, scale=np.exp(mean_log_v), s=np.sqrt(var_log_v))
 plt.plot(linsp, pdf_loggaussian, label="Fitted logGaussian")
 
-
-
 # Add tweedie
 # pdf_tweedie = tweedie.pdf(linsp, p=1.91, mu=8.09, phi=3.18)
-pdf_tweedie = tweedie.pdf(linsp, p=1.5, mu=10, phi=1.55)
+pdf_tweedie = tweedie.pdf(linsp, p=1.9, mu=8.65, phi=2.53)
 plt.plot(linsp, pdf_tweedie, label='Fitted Tweedie')
 
 for p in np.linspace(1.1, 1.9, 9):
     pdf_tweedie = tweedie.pdf(linsp, p=p, mu=mean_v, phi=var_v / mean_v ** p)
     plt.plot(linsp, pdf_tweedie, label=f'p={p}')
-
-
 
 # Add legend
 plt.legend()

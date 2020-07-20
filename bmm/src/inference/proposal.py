@@ -89,7 +89,7 @@ def get_possible_routes(graph: MultiDiGraph,
         else:
             return [None]
 
-    n_inter = max(1, np.sum(intersection_edges[:, 1] != start_edge_and_position[0]))
+    n_inter = max(1, np.sum(intersection_edges[:, 1] != start_edge_and_position[1]))
 
     start_edge_and_position[-2] = n_inter
 
@@ -101,8 +101,8 @@ def get_possible_routes(graph: MultiDiGraph,
         new_routes = []
         for new_edge in intersection_edges:
             # If not u-turn or loop continue route search on new edge
-            if new_edge[1] != start_edge_and_position[1]\
-                    and not (new_edge == in_route[:, 1:4]).all(1).any()\
+            if new_edge[1] != start_edge_and_position[1] \
+                    and not (new_edge == in_route[:, 1:4]).all(1).any() \
                     and len(in_route) < num_inter_cut_off:
                 add_edge = np.array([[0, *new_edge, 0, 0, 0, 0, start_edge_and_position[-1]]])
                 new_route = np.append(in_route,
@@ -165,6 +165,7 @@ def process_proposal_output(particle: np.ndarray,
     # Append sampled route to old particle
     new_route_append = sampled_route
     new_route_append[0, 0] = 0
+    new_route_append[0, 5:7] = 0
     new_route_append[-1, 0] = particle[-1, 0] + time_interval
     new_route_append[-1, 4:7] = sampled_dis_route[0:3]
     new_route_append[-1, -2] = 0
@@ -198,7 +199,11 @@ def optimal_proposal(graph: MultiDiGraph,
                      mm_model: MapMatchingModel,
                      full_smoothing: bool = True,
                      d_refine: float = 1.,
-                     num_inter_cut_off: int = None) -> Tuple[Union[None, np.ndarray], float]:
+                     num_inter_cut_off: int = None,
+                     store_dev_norm_quants: bool = False) -> Union[Tuple[Union[None, np.ndarray], float],
+                                                                   Tuple[Union[None, np.ndarray],
+                                                                         float,
+                                                                         np.ndarray]]:
     """
     Samples a single particle from the (distance discretised) optimal proposal.
     :param graph: encodes road network, simplified and projected to UTM
@@ -210,10 +215,12 @@ def optimal_proposal(graph: MultiDiGraph,
         otherwise returns only x_t-1 to x_t
     :param d_refine: metres, resolution of distance discretisation
     :param num_inter_cut_off: maximum number of intersections to cross in the time interval
-    :return: tuple, (particle, unnormalised weight)
+    :param store_dev_norm_quants: whether to additionally return quantities needed for gradient EM step
+        assuming deviation prior is used
+    :return: (particle, unnormalised weight) or (particle, unnormalised weight, dev_norm_quants)
     """
     if particle is None:
-        return None, 0.
+        return (None, 0., 0.) if store_dev_norm_quants else (None, 0.)
 
     if num_inter_cut_off is None:
         num_inter_cut_off = max(int(time_interval / 1.5), 10)
@@ -254,13 +261,18 @@ def optimal_proposal(graph: MultiDiGraph,
     likelihood_evals = mm_model.likelihood_evaluate(discretised_routes[:, 1:3], new_observation)
 
     # Trim
-    positive_lik_inds = likelihood_evals > 0
-    discretised_routes_indices = discretised_routes_indices[positive_lik_inds]
-    discretised_routes = discretised_routes[positive_lik_inds]
-    likelihood_evals = likelihood_evals[positive_lik_inds]
+    if not store_dev_norm_quants:
+        positive_lik_inds = likelihood_evals > 0
+        discretised_routes_indices = discretised_routes_indices[positive_lik_inds]
+        discretised_routes = discretised_routes[positive_lik_inds]
+        likelihood_evals = likelihood_evals[positive_lik_inds]
+
+    if len(discretised_routes) == 0 or (len(discretised_routes) == 1 and discretised_routes[0][-1] == 0):
+        return (None, 0., 0.) if store_dev_norm_quants else (None, 0.)
 
     # Distance prior evals
-    distance_prior_evals = mm_model.distance_prior_evaluate(discretised_routes[:, -1], time_interval)
+    distances = discretised_routes[:, -1]
+    distance_prior_evals = mm_model.distance_prior_evaluate(distances, time_interval)
 
     # Intersection prior evals
     route_intersection_prior_evals = intersection_prior_evaluate(possible_routes, mm_model)
@@ -270,27 +282,59 @@ def optimal_proposal(graph: MultiDiGraph,
                                                               discretised_routes[:, 1:3],
                                                               discretised_routes[:, -1])
 
+    # Normalise prior/transition probabilities
+    prior_probs = distance_prior_evals \
+                  * route_intersection_prior_evals[discretised_routes_indices] \
+                  * deviation_prior_evals
+
+    if store_dev_norm_quants:
+        prior_probs_norm_const = prior_probs[distances > 0].sum()
+        prior_probs[distances > 0] *= (1 - prior_probs[distances == 0][0]) / prior_probs_norm_const
+    else:
+        prior_probs_norm_const = prior_probs.sum()
+        prior_probs /= prior_probs_norm_const
+
     # Calculate sample probabilities
-    sample_probs = distance_prior_evals \
-                   * route_intersection_prior_evals[discretised_routes_indices] \
-                   * deviation_prior_evals \
-                   * likelihood_evals
+    sample_probs = prior_probs * likelihood_evals
 
-    # Normalising constant = p(y_m | x_m-1^j)
-    sample_probs_norm_const = sample_probs.sum()
+    # p(y_m | x_m-1^j)
+    prop_weight = sample_probs.sum()
 
-    if sample_probs_norm_const < 1e-200:
-        return None, 0.
+    if prop_weight < 1e-200:
+        proposal_out = None
+        prop_weight = 0.
+    else:
+        # Sample an edge and distance
+        sampled_dis_route_index = np.random.choice(len(discretised_routes), 1, p=sample_probs / prop_weight)[0]
+        sampled_dis_route = discretised_routes[sampled_dis_route_index]
 
-    # Sample an edge and distance
-    sampled_dis_route_index = np.random.choice(len(discretised_routes), 1, p=sample_probs / sample_probs_norm_const)[0]
-    sampled_dis_route = discretised_routes[sampled_dis_route_index]
+        # Append sampled route to old particle
+        sampled_route = possible_routes[discretised_routes_indices[sampled_dis_route_index]]
 
-    # Append sampled route to old particle
-    sampled_route = possible_routes[discretised_routes_indices[sampled_dis_route_index]]
+        proposal_out = process_proposal_output(particle, sampled_route, sampled_dis_route, time_interval,
+                                               full_smoothing)
 
-    return process_proposal_output(particle, sampled_route, sampled_dis_route, time_interval, full_smoothing), \
-           sample_probs_norm_const
+    if store_dev_norm_quants:
+        deviations = np.sqrt(np.sum((particle[-1, 5:7] - discretised_routes[:, 1:3]) ** 2, axis=1))
+        deviations = np.abs(deviations - discretised_routes[:, -1])
+
+        # Z, dz/d alpha, dZ/d beta (alpha is all distance parameters, beta is deviation parameter)
+        dev_norm_quants = np.array([prior_probs_norm_const,
+                                    *np.sum(mm_model.distance_prior_gradient(discretised_routes[:, -1], time_interval)
+                                            * route_intersection_prior_evals[discretised_routes_indices]
+                                            * deviation_prior_evals, axis=-1),
+                                    -np.sum(deviations
+                                            * distance_prior_evals
+                                            * route_intersection_prior_evals[discretised_routes_indices]
+                                            * deviation_prior_evals)
+                                    ])
+
+        if prior_probs_norm_const == 0:
+            raise
+
+        return proposal_out, prop_weight, dev_norm_quants
+    else:
+        return proposal_out, prop_weight
 
 
 class DistanceProposal:
@@ -667,8 +711,6 @@ def dist_then_edge_proposal(graph: MultiDiGraph,
     :param mm_model: MapMatchingModel
     :param full_smoothing: if True returns full trajectory
         otherwise returns only x_t-1 to x_t
-    :param d_refine: metres, resolution of distance discretisation
-    :param dist_expand: metres, how far to expand space away from sampled distance
     :param dist_prop: class that contains methods for sampling and evalutaing pdf/cdf of distance proposal
     :return: tuple, (particle, unnormalised weight)
     """
@@ -742,7 +784,7 @@ def dist_then_edge_proposal(graph: MultiDiGraph,
                                            time_interval,
                                            full_smoothing)
 
-    dist_samp_prop_eval = 0.000001 if dist_samp == 0 else dist_samp
+    dist_samp_prop_eval = 1e-7 if dist_samp == 0 else dist_samp
 
     # Weight
     weight = prob_y_given_x_prev_d * mm_model.distance_prior_evaluate(dist_samp, time_interval) \

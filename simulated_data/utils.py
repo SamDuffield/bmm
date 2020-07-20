@@ -92,50 +92,89 @@ def random_positions(graph, n=1):
 
 
 # Function to sample a route (given a start position, route length and time_interval (assumed constant))
-def sample_route(graph, model, time_interval, length, start_position=None, cart_route=False, observations=False):
-    route = np.zeros((1, 7))
+def sample_route(graph, model, time_interval, length, start_position=None, cart_route=False, observations=False,
+                 d_refine=1):
+    route = np.zeros((1, 9))
 
     if start_position is None:
         start_position = random_positions(graph, 1)
 
     route[0, 1:5] = start_position
+    start_geom = bmm.get_geometry(graph, start_position[0, :3])
+    route[0, 5:7] = bmm.src.tools.edges.edge_interpolate(start_geom, start_position[0, 3])
+
+    d_max = model.d_max(time_interval)
+    num_inter_cut_off = max(int(time_interval / 1.5), 10)
 
     for t in range(1, length):
         prev_pos = route[-1:].copy()
-        prev_pos[0, 0] = 0
+        prev_pos[0, -1] = 0
 
-        # Sample a distance
-        sampled_dist = model.distance_prior_sample(time_interval)
+        possible_routes = bmm.get_possible_routes(graph, prev_pos, d_max, all_routes=True,
+                                                  num_inter_cut_off=num_inter_cut_off)
 
-        # Evaluate all possible routes
-        possible_routes = bmm.get_possible_routes(graph, prev_pos, sampled_dist)
+        # Get all possible positions on each route
+        discretised_routes_indices_list = []
+        discretised_routes_list = []
+        for i, sub_route in enumerate(possible_routes):
+            # All possible end positions of route
+            discretised_edge_matrix = bmm.discretise_edge(graph, sub_route[-1, 1:4], d_refine)
 
-        if possible_routes is None or all(p is None for p in possible_routes):
+            if sub_route.shape[0] == 1:
+                discretised_edge_matrix = discretised_edge_matrix[discretised_edge_matrix[:, 0] >= route[-1, 4]]
+                discretised_edge_matrix[:, -1] -= discretised_edge_matrix[-1, -1]
+            else:
+                discretised_edge_matrix[:, -1] += sub_route[-2, -1]
+
+            discretised_edge_matrix = discretised_edge_matrix[discretised_edge_matrix[:, -1] < d_max]
+
+            # Track route index and append to list
+            if discretised_edge_matrix is not None and len(discretised_edge_matrix) > 0:
+                discretised_routes_indices_list += [np.ones(discretised_edge_matrix.shape[0], dtype=int) * i]
+                discretised_routes_list += [discretised_edge_matrix]
+
+        if len(discretised_routes_indices_list) == 0 \
+                or (len(discretised_routes_indices_list) == 1 and len(discretised_routes_indices_list[0]) == 1
+                    and discretised_routes_list[0][0, -1] == 0.):
             break
 
-        # Prior route probabilities given distance
-        num_poss_routes = len(possible_routes)
-        if num_poss_routes == 0:
-            break
-        possible_routes_probs = np.zeros(num_poss_routes)
-        for i in range(num_poss_routes):
-            if possible_routes[i] is None:
-                continue
+        # Concatenate into numpy.ndarray
+        discretised_routes_indices = np.concatenate(discretised_routes_indices_list)
+        discretised_routes = np.concatenate(discretised_routes_list)
 
-            intersection_col = possible_routes[i][:-1, 5]
-            possible_routes_probs[i] = np.prod(1 / intersection_col[intersection_col > 1]) \
-                                       * model.intersection_penalisation ** len(intersection_col)
+        # Distance prior evals
+        distances = discretised_routes[:, -1]
+        distance_prior_evals = model.distance_prior_evaluate(distances, time_interval)
 
-        # Normalise
-        possible_routes_probs /= np.sum(possible_routes_probs)
+        # Intersection prior evals
+        route_intersection_prior_evals = bmm.src.inference.proposal.intersection_prior_evaluate(possible_routes, model)
+
+        # Deviation prior evals
+        deviation_prior_evals = model.deviation_prior_evaluate(route[-1, 5:7],
+                                                               discretised_routes[:, 1:3],
+                                                               discretised_routes[:, -1])
+
+        # Normalise prior/transition probabilities
+        prior_probs = distance_prior_evals \
+                      * route_intersection_prior_evals[discretised_routes_indices] \
+                      * deviation_prior_evals
+        prior_probs[distances > 0] *= (1 - prior_probs[distances == 0][0]) / prior_probs[distances > 0].sum()
 
         # Choose one
-        sampled_route_index = np.random.choice(num_poss_routes, 1, p=possible_routes_probs)[0]
-        sampled_route = possible_routes[sampled_route_index]
+        sampled_route_index = np.random.choice(len(discretised_routes), 1, p=prior_probs)[0]
+        sampled_route = possible_routes[discretised_routes_indices[sampled_route_index]]
 
+        sampled_route[0, 0] = 0
+        sampled_route[0, 5:7] = 0
         sampled_route[-1, 0] = route[-1, 0] + time_interval
+        sampled_route[-1, 4:7] = discretised_routes[sampled_route_index][0:3]
+        sampled_route[-1, -2] = 0
+        sampled_route[-1, -1] = discretised_routes[sampled_route_index][-1]
 
         route = np.append(route, sampled_route, axis=0)
+
+        if np.all(route[-3:, -1] == 0):
+            break
 
     if cart_route or observations:
         cartesianised_route_out = bmm.cartesianise_path(graph, route, t_column=True, observation_time_only=True)
@@ -151,6 +190,85 @@ def sample_route(graph, model, time_interval, length, start_position=None, cart_
             return route, cartesianised_route_out
     else:
         return route
+
+
+#
+# # Function to sample a route (given a start position, route length and time_interval (assumed constant))
+# def sample_route(graph, model, time_interval, length, start_position=None, cart_route=False, observations=False):
+#     route = np.zeros((1, 9))
+#
+#     if start_position is None:
+#         start_position = random_positions(graph, 1)
+#
+#     route[0, 1:5] = start_position
+#     start_geom = bmm.get_geometry(graph, start_position[0, :3])
+#     route[0, 5:7] = bmm.src.tools.edges.edge_interpolate(start_geom, start_position[0, 3])
+#
+#     for t in range(1, length):
+#         prev_pos = route[-1:].copy()
+#         prev_pos[0, 0] = 0
+#         prev_pos[0, -1] = 0
+#
+#         # Sample a distance
+#         sampled_dist = model.distance_prior_sample(time_interval)
+#
+#         # Evaluate all possible routes
+#         possible_routes = bmm.get_possible_routes(graph, prev_pos, sampled_dist, all_routes=False)
+#
+#         if possible_routes is None or all(p is None for p in possible_routes):
+#             break
+#
+#         # Initiate cartesian position of end of routes
+#         routes_end_cart_pos = np.zeros((len(possible_routes), 2))
+#
+#         # Iterate through routes
+#         for i, pos_route in enumerate(possible_routes):
+#
+#             if pos_route is None:
+#                 continue
+#
+#             end_position = pos_route[-1]
+#
+#             end_geom = bmm.get_geometry(graph, end_position[1:4])
+#
+#             routes_end_cart_pos[i] = pos_route[-1, 5:7] = bmm.src.tools.edges.edge_interpolate(end_geom,
+#                                                                                                end_position[4])
+#
+#         # Intersection prior
+#         intersection_probs = bmm.src.inference.proposal.intersection_prior_evaluate(possible_routes, model)
+#
+#         # Unnormalised sample probablilites
+#         route_sample_weights = intersection_probs * model.deviation_prior_evaluate(prev_pos[0, 5:7],
+#                                                                                    routes_end_cart_pos,
+#                                                                                    sampled_dist)
+#
+#         num_poss_routes = len(possible_routes)
+#
+#         # Normalise
+#         route_sample_weights /= np.sum(route_sample_weights)
+#
+#         # Choose one
+#         sampled_route_index = np.random.choice(num_poss_routes, 1, p=route_sample_weights)[0]
+#         sampled_route = possible_routes[sampled_route_index]
+#
+#         sampled_route[-1, 0] = route[-1, 0] + time_interval
+#
+#         route = np.append(route, sampled_route, axis=0)
+#
+#     if cart_route or observations:
+#         cartesianised_route_out = bmm.cartesianise_path(graph, route, t_column=True, observation_time_only=True)
+#
+#         if observations:
+#             observations_out = cartesianised_route_out \
+#                                + model.gps_sd * np.random.normal(size=cartesianised_route_out.shape)
+#             if cart_route:
+#                 return route, cartesianised_route_out, observations_out
+#             else:
+#                 return route, observations_out
+#         else:
+#             return route, cartesianised_route_out
+#     else:
+#         return route
 
 
 # RMSE given particle cloud
@@ -370,5 +488,3 @@ def plot_pei(setup_dict, true_route, fl_pf_routes, fl_bsi_routes, ffbsi_routes, 
     plt.savefig(save_dir + 'route_incorrect_edges_compare.png', dpi=350)
 
     return fig, axes
-
-

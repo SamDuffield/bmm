@@ -42,7 +42,7 @@ def plot(graph, particles=None, polyline=None, particles_alpha=None, label_start
 
         start_end_points = np.zeros((2, 2))
 
-        alpha_min = 0.3
+        alpha_min = 0.1
 
         if particles_alpha is None:
             particles_alpha = 1 / len(particles) * (1 - alpha_min) + alpha_min

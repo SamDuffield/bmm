@@ -6,10 +6,11 @@
 ########################################################################################################################
 
 from typing import Union
+from collections import OrderedDict
 
 import numpy as np
 from numba import njit
-from scipy.special import gammainc
+from scipy.special import gammainc, digamma
 from scipy.stats import gamma as gamma_dist
 from scipy.stats import lognorm as lognorm_dist
 from tweedie import tweedie
@@ -50,17 +51,24 @@ def _likelihood_evaluate(route_cart_coords: np.ndarray,
 
 
 class MapMatchingModel:
-    gps_sd = 5
-    gps_sd_lambda = 1/4.07
-    intersection_penalisation = 1
-    deviation_beta = 15
-    max_speed = 50
-    likelihood_d_truncate = np.inf
-    distance_params = {}
+
+    def __init__(self):
+        self.gps_sd = 5.0
+        self.intersection_penalisation = 1
+        self.deviation_beta = 1 / 7
+        self.max_speed = 50
+        self.likelihood_d_truncate = np.inf
+
+        self.gps_sd_bounds = (0, np.inf)
+
+        self.deviation_beta_bounds = (0, np.inf)
+
+        self.distance_params = OrderedDict()
+        self.distance_params_bounds = OrderedDict()
 
     initiate_speed_mean = 10
-    initiate_speed_sd = 7
-    initiate_zero_dist_prob_neg_exponent = 0.1
+    initiate_speed_sd = 5
+    initiate_zero_dist_prob_neg_exponent = 0.123
 
     def distance_prior_evaluate(self,
                                 distance: Union[float, np.ndarray],
@@ -68,12 +76,25 @@ class MapMatchingModel:
         """
         Evaluate distance prior/transition density
         Vectorised to handle multiple evaluations at once
-        :param time_interval: seconds, time between observations
         :param distance: metres
             array if multiple evaluations at once
+        :param time_interval: seconds, time between observations
         :return: distance prior density evaluation(s)
         """
         raise NotImplementedError
+
+    def distance_prior_gradient(self,
+                                distance: Union[float, np.ndarray],
+                                time_interval: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
+        """
+        Evaluate gradient of distance prior/transition density in distance_params
+        Vectorised to handle multiple evaluations at once
+        :param distance: metres
+            array if multiple evaluations at once
+        :param time_interval: seconds, time between observations
+        :return: distance prior density evaluation(s)
+        """
+        raise AttributeError("Distance prior gradient not implemented")
 
     def prior_bound(self, time_interval):
         """
@@ -107,12 +128,12 @@ class MapMatchingModel:
         :param distances: shape = (_,) route distances between previous_cart_coord(s) and route_cart_coords
         :return: deviation prior density evaluation(s)
         """
-        if self.deviation_beta == np.inf:
+        if self.deviation_beta == 0:
             return np.ones(len(route_cart_coords))
 
         deviations = np.sqrt(np.sum((previous_cart_coord - route_cart_coords) ** 2, axis=1))
         diffs = np.abs(deviations - distances)
-        return np.exp(-diffs / self.deviation_beta) / self.deviation_beta
+        return np.exp(-diffs * self.deviation_beta)  # / self.deviation_beta
 
     def intersection_prior_evaluate(self,
                                     between_obs_route: np.ndarray) -> float:
@@ -140,9 +161,13 @@ class MapMatchingModel:
 class GammaMapMatchingModel(MapMatchingModel):
 
     def __init__(self):
-        self.distance_params = {'b_speed': self.initiate_speed_mean / self.initiate_speed_sd ** 2}
-        self.distance_params['a_speed'] = self.initiate_speed_mean * self.distance_params['b_speed']
-        self.distance_params['zero_dist_prob_neg_exponent'] = 0.25
+        super().__init__()
+        self.distance_params = OrderedDict({'a_speed': 1.39,
+                                            'b_speed': 0.134,
+                                            'zero_dist_prob_neg_exponent': 0.123})
+        self.distance_params_bounds = OrderedDict({'a_speed': (1e-20, np.inf),
+                                                   'b_speed': (1e-20, np.inf),
+                                                   'zero_dist_prob_neg_exponent': (1e-20, np.inf)})
 
     def zero_dist_prob(self,
                        time_interval: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
@@ -171,9 +196,9 @@ class GammaMapMatchingModel(MapMatchingModel):
         """
         Evaluate distance prior/transition density
         Vectorised to handle multiple evaluations at once
-        :param time_interval: seconds, time between observations
         :param distance: metres
             array if multiple evaluations at once
+        :param time_interval: seconds, time between observations
         :return: distance prior density evaluation(s)
         """
         zero_dist_prob = self.zero_dist_prob(time_interval)
@@ -182,7 +207,7 @@ class GammaMapMatchingModel(MapMatchingModel):
 
         out_arr = np.ones_like(distance) * zero_dist_prob
 
-        non_zero_inds = distance > 0
+        non_zero_inds = distance > 1e-5
 
         if np.sum(non_zero_inds) > 0:
             if np.any(np.atleast_1d(distance[non_zero_inds]) < 0):
@@ -195,7 +220,53 @@ class GammaMapMatchingModel(MapMatchingModel):
             out_arr[non_zero_inds] = gamma_dist.pdf(distance[non_zero_inds] / time_int_check,
                                                     a=self.distance_params['a_speed'],
                                                     scale=1 / self.distance_params['b_speed']) \
-                                     * (1 - zero_dist_prob_check)
+                                     * (1 - zero_dist_prob_check) / time_int_check
+
+        return np.squeeze(out_arr)
+
+    def distance_prior_gradient(self,
+                                distance: Union[float, np.ndarray],
+                                time_interval: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
+        """
+        Evaluate gradient of distance prior/transition density in distance_params
+        Vectorised to handle multiple evaluations at once
+        :param distance: metres
+            array if multiple evaluations at once
+        :param time_interval: seconds, time between observations
+        :return: distance prior density evaluation(s)
+        """
+        zero_dist_prob = self.zero_dist_prob(time_interval)
+
+        distance = np.atleast_1d(distance)
+
+        out_arr = np.zeros((3, len(distance)))
+
+        out_arr[2, :] = - time_interval * zero_dist_prob
+
+        non_zero_inds = distance > 1e-5
+
+        if np.sum(non_zero_inds) > 0:
+            if np.any(np.atleast_1d(distance[non_zero_inds]) < 0):
+                raise ValueError("Gamma pdf takes only positive values")
+
+            time_int_check = time_interval[non_zero_inds] if isinstance(time_interval, np.ndarray) else time_interval
+            zero_dist_prob_check = zero_dist_prob[non_zero_inds] if isinstance(time_interval, np.ndarray) \
+                else zero_dist_prob
+
+            positive_pdf_evals = gamma_dist.pdf(distance[non_zero_inds] / time_int_check,
+                                                a=self.distance_params['a_speed'],
+                                                scale=1 / self.distance_params['b_speed']) / time_int_check
+
+            out_arr[0, non_zero_inds] = (np.log(self.distance_params['b_speed'])
+                                         - digamma(self.distance_params['a_speed'])
+                                         + np.log(distance[non_zero_inds] / time_int_check))
+
+            out_arr[1, non_zero_inds] = (self.distance_params['a_speed'] / self.distance_params['b_speed']
+                                         - distance[non_zero_inds] / time_int_check)
+
+            out_arr[:2, non_zero_inds] *= positive_pdf_evals * (1 - zero_dist_prob_check)
+
+            out_arr[2, non_zero_inds] = positive_pdf_evals * zero_dist_prob_check * time_int_check
 
         return np.squeeze(out_arr)
 
@@ -215,10 +286,11 @@ class GammaMapMatchingModel(MapMatchingModel):
 
         distance_bound = max(gamma_dist.pdf(gamma_mode,
                                             a=self.distance_params['a_speed'],
-                                            scale=1 / self.distance_params['b_speed']) * (1 - zero_dist_prob),
+                                            scale=1 / self.distance_params['b_speed']) * (1 - zero_dist_prob)
+                             / time_interval,
                              zero_dist_prob)
 
-        return distance_bound if self.deviation_beta == np.inf else distance_bound / self.deviation_beta
+        return distance_bound if self.deviation_beta == 0 else distance_bound / self.deviation_beta
 
 
 def pdf_gamma_mv(vals: Union[float, np.ndarray],
@@ -260,6 +332,8 @@ def cdf_gamma_mv(vals: Union[float, np.ndarray],
 
 
 class LogNormalMapMatchingModel(MapMatchingModel):
+    # distance_params_bounds = [(1e-20, np.inf)] * 3
+    distance_params_bounds = [(1e-20, np.inf), (1e-20, np.inf), (0.01, 0.25)]
 
     def __init__(self):
         self.distance_params = {'scale_speed': self.initiate_speed_mean ** 2
@@ -329,12 +403,14 @@ class LogNormalMapMatchingModel(MapMatchingModel):
 
 
 class TweedieMapMatchingModel(MapMatchingModel):
+    # deviation_beta = 3.464
+    deviation_beta = 8
+    gps_sd = 7.512
+    distance_params = {'p_speed': 1.906,
+                       'mu_speed': 8.650,
+                       'phi_speed': 2.528}
 
-    def __init__(self):
-        self.distance_params = {'p_speed': 1.5}
-        self.distance_params['mu_speed'] = self.initiate_speed_mean
-        self.distance_params['phi_speed'] = self.initiate_speed_sd ** 2 \
-                                            / self.initiate_speed_mean ** self.distance_params['p_speed']
+    distance_params_bounds = [(1 + 1e-20, 2 - 1e-20), (1e-20, np.inf), (1e-20, np.inf)]
 
     def distance_prior_evaluate(self,
                                 distance: Union[float, np.ndarray],
@@ -351,5 +427,3 @@ class TweedieMapMatchingModel(MapMatchingModel):
                            p=self.distance_params['p_speed'],
                            mu=self.distance_params['mu_speed'],
                            phi=self.distance_params['phi_speed'])
-
-

@@ -30,24 +30,22 @@ graph = load_graph()
 
 data_path = process_data_path + "/data/portotaxi_05052014_12052014_utm_bbox.csv"
 raw_data = read_data(data_path)
-# polyline_indices = np.linspace(30, len(raw_data) - 1, 10, dtype=int)
-# polyline_indices = np.arange(10) * 3300
-polyline_indices = np.array([0,  3300,  6600,  9900, 13200, 16500, 19800, 23101, 26400, 29700])
+polyline_indices = np.array([0,  3300,  6601,  9900, 13200, 16502, 19800, 23101, 26400, 29700])
+# polyline_indices = [0]
+
 
 polylines = [np.asarray(raw_data['POLYLINE_UTM'][single_index]) for single_index in polyline_indices]
 lens = [len(po) for po in polylines]
 del raw_data
 
-# mm_model = bmm.GammaMapMatchingModel()
-mm_model = bmm.LogNormalMapMatchingModel()
+mm_model = bmm.GammaMapMatchingModel()
+# mm_model = bmm.LogNormalMapMatchingModel()
 # mm_model = bmm.src.inference.model.TweedieMapMatchingModel()
+# mm_model.deviation_beta = 4
 
 timestamps = 15
-n_iter = 100
+n_iter = 25
 
 params_track = bmm.offline_em(graph, mm_model, timestamps, polylines, n_iter=n_iter, max_rejections=0,
                               initial_d_truncate=50)
-
-# mm_model.deviation_beta = 3.3
-parts = bmm.offline_map_match(graph, polylines[0], 100, 15, mm_model)
 

@@ -20,6 +20,8 @@ from bmm.src.inference.proposal import get_possible_routes
 from bmm.src.tools.edges import cartesianise_path
 from bmm.src.tools.edges import get_geometry
 from bmm.src.tools.edges import discretise_edge
+from bmm.src.tools.edges import observation_time_indices
+from bmm.src.tools.edges import observation_time_rows
 
 from bmm.src.inference.particles import MMParticles
 
