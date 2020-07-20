@@ -269,7 +269,7 @@ def optimal_proposal(graph: MultiDiGraph,
         discretised_routes = discretised_routes[positive_lik_inds]
         likelihood_evals = likelihood_evals[positive_lik_inds]
 
-    if len(discretised_routes) == 0 or (len(discretised_routes) == 1 and discretised_routes[0][-1] == 0):
+    if len(discretised_routes) == 0:
         return (None, 0., 0.) if store_dev_norm_quants else (None, 0.)
 
     # Distance prior evals
@@ -288,6 +288,9 @@ def optimal_proposal(graph: MultiDiGraph,
     prior_probs = distance_prior_evals \
                   * route_intersection_prior_evals \
                   * deviation_prior_evals
+
+    if len(discretised_routes) == 1 and discretised_routes[0][-1] == 0:
+        return (None, 0., np.sum(prior_probs)) if store_dev_norm_quants else (None, 0.)
 
     if store_dev_norm_quants:
         prior_probs_norm_const = prior_probs[distances > 0].sum()

@@ -16,15 +16,15 @@ gen_model.max_speed = 30
 gen_model.distance_params['a_speed'] = 1.39
 gen_model.distance_params['b_speed'] = 0.134
 gen_model.distance_params['zero_dist_prob_neg_exponent'] = 0.123
-gen_model.deviation_beta = 0.
+gen_model.deviation_beta = 1/20
 gen_model.gps_sd = 7
 
 timestamps = 15
 
 # Generate simulated routes
-num_routes = 1
+num_routes = 10
 route_length = 50
-sample_d_refine = 3
+sample_d_refine = 1
 
 routes = [sample_route(cam_graph, gen_model, timestamps, route_length, d_refine=sample_d_refine) for _ in range(num_routes)]
 true_polylines = [bmm.observation_time_rows(rou)[:, 5:7] for rou in routes]
@@ -40,7 +40,7 @@ while np.any(len_obs < 10):
     routes_obs_rows = [bmm.observation_time_rows(rou) for rou in routes]
     len_routes = [len(rou) for rou in routes]
     len_obs = np.array([len(po) for po in true_polylines])
-    print(np.sum(len_obs < 10))
+    # print(np.sum(len_obs < 10))
 
 observations = [po + gen_model.gps_sd * np.random.normal(size=po.shape) for po in true_polylines]
 
