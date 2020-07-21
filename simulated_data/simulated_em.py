@@ -22,7 +22,7 @@ gen_model.gps_sd = 7
 timestamps = 15
 
 # Generate simulated routes
-num_routes = 10
+num_routes = 1
 route_length = 50
 sample_d_refine = 1
 
@@ -62,8 +62,8 @@ tune_model.gps_sd = 10
 
 # tune_model.deviation_beta_bounds = (0, 0)
 
-params_track = bmm.offline_em(cam_graph, tune_model, timestamps, observations[9:], n_iter=n_iter, max_rejections=0,
+params_track = bmm.offline_em(cam_graph, tune_model, timestamps, observations, n_iter=n_iter, max_rejections=0,
                               initial_d_truncate=50,
-                              gradient_stepsize_scale=1e-3, gradient_stepsize_neg_exp=0.5)
+                              gradient_stepsize_scale=5e-4, gradient_stepsize_neg_exp=0.5)
 
 

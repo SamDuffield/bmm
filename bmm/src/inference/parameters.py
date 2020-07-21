@@ -48,7 +48,8 @@ def offline_em(graph: MultiDiGraph,
     :return: dict of optimised parameters
     """
 
-    params_track = {'distance_params': {key: np.asarray(value) for key, value in mm_model.distance_params.items()},
+    params_track = {'zero_dist_prob_neg_exponent': np.asarray(mm_model.zero_dist_prob_neg_exponent),
+                    'distance_params': {key: np.asarray(value) for key, value in mm_model.distance_params.items()},
                     'deviation_beta': np.asarray(mm_model.deviation_beta),
                     'gps_sd': np.asarray(mm_model.gps_sd)}
 
@@ -102,6 +103,8 @@ def update_params_track(params_track: dict,
     :param mm_model: MapMatchingModel with hyperparameters updated
     :return: params_track with new hyperparameters updated
     """
+    params_track['zero_dist_prob_neg_exponent'] = np.append(params_track['zero_dist_prob_neg_exponent'],
+                                                            mm_model.zero_dist_prob_neg_exponent)
     params_track['distance_params'] = {key: np.append(params_track['distance_params'][key], value)
                                        for key, value in mm_model.distance_params.items()}
     params_track['deviation_beta'] = np.append(params_track['deviation_beta'], mm_model.deviation_beta)
