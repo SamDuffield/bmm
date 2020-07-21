@@ -54,21 +54,37 @@ class MapMatchingModel:
 
     def __init__(self):
         self.gps_sd = 5.0
-        self.intersection_penalisation = 1
-        self.deviation_beta = 1 / 7
-        self.max_speed = 50
+        self.gps_sd_bounds = (0, np.inf)
         self.likelihood_d_truncate = np.inf
 
-        self.gps_sd_bounds = (0, np.inf)
+        self.intersection_penalisation = 1
 
+        self.deviation_beta = 1 / 7
         self.deviation_beta_bounds = (0, np.inf)
 
+        self.zero_dist_prob_neg_exponent = 0.123
+        self.min_zero_dist_prob = 0.01
+        self.max_zero_dist_prob = 0.9
+
+        self.max_speed = 50
         self.distance_params = OrderedDict()
         self.distance_params_bounds = OrderedDict()
 
     initiate_speed_mean = 10
     initiate_speed_sd = 5
     initiate_zero_dist_prob_neg_exponent = 0.123
+
+    def zero_dist_prob(self,
+                       time_interval: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
+        """
+        Probability of travelling a distance of exactly zero
+        :param time_interval: time between last observation and newly received observation
+        :return: probability of travelling zero metres in time_interval
+        """
+        prob = np.exp(- self.zero_dist_prob_neg_exponent * time_interval)
+        prob = np.where(prob < self.min_zero_dist_prob, self.min_zero_dist_prob, prob)
+        prob = np.where(prob > self.max_zero_dist_prob, self.max_zero_dist_prob, prob)
+        return prob
 
     def distance_prior_evaluate(self,
                                 distance: Union[float, np.ndarray],
@@ -163,20 +179,18 @@ class GammaMapMatchingModel(MapMatchingModel):
     def __init__(self):
         super().__init__()
         self.distance_params = OrderedDict({'a_speed': 1.39,
-                                            'b_speed': 0.134,
-                                            'zero_dist_prob_neg_exponent': 0.123})
+                                            'b_speed': 0.134})
         self.distance_params_bounds = OrderedDict({'a_speed': (1e-20, np.inf),
-                                                   'b_speed': (1e-20, np.inf),
-                                                   'zero_dist_prob_neg_exponent': (1e-20, np.inf)})
+                                                   'b_speed': (1e-20, np.inf)})
 
-    def zero_dist_prob(self,
-                       time_interval: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
-        """
-        Probability of travelling a distance of exactly zero
-        :param time_interval: time between last observation and newly received observation
-        :return: probability of travelling zero metres in time_interval
-        """
-        return np.exp(- self.distance_params['zero_dist_prob_neg_exponent'] * time_interval)
+    # def zero_dist_prob(self,
+    #                    time_interval: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
+    #     """
+    #     Probability of travelling a distance of exactly zero
+    #     :param time_interval: time between last observation and newly received observation
+    #     :return: probability of travelling zero metres in time_interval
+    #     """
+    #     return np.exp(- self.distance_params['zero_dist_prob_neg_exponent'] * time_interval)
 
     def distance_prior_sample(self,
                               time_interval: float) -> float:
@@ -229,19 +243,17 @@ class GammaMapMatchingModel(MapMatchingModel):
                                 time_interval: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
         """
         Evaluate gradient of distance prior/transition density in distance_params
+        Gradient at distances >0 only
         Vectorised to handle multiple evaluations at once
         :param distance: metres
             array if multiple evaluations at once
         :param time_interval: seconds, time between observations
-        :return: distance prior density evaluation(s)
+        :return: distance prior gradient evaluation(s)
         """
-        zero_dist_prob = self.zero_dist_prob(time_interval)
 
         distance = np.atleast_1d(distance)
 
-        out_arr = np.zeros((3, len(distance)))
-
-        out_arr[2, :] = - time_interval * zero_dist_prob
+        out_arr = np.zeros((2, len(distance)))
 
         non_zero_inds = distance > 1e-5
 
@@ -250,8 +262,6 @@ class GammaMapMatchingModel(MapMatchingModel):
                 raise ValueError("Gamma pdf takes only positive values")
 
             time_int_check = time_interval[non_zero_inds] if isinstance(time_interval, np.ndarray) else time_interval
-            zero_dist_prob_check = zero_dist_prob[non_zero_inds] if isinstance(time_interval, np.ndarray) \
-                else zero_dist_prob
 
             positive_pdf_evals = gamma_dist.pdf(distance[non_zero_inds] / time_int_check,
                                                 a=self.distance_params['a_speed'],
@@ -264,9 +274,7 @@ class GammaMapMatchingModel(MapMatchingModel):
             out_arr[1, non_zero_inds] = (self.distance_params['a_speed'] / self.distance_params['b_speed']
                                          - distance[non_zero_inds] / time_int_check)
 
-            out_arr[:2, non_zero_inds] *= positive_pdf_evals * (1 - zero_dist_prob_check)
-
-            out_arr[2, non_zero_inds] = positive_pdf_evals * zero_dist_prob_check * time_int_check
+            out_arr[:, non_zero_inds] *= positive_pdf_evals
 
         return np.squeeze(out_arr)
 

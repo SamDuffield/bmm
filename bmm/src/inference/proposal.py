@@ -262,14 +262,14 @@ def optimal_proposal(graph: MultiDiGraph,
     # Likelihood evaluations
     likelihood_evals = mm_model.likelihood_evaluate(discretised_routes[:, 1:3], new_observation)
 
-    # Trim
-    if not store_dev_norm_quants:
-        positive_lik_inds = likelihood_evals > 0
-        discretised_routes_indices = discretised_routes_indices[positive_lik_inds]
-        discretised_routes = discretised_routes[positive_lik_inds]
-        likelihood_evals = likelihood_evals[positive_lik_inds]
+    # # Trim
+    # if not store_dev_norm_quants:
+    #     positive_lik_inds = likelihood_evals > 0
+    #     discretised_routes_indices = discretised_routes_indices[positive_lik_inds]
+    #     discretised_routes = discretised_routes[positive_lik_inds]
+    #     likelihood_evals = likelihood_evals[positive_lik_inds]
 
-    if len(discretised_routes) == 0:
+    if len(discretised_routes) == 0 or (len(discretised_routes) == 1 and discretised_routes[0][-1] == 0):
         return (None, 0., 0.) if store_dev_norm_quants else (None, 0.)
 
     # Distance prior evals
@@ -289,16 +289,12 @@ def optimal_proposal(graph: MultiDiGraph,
                   * route_intersection_prior_evals \
                   * deviation_prior_evals
 
-    if len(discretised_routes) == 1 and discretised_routes[0][-1] == 0:
-        return (None, 0., np.sum(prior_probs)) if store_dev_norm_quants else (None, 0.)
+    prior_probs_norm_const = prior_probs[distances > 1e-5].sum()
+    prior_probs[distances > 1e-5] *= (1 - prior_probs[distances < 1e-5][0]) / prior_probs_norm_const
 
-    if store_dev_norm_quants:
-        prior_probs_norm_const = prior_probs[distances > 0].sum()
-        prior_probs[distances > 0] *= (1 - prior_probs[distances == 0][0]) / prior_probs_norm_const
-
-    else:
-        prior_probs_norm_const = prior_probs.sum()
-        prior_probs /= prior_probs_norm_const
+    # else:
+    #     prior_probs_norm_const = prior_probs.sum()
+    #     prior_probs /= prior_probs_norm_const
 
     # Calculate sample probabilities
     sample_probs = prior_probs * likelihood_evals
