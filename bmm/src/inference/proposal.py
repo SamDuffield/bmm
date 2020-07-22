@@ -322,13 +322,13 @@ def optimal_proposal(graph: MultiDiGraph,
 
         # Z, dz/d alpha, dZ/d beta (alpha is all distance parameters, beta is deviation parameter)
         dev_norm_quants = np.array([prior_probs_norm_const,
-                                    *np.sum(mm_model.distance_prior_gradient(distances, time_interval)
-                                            * route_intersection_prior_evals[discretised_routes_indices]
-                                            * deviation_prior_evals, axis=-1),
-                                    -np.sum(deviations
-                                            * distance_prior_evals
-                                            * route_intersection_prior_evals[discretised_routes_indices]
-                                            * deviation_prior_evals)
+                                    *np.sum(mm_model.distance_prior_gradient(distances[distances > 1e-5], time_interval)
+                                            * route_intersection_prior_evals[discretised_routes_indices][distances > 1e-5]
+                                            * deviation_prior_evals[distances > 1e-5], axis=-1),
+                                    -np.sum(deviations[distances > 1e-5]
+                                            * distance_prior_evals[distances > 1e-5]
+                                            * route_intersection_prior_evals[discretised_routes_indices][distances > 1e-5]
+                                            * deviation_prior_evals[distances > 1e-5])
                                     ])
 
         if prior_probs_norm_const == 0:
