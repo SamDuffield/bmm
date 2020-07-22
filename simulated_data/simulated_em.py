@@ -2,6 +2,13 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+import os
+import sys
+sim_dat_path = os.getcwd()
+repo_path = os.path.dirname(sim_dat_path)
+sys.path.append(sim_dat_path)
+sys.path.append(repo_path)
+
 from simulated_data.utils import sample_route, cambridge_graph
 
 import bmm
@@ -13,9 +20,9 @@ cam_graph = cambridge_graph()
 
 gen_model = bmm.GammaMapMatchingModel()
 gen_model.max_speed = 30
+gen_model.zero_dist_prob_neg_exponent = 0.123
 gen_model.distance_params['a_speed'] = 1.39
 gen_model.distance_params['b_speed'] = 0.134
-gen_model.zero_dist_prob_neg_exponent = 0.123
 gen_model.deviation_beta = 1/20
 gen_model.gps_sd = 7
 
@@ -46,7 +53,7 @@ observations = [po + gen_model.gps_sd * np.random.normal(size=po.shape) for po i
 
 ###
 distances = np.concatenate([a[1:, -1] for a in routes_obs_rows])
-print(np.mean(distances == 0))
+print(np.mean(distances < 1e-5))
 # for route, obs in zip(routes, observations):
 #     bmm.plot(cam_graph, route, obs)
 
@@ -64,6 +71,6 @@ tune_model.gps_sd = 10
 
 params_track = bmm.offline_em(cam_graph, tune_model, timestamps, observations, n_iter=n_iter, max_rejections=0,
                               initial_d_truncate=50,
-                              gradient_stepsize_scale=5e-4, gradient_stepsize_neg_exp=0.5)
+                              gradient_stepsize_scale=1e-3, gradient_stepsize_neg_exp=0.5)
 
 
