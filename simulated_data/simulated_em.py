@@ -66,11 +66,11 @@ tune_model = bmm.GammaMapMatchingModel()
 tune_model.distance_params['a_speed'] = 1.
 tune_model.distance_params_bounds['a_speed'] = (1., 1.)
 # tune_model.distance_params['b_speed'] = 0.19
-tune_model.distance_params['b_speed'] = 0.134
-tune_model.zero_dist_prob_neg_exponent = 0.123
+tune_model.distance_params['b_speed'] = 0.05
+tune_model.zero_dist_prob_neg_exponent = -np.log(0.05)/timestamps
 # tune_model.deviation_beta = 1/12
-tune_model.deviation_beta = 1/20
-tune_model.gps_sd = 5.
+tune_model.deviation_beta = 0.05
+tune_model.gps_sd = 7.
 
 # tune_model.distance_params['a_speed'] = gen_model.distance_params['a_speed']
 # tune_model.distance_params_bounds['a_speed'] = (1., 1.)
