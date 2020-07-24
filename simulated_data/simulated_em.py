@@ -13,7 +13,7 @@ from simulated_data.utils import sample_route, cambridge_graph
 
 import bmm
 
-np.random.seed(1)
+np.random.seed(0)
 
 # Load networkx graph
 cam_graph = cambridge_graph()
@@ -30,7 +30,7 @@ gen_model.gps_sd = 5.
 num_inter_cut_off = None
 
 # Generate simulated routes
-num_routes = 1
+num_routes = 10
 route_length = 50
 sample_d_refine = 1
 
@@ -44,7 +44,7 @@ while np.any(len_obs < 10):
     for i in range(num_routes):
         if len_obs[i] < 10:
             routes[i] = sample_route(cam_graph, gen_model, timestamps, route_length, d_refine=sample_d_refine,
-                                     num_inter_cut_off=num_inter_cut_off)
+                                     num_inter_cut_off=num_inter_cut_off, num_pos_route_cap=100)
     true_polylines = [bmm.observation_time_rows(rou)[:, 5:7] for rou in routes]
     routes_obs_rows = [bmm.observation_time_rows(rou) for rou in routes]
     len_routes = [len(rou) for rou in routes]
@@ -58,6 +58,9 @@ distances = np.concatenate([a[1:, -1] for a in routes_obs_rows])
 print(np.mean(distances < 1e-5))
 # for route, obs in zip(routes, observations):
 #     bmm.plot(cam_graph, route, obs)
+# plt.hist(distances[distances > 1e-5]/timestamps, bins=50, density=True)
+# linsp = np.linspace(0.01, 25, 100)
+# plt.plot(linsp, gen_model.distance_params['b_speed'] * np.exp(-gen_model.distance_params['b_speed']*linsp))
 
 # Run EM
 n_iter = 100

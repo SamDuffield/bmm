@@ -96,7 +96,7 @@ def random_positions(graph, n=1):
 
 # Function to sample a route (given a start position, route length and time_interval (assumed constant))
 def sample_route(graph, model, time_interval, length, start_position=None, cart_route=False, observations=False,
-                 d_refine=1, num_inter_cut_off=None):
+                 d_refine=1, num_inter_cut_off=None, num_pos_route_cap=np.inf):
     route = np.zeros((1, 9))
 
     if start_position is None:
@@ -116,6 +116,9 @@ def sample_route(graph, model, time_interval, length, start_position=None, cart_
 
         possible_routes = bmm.get_possible_routes(graph, prev_pos, d_max, all_routes=True,
                                                   num_inter_cut_off=num_inter_cut_off)
+
+        if len(possible_routes) > num_pos_route_cap:
+            break
 
         # Get all possible positions on each route
         discretised_routes_indices_list = []
@@ -145,6 +148,8 @@ def sample_route(graph, model, time_interval, length, start_position=None, cart_
         # Concatenate into numpy.ndarray
         discretised_routes_indices = np.concatenate(discretised_routes_indices_list)
         discretised_routes = np.concatenate(discretised_routes_list)
+
+
 
         # Distance prior evals
         distances = discretised_routes[:, -1]
