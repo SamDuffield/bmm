@@ -193,7 +193,6 @@ def intersection_prior_evaluate(routes: list,
         evals[i] = mm_model.intersection_prior_evaluate(route)
     return evals
 
-
 def optimal_proposal(graph: MultiDiGraph,
                      particle: np.ndarray,
                      new_observation: np.ndarray,
@@ -283,6 +282,7 @@ def optimal_proposal(graph: MultiDiGraph,
     deviation_prior_evals = mm_model.deviation_prior_evaluate(particle[-1, 5:7],
                                                               discretised_routes[:, 1:3],
                                                               discretised_routes[:, -1])
+    deviation_prior_evals[distances < 1e-5] = 1.
 
     # Normalise prior/transition probabilities
     prior_probs = distance_prior_evals \
@@ -297,7 +297,8 @@ def optimal_proposal(graph: MultiDiGraph,
     #     prior_probs /= prior_probs_norm_const
 
     # Calculate sample probabilities
-    sample_probs = prior_probs * likelihood_evals
+    sample_probs = prior_probs[likelihood_evals > 0] * likelihood_evals[likelihood_evals > 0]
+    # sample_probs = prior_probs * likelihood_evals
 
     # p(y_m | x_m-1^j)
     prop_weight = sample_probs.sum()
@@ -307,11 +308,11 @@ def optimal_proposal(graph: MultiDiGraph,
         prop_weight = 0.
     else:
         # Sample an edge and distance
-        sampled_dis_route_index = np.random.choice(len(discretised_routes), 1, p=sample_probs / prop_weight)[0]
-        sampled_dis_route = discretised_routes[sampled_dis_route_index]
+        sampled_dis_route_index = np.random.choice(len(sample_probs), 1, p=sample_probs / prop_weight)[0]
+        sampled_dis_route = discretised_routes[likelihood_evals > 0][sampled_dis_route_index]
 
         # Append sampled route to old particle
-        sampled_route = possible_routes[discretised_routes_indices[sampled_dis_route_index]]
+        sampled_route = possible_routes[discretised_routes_indices[likelihood_evals > 0][sampled_dis_route_index]]
 
         proposal_out = process_proposal_output(particle, sampled_route, sampled_dis_route, time_interval,
                                                full_smoothing)
@@ -323,16 +324,14 @@ def optimal_proposal(graph: MultiDiGraph,
         # Z, dz/d alpha, dZ/d beta (alpha is all distance parameters, beta is deviation parameter)
         dev_norm_quants = np.array([prior_probs_norm_const,
                                     *np.sum(mm_model.distance_prior_gradient(distances[distances > 1e-5], time_interval)
-                                            * route_intersection_prior_evals[discretised_routes_indices][distances > 1e-5]
+                                            .reshape(2, np.sum(distances > 1e-5))
+                                            * route_intersection_prior_evals[distances > 1e-5]
                                             * deviation_prior_evals[distances > 1e-5], axis=-1),
                                     -np.sum(deviations[distances > 1e-5]
                                             * distance_prior_evals[distances > 1e-5]
-                                            * route_intersection_prior_evals[discretised_routes_indices][distances > 1e-5]
+                                            * route_intersection_prior_evals[distances > 1e-5]
                                             * deviation_prior_evals[distances > 1e-5])
                                     ])
-
-        if prior_probs_norm_const == 0:
-            raise
 
         return proposal_out, prop_weight, dev_norm_quants
     else:

@@ -176,6 +176,7 @@ def optimise_hyperparameters(mm_model: MapMatchingModel,
         return - np.sum(- time_interval_arrs_concat * (distances < 1e-5)
                         + time_interval_arrs_concat * np.exp(-neg_exp * time_interval_arrs_concat)
                         / (1 - np.exp(-neg_exp * time_interval_arrs_concat)) * (distances >= 1e-5))
+
     mm_model.zero_dist_prob_neg_exponent = root_scalar(zero_dist_prob_root_func, bracket=(1e-3, 1e20)).root
 
     pos_distances = distances[distances > 1e-5]
@@ -245,6 +246,7 @@ def gradient_em_step(mm_model: MapMatchingModel,
         return - np.sum(- time_interval_arrs_concat * (distances < 1e-5)
                         + time_interval_arrs_concat * np.exp(-neg_exp * time_interval_arrs_concat)
                         / (1 - np.exp(-neg_exp * time_interval_arrs_concat)) * (distances >= 1e-5))
+
     mm_model.zero_dist_prob_neg_exponent = root_scalar(zero_dist_prob_root_func, bracket=(1e-5, 1e20)).root
 
     pos_distances = distances[distances > 1e-5]
@@ -254,15 +256,15 @@ def gradient_em_step(mm_model: MapMatchingModel,
 
     distance_gradient_evals = (mm_model.distance_prior_gradient(pos_distances, pos_time_interval_arrs_concat)
                                / mm_model.distance_prior_evaluate(pos_distances, pos_time_interval_arrs_concat)
-                               - pos_dev_norm_quants[:, 1:-1].T / pos_dev_norm_quants[:, 0]).sum(axis=1)\
+                               - pos_dev_norm_quants[:, 1:-1].T / pos_dev_norm_quants[:, 0]).sum(axis=1) \
                               / n_particles
 
-    deviation_beta_gradient_evals = (-pos_devs - pos_dev_norm_quants[:, -1] / pos_dev_norm_quants[:, 0]).sum()\
+    deviation_beta_gradient_evals = (-pos_devs - pos_dev_norm_quants[:, -1] / pos_dev_norm_quants[:, 0]).sum() \
                                     / n_particles
 
     # Take gradient step in distance params
     for i, k in enumerate(mm_model.distance_params.keys()):
-        bounds = list(mm_model.distance_params_bounds.values())[i]
+        bounds = mm_model.distance_params_bounds[k]
         mm_model.distance_params[k] = min(max(
             mm_model.distance_params[k] + stepsize * distance_gradient_evals[i],
             bounds[0]), bounds[1])
@@ -343,26 +345,26 @@ def gradient_em_step(mm_model: MapMatchingModel,
 #     # gps_roots = gps_roots[gps_roots > 0]
 #     # mm_model.gps_sd = float(gps_roots[0])
 #
-    # # # Plot dist loss function
-    # lambda_linsp = np.linspace(0.01, 0.5, 100)
-    # nexpp0_linsp = np.linspace(0.01, 0.6, 100)
-    #
-    # dist_eval_mat = np.array([[-distance_minim_func(np.array([1., lam, p0]))
-    #                            for lam in lambda_linsp]
-    #                           for p0 in nexpp0_linsp])
-    #
-    # brute_optim_inds = np.unravel_index(dist_eval_mat.argmax(), dist_eval_mat.shape)
-    #
-    # # plt.contourf(lambda_linsp, nexpp0_linsp, dist_eval_mat)
-    # # plt.scatter(lambda_linsp[brute_optim_inds[1]], nexpp0_linsp[brute_optim_inds[0]])
-    # # plt.xlabel('lambda')
-    # # plt.ylabel('-15 * log(p0)')
-    #
-    # plt.figure()
-    # plt.contourf(lambda_linsp, np.exp(-15*nexpp0_linsp), dist_eval_mat)
-    # plt.scatter(lambda_linsp[brute_optim_inds[1]], np.exp(-15*nexpp0_linsp[brute_optim_inds[0]]))
-    # plt.xlabel('lambda')
-    # plt.ylabel('p0')
+# # # Plot dist loss function
+# lambda_linsp = np.linspace(0.01, 0.5, 100)
+# nexpp0_linsp = np.linspace(0.01, 0.6, 100)
+#
+# dist_eval_mat = np.array([[-distance_minim_func(np.array([1., lam, p0]))
+#                            for lam in lambda_linsp]
+#                           for p0 in nexpp0_linsp])
+#
+# brute_optim_inds = np.unravel_index(dist_eval_mat.argmax(), dist_eval_mat.shape)
+#
+# # plt.contourf(lambda_linsp, nexpp0_linsp, dist_eval_mat)
+# # plt.scatter(lambda_linsp[brute_optim_inds[1]], nexpp0_linsp[brute_optim_inds[0]])
+# # plt.xlabel('lambda')
+# # plt.ylabel('-15 * log(p0)')
+#
+# plt.figure()
+# plt.contourf(lambda_linsp, np.exp(-15*nexpp0_linsp), dist_eval_mat)
+# plt.scatter(lambda_linsp[brute_optim_inds[1]], np.exp(-15*nexpp0_linsp[brute_optim_inds[0]]))
+# plt.xlabel('lambda')
+# plt.ylabel('p0')
 #
 #
 

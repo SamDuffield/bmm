@@ -96,7 +96,7 @@ def random_positions(graph, n=1):
 
 # Function to sample a route (given a start position, route length and time_interval (assumed constant))
 def sample_route(graph, model, time_interval, length, start_position=None, cart_route=False, observations=False,
-                 d_refine=1):
+                 d_refine=1, num_inter_cut_off=None):
     route = np.zeros((1, 9))
 
     if start_position is None:
@@ -107,7 +107,8 @@ def sample_route(graph, model, time_interval, length, start_position=None, cart_
     route[0, 5:7] = bmm.src.tools.edges.edge_interpolate(start_geom, start_position[0, 3])
 
     d_max = model.d_max(time_interval)
-    num_inter_cut_off = max(int(time_interval / 1.5), 10)
+    if num_inter_cut_off is None:
+        num_inter_cut_off = max(int(time_interval / 1.5), 10)
 
     for t in range(1, length):
         prev_pos = route[-1:].copy()
@@ -150,18 +151,19 @@ def sample_route(graph, model, time_interval, length, start_position=None, cart_
         distance_prior_evals = model.distance_prior_evaluate(distances, time_interval)
 
         # Intersection prior evals
-        route_intersection_prior_evals = bmm.src.inference.proposal.intersection_prior_evaluate(possible_routes, model)
+        route_intersection_prior_evals = bmm.src.inference.proposal.intersection_prior_evaluate(possible_routes, model)[discretised_routes_indices]
 
         # Deviation prior evals
         deviation_prior_evals = model.deviation_prior_evaluate(route[-1, 5:7],
                                                                discretised_routes[:, 1:3],
                                                                discretised_routes[:, -1])
+        deviation_prior_evals[distances < 1e-5] = 1.
 
         # Normalise prior/transition probabilities
         prior_probs = distance_prior_evals \
-                      * route_intersection_prior_evals[discretised_routes_indices] \
+                      * route_intersection_prior_evals \
                       * deviation_prior_evals
-        prior_probs[distances > 0] *= (1 - prior_probs[distances == 0][0]) / prior_probs[distances > 0].sum()
+        prior_probs[distances > 1e-5] *= (1 - prior_probs[distances <= 1e-5][0]) / prior_probs[distances > 1e-5].sum()
 
         # Choose one
         sampled_route_index = np.random.choice(len(discretised_routes), 1, p=prior_probs)[0]
