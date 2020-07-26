@@ -362,8 +362,8 @@ def prop_edges_incorrect_multiple_routes(particles_arr, true_route, average_over
 # Plot RMSE
 def plot_rmse(graph, setup_dict, true_polyline, fl_pf_routes, fl_bsi_routes, ffbsi_routes, save_dir):
     lags = setup_dict['lags']
-    t_linspace = np.linspace(0, (setup_dict['route_length'] - 1) * setup_dict['time_interval'],
-                             setup_dict['route_length'])
+    t_linspace = np.linspace(0, (setup_dict['max_route_length'] - 1) * setup_dict['time_interval'],
+                             setup_dict['max_route_length'])
 
     fontsize = 8
     shift = 0.08
@@ -433,8 +433,8 @@ def plot_rmse(graph, setup_dict, true_polyline, fl_pf_routes, fl_bsi_routes, ffb
 # Plot proportion routes correct
 def plot_pei(setup_dict, true_route, fl_pf_routes, fl_bsi_routes, ffbsi_routes, save_dir):
     lags = setup_dict['lags']
-    t_linspace = np.linspace(0, (setup_dict['route_length'] - 1) * setup_dict['time_interval'],
-                             setup_dict['route_length'])
+    t_linspace = np.linspace(0, (setup_dict['max_route_length'] - 1) * setup_dict['time_interval'],
+                             setup_dict['max_route_length'])
 
     fontsize = 8
     shift = 0.08

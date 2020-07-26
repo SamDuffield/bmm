@@ -39,7 +39,7 @@ fl_bsi_routes = np.load(load_dir + 'fl_bsi.npy', allow_pickle=True)
 ffbsi_routes = np.load(load_dir + 'ffbsi.npy', allow_pickle=True)
 
 lags = setup_dict['lags']
-t_linspace = np.linspace(0, (setup_dict['route_length'] - 1) * setup_dict['time_interval'], setup_dict['route_length'])
+t_linspace = np.linspace(0, (setup_dict['max_route_length'] - 1) * setup_dict['time_interval'], setup_dict['max_route_length'])
 
 fontsize = 5
 shift = 0.08

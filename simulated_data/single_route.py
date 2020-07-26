@@ -75,7 +75,7 @@ if __name__ == '__main__':
         json.dump(proposal_dict, f)
 
     setup_dict = {'time_interval': time_interval,
-                  'route_length': route_length,
+                  'max_route_length': route_length,
                   'gps_sd': gps_sd,
                   'n_samps': n_samps.tolist(),
                   'lags': lags.tolist(),
