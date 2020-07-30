@@ -193,6 +193,7 @@ def intersection_prior_evaluate(routes: list,
         evals[i] = mm_model.intersection_prior_evaluate(route)
     return evals
 
+
 def optimal_proposal(graph: MultiDiGraph,
                      particle: np.ndarray,
                      new_observation: np.ndarray,
@@ -290,6 +291,7 @@ def optimal_proposal(graph: MultiDiGraph,
                   * deviation_prior_evals
 
     prior_probs_norm_const = prior_probs[distances > 1e-5].sum()
+
     prior_probs[distances > 1e-5] *= (1 - prior_probs[distances < 1e-5][0]) / prior_probs_norm_const
 
     # else:

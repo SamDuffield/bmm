@@ -149,8 +149,6 @@ def sample_route(graph, model, time_interval, length, start_position=None, cart_
         discretised_routes_indices = np.concatenate(discretised_routes_indices_list)
         discretised_routes = np.concatenate(discretised_routes_list)
 
-
-
         # Distance prior evals
         distances = discretised_routes[:, -1]
         distance_prior_evals = model.distance_prior_evaluate(distances, time_interval)

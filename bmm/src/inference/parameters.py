@@ -179,6 +179,9 @@ def optimise_hyperparameters(mm_model: MapMatchingModel,
 
     mm_model.zero_dist_prob_neg_exponent = root_scalar(zero_dist_prob_root_func, bracket=(1e-3, 1e20)).root
 
+    print(-np.log(np.mean(distances < 1e-5)) / 15)
+    print(root_scalar(zero_dist_prob_root_func, bracket=(1e-5, 1e20)).root)
+
     pos_distances = distances[distances > 1e-5]
     pos_time_interval_arrs_concat = time_interval_arrs_concat[distances > 1e-5]
 
@@ -247,7 +250,10 @@ def gradient_em_step(mm_model: MapMatchingModel,
                         + time_interval_arrs_concat * np.exp(-neg_exp * time_interval_arrs_concat)
                         / (1 - np.exp(-neg_exp * time_interval_arrs_concat)) * (distances >= 1e-5))
 
-    mm_model.zero_dist_prob_neg_exponent = root_scalar(zero_dist_prob_root_func, bracket=(1e-5, 1e20)).root
+    # mm_model.zero_dist_prob_neg_exponent = root_scalar(zero_dist_prob_root_func, bracket=(1e-5, 1e20)).root
+    mm_model.zero_dist_prob_neg_exponent = -np.log(np.mean(distances < 1e-5)) / 15
+    print(-np.log(np.mean(distances < 1e-5)) / 15)
+    print(root_scalar(zero_dist_prob_root_func, bracket=(1e-5, 1e20)).root)
 
     pos_distances = distances[distances > 1e-5]
     pos_time_interval_arrs_concat = time_interval_arrs_concat[distances > 1e-5]

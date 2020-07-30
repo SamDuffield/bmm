@@ -23,25 +23,20 @@ timestamps = 15
 
 gen_model = bmm.GammaMapMatchingModel()
 # gen_model.max_speed = 30
-gen_model.zero_dist_prob_neg_exponent = -np.log(0.1) / timestamps
+gen_model.zero_dist_prob_neg_exponent = -np.log(0.25) / timestamps
 gen_model.distance_params['a_speed'] = 1.
-gen_model.distance_params['b_speed'] = 0.1
-gen_model.deviation_beta = 0.1
-gen_model.gps_sd = 5.
+gen_model.distance_params['b_speed'] = 1/15
+gen_model.deviation_beta = 0.05
+gen_model.gps_sd = 3.
 num_inter_cut_off = None
 
 # Generate simulated routes
-num_repeats = 5
-num_routes = 10
+num_repeats = 1
+num_routes = 20
 min_route_length = 10
 max_route_length = 50
 sample_d_refine = 1
-n_iter = 25
-
-# num_routes = 2
-# min_route_length = 5
-# max_route_length = 5
-# n_iter = 2
+n_iter = 50
 
 params_track = []
 
@@ -72,6 +67,8 @@ for repeat_int in range(num_repeats):
     ###
     distances = np.concatenate([a[1:, -1] for a in routes_obs_rows])
     print(np.mean(distances < 1e-5))
+    print(-np.log(np.mean(distances < 1e-5)) / 15)
+    print(np.sum(distances < 1e-5))
     # for route, obs in zip(routes, observations):
     #     bmm.plot(cam_graph, route, obs)
     # plt.hist(distances[distances > 1e-5]/timestamps, bins=50, density=True)
@@ -82,16 +79,15 @@ for repeat_int in range(num_repeats):
     tune_model = bmm.GammaMapMatchingModel()
     tune_model.distance_params['a_speed'] = 1.
     tune_model.distance_params_bounds['a_speed'] = (1., 1.)
-    tune_model.distance_params['b_speed'] = 0.05
-    tune_model.zero_dist_prob_neg_exponent = -np.log(0.08) / timestamps
-    # tune_model.zero_dist_prob_neg_exponent = -np.log(0.05)/timestamps
-    tune_model.deviation_beta = 0.05
+    tune_model.distance_params['b_speed'] = 0.1
+    tune_model.zero_dist_prob_neg_exponent = -np.log(0.2) / timestamps
+    tune_model.deviation_beta = 0.01
     tune_model.gps_sd = 7.
 
+    # tune_model.zero_dist_prob_neg_exponent = gen_model.zero_dist_prob_neg_exponent
     # tune_model.distance_params['a_speed'] = gen_model.distance_params['a_speed']
     # tune_model.distance_params_bounds['a_speed'] = (1., 1.)
     # tune_model.distance_params['b_speed'] = gen_model.distance_params['b_speed']
-    # tune_model.zero_dist_prob_neg_exponent = gen_model.zero_dist_prob_neg_exponent
     # tune_model.deviation_beta = gen_model.deviation_beta
     # tune_model.gps_sd = gen_model.gps_sd
 
