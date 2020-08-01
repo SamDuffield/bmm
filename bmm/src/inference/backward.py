@@ -194,9 +194,6 @@ def backward_simulate(graph: MultiDiGraph,
     n_samps = filter_particles[-1].n
     num_obs = len(filter_particles)
 
-    ##################################################################
-    dev_norm_quants_store = dev_norm_quants.copy()
-
     if len(time_interval_arr) + 1 != num_obs:
         raise ValueError("time_interval_arr must be length one less than that of filter_particles")
 

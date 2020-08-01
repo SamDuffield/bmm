@@ -5,7 +5,9 @@ import matplotlib.pyplot as plt
 
 # Load bmm particles
 bmm_dir = '/Users/samddd/Main/Data/bayesian-map-matching/simulations/porto/0/0/'
-bmm_particles = np.load(bmm_dir + 'fl_bsi.npy', allow_pickle=True)[2, -1, -1]
+# bmm_particles = np.load(bmm_dir + 'fl_bsi.npy', allow_pickle=True)[2, -1, -1]
+# bmm_particles = np.load('/Users/samddd/Desktop/fl_bsi.npy', allow_pickle=True)[0]
+bmm_particles = np.load('/Users/samddd/Desktop/ffbsi.npy', allow_pickle=True)[0]
 
 # Load Viterbi particle
 viterbi_path = '/Users/samddd/Main/Data/bayesian-map-matching/osrm/'
@@ -48,3 +50,14 @@ ax.invert_yaxis()
 ax.set_ylabel('t')
 ax.scatter(viterbi_distances[::-1], np.arange(n_max, 0, -1), s=15, zorder=1)
 plt.tight_layout()
+
+fig, axes = plt.subplots(n_max, sharex=True)
+axes[0].xlim = (0, 165)
+for i, d in enumerate(bmm_distances):
+    axes[i].hist(d, bins=20, color='purple', alpha=0.5, zorder=0, density=True)
+    axes[i].set_yticklabels([])
+    axes[i].scatter(viterbi_distances[i], 0, s=50, zorder=1, color='blue')
+# plt.tight_layout()
+
+
+

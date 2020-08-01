@@ -11,6 +11,14 @@ import os
 import numpy as np
 import pandas as pd
 
+import os
+import sys
+
+sim_dat_path = os.getcwd()
+repo_path = os.path.dirname(sim_dat_path)
+sys.path.append(sim_dat_path)
+sys.path.append(repo_path)
+
 import bmm
 
 from bmm.src.tools.graph import load_graph
@@ -34,7 +42,7 @@ route_index = 0
 route_polyline = np.asarray(raw_data['POLYLINE_UTM'][route_index])
 
 # Save directory
-save_dir = f'/Users/samddd/Main/Data/bayesian-map-matching/simulations/porto/{route_index}/{run_indicator}/'
+save_dir = f'{process_data_path}/simulations/porto/{route_index}/{run_indicator}/'
 
 # Plot route
 fig_route, ax_route = bmm.plot(graph, polyline=route_polyline)
@@ -45,8 +53,8 @@ np.random.seed(seed)
 
 # Model parameters
 time_interval = 15
-gps_sd = 7.5
-intersection_penalisation = 1.
+# gps_sd = 7.5
+# intersection_penalisation = 1.
 
 # Inference parameters
 ffbsi_n_samps = int(1e3)
@@ -59,8 +67,8 @@ proposal_dict = {'proposal': 'optimal'}
 
 setup_dict = {'seed': seed,
               'time_interval': time_interval,
-              'gps_sd': gps_sd,
-              'intersection_penalisation': intersection_penalisation,
+              # 'gps_sd': gps_sd,
+              # 'intersection_penalisation': intersection_penalisation,
               'ffbsi_n_samps': ffbsi_n_samps,
               'fl_n_samps': fl_n_samps.tolist(),
               'lags': lags.tolist(),
@@ -87,8 +95,8 @@ with open(save_dir + 'proposal_dict', 'w+') as f:
 
 # Setup map-matching model
 mm_model = bmm.GammaMapMatchingModel()
-mm_model.gps_sd = gps_sd
-mm_model.intersection_penalisation = intersection_penalisation
+# mm_model.gps_sd = gps_sd
+# mm_model.intersection_penalisation = intersection_penalisation
 
 # Run FFBSi
 ffbsi_route = bmm.offline_map_match(graph,
@@ -127,7 +135,6 @@ for i in range(num_repeats):
                 n_pf_failures += 1
             print(f'FL PF failures: {n_pf_failures}')
             clear_cache()
-
 
             if lag == 0:
                 fl_bsi_routes[i, k, j] = fl_pf_routes[i, k, j].copy()
@@ -199,13 +206,13 @@ np.save(save_dir + 'fl_bsi_times', fl_bsi_times)
 # fl_bsi_times = np.load(save_dir + 'fl_bsi_times.npy', allow_pickle=True)
 
 
-fig, axes = plot_metric_over_time(setup_dict,
-                      save_dir,
-                      np.mean(fl_pf_tvs, axis=0),
-                      np.mean(fl_pf_times, axis=0),
-                      np.mean(fl_bsi_tvs, axis=0),
-                      np.mean(fl_bsi_times, axis=0))
-
-sub_route_plot_xlim = (532399.6154033017, 532860.7133234204)
-sub_route_plot_ylim = (4556923.901931656, 4557388.957773835)
+# fig, axes = plot_metric_over_time(setup_dict,
+#                       save_dir,
+#                       np.mean(fl_pf_tvs, axis=0),
+#                       np.mean(fl_pf_times, axis=0),
+#                       np.mean(fl_bsi_tvs, axis=0),
+#                       np.mean(fl_bsi_times, axis=0))
+#
+# sub_route_plot_xlim = (532399.6154033017, 532860.7133234204)
+# sub_route_plot_ylim = (4556923.901931656, 4557388.957773835)
 

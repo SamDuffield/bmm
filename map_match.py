@@ -28,8 +28,8 @@ raw_data = read_data(data_path, 100).get_chunk()
 
 # Select single polyline
 single_index = np.random.choice(100, 1)[0]
-# single_index = 0
-single_index = 68         # deviation to rule out
+single_index = 0
+# single_index = 68         # deviation to rule out
 # single_index = 44         # map incorrect? + 54
 # single_index = 76         # dead end with too high probability issue
 # single_index = 86         # times out
@@ -43,7 +43,7 @@ print(single_index)
 # Number of particles
 n_samps = 100
 
-polyline_truncation = 10
+polyline_truncation = None
 
 max_rejects = 10
 
@@ -84,13 +84,12 @@ particles = offline_map_match(graph, poly_single[:polyline_truncation], n_samps,
                               d_refine=1,
                               max_rejections=max_rejects,
                               proposal='optimal',
-                              ess_threshold=0.5,
-                              store_dev_norm_quants=True)
+                              ess_threshold=0.5)
 
 print(particles.time)
 print(particles.time / len(poly_single))
 
-# Plot
-plot(graph, particles, poly_single)
-plt.show()
+# # Plot
+# plot(graph, particles, poly_single)
+# plt.show()
 
