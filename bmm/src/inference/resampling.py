@@ -107,7 +107,7 @@ def full_fixed_lag_stitch(j: int,
                     new_particle[1, 4] < last_edge_fixed[4]:
                 continue
 
-            new_cart_coords[j] = new_particle[min_resample_time_indices[j], 5:7]
+            new_cart_coords[k] = new_particle[min_resample_time_indices[k], 5:7]
 
             # Calculate distance modification
             first_distance_j_to_k = (new_particle[1, 4] - last_edge_fixed[4]) * last_edge_fixed_length
@@ -223,7 +223,7 @@ def rejection_fixed_lag_stitch(j: int,
         new_stitching_distance_prior = mm_model.distance_prior_evaluate(new_stitching_distance, stitch_time_interval)
         new_stitching_deviation_prior = mm_model.deviation_prior_evaluate(fixed_particle[-1, 5:7],
                                                                           new_particle[None,
-                                                                          min_resample_time_indices[j], 5:7],
+                                                                          min_resample_time_indices[new_index], 5:7],
                                                                           new_stitching_distance)
 
         if np.random.uniform() < new_stitching_distance_prior * new_stitching_deviation_prior\
@@ -258,9 +258,10 @@ def fixed_lag_stitch_post_split(graph: MultiDiGraph,
     full_fixed_lag_resample = max_rejections == 0
 
     min_resample_time = new_particles.observation_times[1]
-    min_resample_time_indices = [np.where(particle[:, 0] == min_resample_time)[0][0]
+    min_resample_time_indices = [np.where(particle[:, 0] == min_resample_time)[0][0] if particle is not None else 0
                                  for particle in new_particles]
-    originial_stitching_distances = np.array([new_particles[j][min_resample_time_indices[j], -1] for j in range(n)])
+    originial_stitching_distances = np.array([new_particles[j][min_resample_time_indices[j], -1]
+                                              if new_particles[j] is not None else 0 for j in range(n)])
 
     max_fixed_time = fixed_particles._first_non_none_particle[-1, 0]
 
@@ -268,8 +269,9 @@ def fixed_lag_stitch_post_split(graph: MultiDiGraph,
 
     distance_prior_evals = mm_model.distance_prior_evaluate(originial_stitching_distances, stitch_time_interval)
 
-    fixed_last_coords = np.array([part[0, 5:7] for part in new_particles])
-    new_coords = np.array([new_particles[j][min_resample_time_indices[j], 5:7] for j in range(n)])
+    fixed_last_coords = np.array([part[0, 5:7] if part is not None else [0, 0] for part in new_particles])
+    new_coords = np.array([new_particles[j][min_resample_time_indices[j], 5:7]
+                           if new_particles[j] is not None else [0, 0] for j in range(n)])
     deviation_prior_evals = mm_model.deviation_prior_evaluate(fixed_last_coords,
                                                               new_coords,
                                                               originial_stitching_distances)

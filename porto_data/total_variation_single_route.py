@@ -30,7 +30,7 @@ _, process_data_path = source_data()
 
 graph = load_graph()
 
-run_indicator = 2
+run_indicator = 10
 
 # Load taxi data
 # data_path = data.utils.choose_data()
@@ -45,7 +45,7 @@ route_polyline = np.asarray(raw_data['POLYLINE_UTM'][route_index])
 save_dir = f'{process_data_path}/simulations/porto/{route_index}/{run_indicator}/'
 
 # Plot route
-fig_route, ax_route = bmm.plot(graph, polyline=route_polyline)
+# fig_route, ax_route = bmm.plot(graph, polyline=route_polyline)
 
 # Setup
 seed = 0
@@ -53,8 +53,6 @@ np.random.seed(seed)
 
 # Model parameters
 time_interval = 15
-# gps_sd = 7.5
-# intersection_penalisation = 1.
 
 # Inference parameters
 ffbsi_n_samps = int(1e3)
@@ -83,7 +81,7 @@ if not os.path.exists(save_dir):
     os.makedirs(save_dir)
 
 # Save route figure
-fig_route.savefig(save_dir + 'route.png', dpi=350)
+# fig_route.savefig(save_dir + 'route.png', dpi=350)
 
 # Save simulation parameters
 with open(save_dir + 'setup_dict', 'w+') as f:
@@ -136,7 +134,7 @@ for i in range(num_repeats):
             print(f'FL PF failures: {n_pf_failures}')
             clear_cache()
 
-            if lag == 0:
+            if lag == 0 and fl_bsi_routes[i, k, j] is not None:
                 fl_bsi_routes[i, k, j] = fl_pf_routes[i, k, j].copy()
             else:
                 try:
