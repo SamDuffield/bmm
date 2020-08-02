@@ -6,6 +6,7 @@
 ########################################################################################################################
 
 import numpy as np
+
 import matplotlib.pyplot as plt
 
 from bmm.src.data.utils import source_data, read_data
@@ -13,7 +14,7 @@ from bmm.src.tools.graph import load_graph
 
 from bmm import offline_map_match, _offline_map_match_fl, plot
 
-np.random.seed(0)
+np.random.seed(1)
 
 # Source data paths
 _, process_data_path = source_data()
@@ -41,19 +42,20 @@ poly_single = np.asarray(poly_single_list)
 print(single_index)
 
 # Number of particles
-n_samps = 100
+n_samps = 50
 
 polyline_truncation = None
 
-max_rejects = 10
+max_rejects = 5
 
 # Run offline map-matching
-# particles = _offline_map_match_fl(graph, poly_single[:polyline_truncation], n_samps, timestamps=15,
-#                                   lag=3,
-#                                   d_refine=1,
-#                                   max_rejections=max_rejects,
-#                                   update='BSi',
-#                                   proposal='optimal')
+for ind in range(10):
+    particles = _offline_map_match_fl(graph, poly_single[:polyline_truncation], n_samps, timestamps=15,
+                                      lag=10,
+                                      d_refine=1,
+                                      max_rejections=max_rejects,
+                                      update='BSi',
+                                      proposal='optimal')
 
 # particles = _offline_map_match_fl(graph, poly_single[:polyline_truncation], n_samps, timestamps=15,
 #                                   lag=3,
@@ -80,16 +82,16 @@ max_rejects = 10
 #                               dist_expand=50,
 #                               var=5)
 
-particles = offline_map_match(graph, poly_single[:polyline_truncation], n_samps, timestamps=15,
-                              d_refine=1,
-                              max_rejections=max_rejects,
-                              proposal='optimal',
-                              ess_threshold=0.5)
+# particles = offline_map_match(graph, poly_single[:polyline_truncation], n_samps, timestamps=15,
+#                               d_refine=1,
+#                               max_rejections=max_rejects,
+#                               proposal='optimal',
+#                               ess_threshold=0.5)
 
 print(particles.time)
 print(particles.time / len(poly_single))
 
 # # Plot
-# plot(graph, particles, poly_single)
-# plt.show()
+plot(graph, particles, poly_single)
+plt.show()
 

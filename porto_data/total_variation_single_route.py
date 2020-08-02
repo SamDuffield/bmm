@@ -45,7 +45,7 @@ route_polyline = np.asarray(raw_data['POLYLINE_UTM'][route_index])
 save_dir = f'{process_data_path}/simulations/porto/{route_index}/{run_indicator}/'
 
 # Plot route
-# fig_route, ax_route = bmm.plot(graph, polyline=route_polyline)
+fig_route, ax_route = bmm.plot(graph, polyline=route_polyline)
 
 # Setup
 seed = 0
@@ -81,7 +81,7 @@ if not os.path.exists(save_dir):
     os.makedirs(save_dir)
 
 # Save route figure
-# fig_route.savefig(save_dir + 'route.png', dpi=350)
+fig_route.savefig(save_dir + 'route.png', dpi=350)
 
 # Save simulation parameters
 with open(save_dir + 'setup_dict', 'w+') as f:
@@ -137,20 +137,20 @@ for i in range(num_repeats):
             if lag == 0 and fl_bsi_routes[i, k, j] is not None:
                 fl_bsi_routes[i, k, j] = fl_pf_routes[i, k, j].copy()
             else:
-                try:
-                    fl_bsi_routes[i, k, j] = bmm._offline_map_match_fl(graph,
-                                                                       route_polyline,
-                                                                       n,
-                                                                       timestamps=time_interval,
-                                                                       mm_model=mm_model,
-                                                                       lag=lag,
-                                                                       update='BSi',
-                                                                       max_rejections=max_rejections,
-                                                                       initial_d_truncate=initial_truncation,
-                                                                       **proposal_dict)
-                    print(f'FL BSi {i} {j} {k}:', fl_bsi_routes[i, k, j].time)
-                except:
-                    n_bsi_failures += 1
+                # try:
+                fl_bsi_routes[i, k, j] = bmm._offline_map_match_fl(graph,
+                                                                   route_polyline,
+                                                                   n,
+                                                                   timestamps=time_interval,
+                                                                   mm_model=mm_model,
+                                                                   lag=lag,
+                                                                   update='BSi',
+                                                                   max_rejections=max_rejections,
+                                                                   initial_d_truncate=initial_truncation,
+                                                                   **proposal_dict)
+                print(f'FL BSi {i} {j} {k}:', fl_bsi_routes[i, k, j].time)
+                # except:
+                #     n_bsi_failures += 1
                 print(f'FL BSi failures: {n_bsi_failures}')
 
                 clear_cache()
@@ -172,9 +172,10 @@ np.save(save_dir + 'ffbsi', ffbsi_route_arr)
 
 observation_times = ffbsi_route.observation_times
 
-fl_pf_tvs = np.empty((setup_dict['num_repeats'], len(setup_dict['fl_n_samps']), len(setup_dict['lags']),  len(observation_times)))
+fl_pf_tvs = np.empty(
+    (setup_dict['num_repeats'], len(setup_dict['fl_n_samps']), len(setup_dict['lags']), len(observation_times)))
 fl_bsi_tvs = np.empty_like(fl_pf_tvs)
-fl_pf_times = np.empty((setup_dict['num_repeats'],  len(setup_dict['fl_n_samps']), len(setup_dict['lags'])))
+fl_pf_times = np.empty((setup_dict['num_repeats'], len(setup_dict['fl_n_samps']), len(setup_dict['lags'])))
 fl_bsi_times = np.empty_like(fl_pf_times)
 
 # Calculate TV distances from FFBSi
@@ -197,20 +198,17 @@ np.save(save_dir + 'fl_bsi_tv', fl_bsi_tvs)
 np.save(save_dir + 'fl_pf_times', fl_pf_times)
 np.save(save_dir + 'fl_bsi_times', fl_bsi_times)
 
+fl_pf_tvs = np.load(save_dir + 'fl_pf_tv.npy', allow_pickle=True)
+fl_bsi_tvs = np.load(save_dir + 'fl_bsi_tv.npy', allow_pickle=True)
+fl_pf_times = np.load(save_dir + 'fl_pf_times.npy', allow_pickle=True)
+fl_bsi_times = np.load(save_dir + 'fl_bsi_times.npy', allow_pickle=True)
 
-# fl_pf_tvs = np.load(save_dir + 'fl_pf_tv.npy', allow_pickle=True)
-# fl_bsi_tvs = np.load(save_dir + 'fl_bsi_tv.npy', allow_pickle=True)
-# fl_pf_times = np.load(save_dir + 'fl_pf_times.npy', allow_pickle=True)
-# fl_bsi_times = np.load(save_dir + 'fl_bsi_times.npy', allow_pickle=True)
+fig, axes = plot_metric_over_time(setup_dict,
+                                  save_dir,
+                                  np.mean(fl_pf_tvs, axis=0),
+                                  np.mean(fl_pf_times, axis=0),
+                                  np.mean(fl_bsi_tvs, axis=0),
+                                  np.mean(fl_bsi_times, axis=0))
 
-
-# fig, axes = plot_metric_over_time(setup_dict,
-#                       save_dir,
-#                       np.mean(fl_pf_tvs, axis=0),
-#                       np.mean(fl_pf_times, axis=0),
-#                       np.mean(fl_bsi_tvs, axis=0),
-#                       np.mean(fl_bsi_times, axis=0))
-#
-# sub_route_plot_xlim = (532399.6154033017, 532860.7133234204)
-# sub_route_plot_ylim = (4556923.901931656, 4557388.957773835)
-
+sub_route_plot_xlim = (532399.6154033017, 532860.7133234204)
+sub_route_plot_ylim = (4556923.901931656, 4557388.957773835)

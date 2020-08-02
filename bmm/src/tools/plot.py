@@ -31,7 +31,7 @@ def plot(graph, particles=None, polyline=None, particles_alpha=None, label_start
         whether to label the start and end points of the route
     :return: fig, ax
     """
-    fig, ax = ox.plot_graph(graph, show=False, close=False, equal_aspect=True, edge_color='lightgrey',
+    fig, ax = ox.plot_graph(graph, show=False, close=False, edge_color='lightgrey',
                             node_size=0, edge_linewidth=3)
 
     start_end_points = None

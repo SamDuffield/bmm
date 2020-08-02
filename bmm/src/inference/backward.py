@@ -203,9 +203,9 @@ def backward_simulate(graph: MultiDiGraph,
 
     # Multinomial resample end particles if weighted
     if np.all(filter_weights[-1] == filter_weights[-1][0]):
-        out_particles = filter_particles[-1]
+        out_particles = filter_particles[-1].copy()
     else:
-        out_particles = multinomial(filter_particles[-1], filter_weights[-1])
+        out_particles = multinomial(filter_particles[-1].copy(), filter_weights[-1])
     if full_sampling:
         ess_back = np.zeros((num_obs, n_samps))
         ess_back[0] = 1 / (filter_weights[-1] ** 2).sum()
@@ -243,8 +243,6 @@ def backward_simulate(graph: MultiDiGraph,
 
                 if dev_norm:
                     out_particles[j], ess_back[i, j], sampled_inds[j] = back_output
-                    # if dev_norm_quants[i, sampled_inds[j], 0] == 0 and out_particles[j][0, -1] != 0.:
-                    #     raise
                 else:
                     out_particles[j], ess_back[i, j] = back_output
 
@@ -284,7 +282,7 @@ def backward_simulate(graph: MultiDiGraph,
         if n_good < n_samps:
             none_inds_res_indices = np.random.choice(n_samps, n_samps - n_good, p=good_inds / n_good)
             for i_none, j_none in enumerate(np.where(none_inds)[0]):
-                out_particles[j_none] = out_particles[none_inds_res_indices[i_none]]
+                out_particles[j_none] = out_particles[none_inds_res_indices[i_none]].copy()
                 if dev_norm:
                     dev_norm_quants[i:, j_none] = dev_norm_quants[i:, none_inds_res_indices[i_none]]
             if store_ess_back:
