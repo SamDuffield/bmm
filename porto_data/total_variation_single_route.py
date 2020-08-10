@@ -30,7 +30,7 @@ _, process_data_path = source_data()
 
 graph = load_graph()
 
-run_indicator = 10
+run_indicator = 6
 
 # Load taxi data
 # data_path = data.utils.choose_data()
@@ -39,7 +39,7 @@ raw_data = read_data(data_path, 100).get_chunk()
 
 # Select single route
 route_index = 0
-route_polyline = np.asarray(raw_data['POLYLINE_UTM'][route_index])
+route_polyline = np.asarray(raw_data['POLYLINE_UTM'][route_index])[:4]
 
 # Save directory
 save_dir = f'{process_data_path}/simulations/porto/{route_index}/{run_indicator}/'
@@ -58,9 +58,9 @@ time_interval = 15
 ffbsi_n_samps = int(1e3)
 fl_n_samps = np.array([50, 100, 200])
 lags = np.array([0, 3, 10])
-max_rejections = 5
+max_rejections = 20
 initial_truncation = None
-num_repeats = 30
+num_repeats = 20
 proposal_dict = {'proposal': 'optimal'}
 
 setup_dict = {'seed': seed,
@@ -107,8 +107,8 @@ ffbsi_route = bmm.offline_map_match(graph,
                                     **proposal_dict)
 clear_cache()
 
-fl_pf_routes = np.empty((num_repeats, len(lags), len(fl_n_samps)), dtype=object)
-fl_bsi_routes = np.empty((num_repeats, len(lags), len(fl_n_samps)), dtype=object)
+fl_pf_routes = np.empty((num_repeats, len(fl_n_samps), len(lags)), dtype=object)
+fl_bsi_routes = np.empty((num_repeats, len(fl_n_samps), len(lags)), dtype=object)
 
 n_pf_failures = 0
 n_bsi_failures = 0
@@ -118,7 +118,7 @@ for i in range(num_repeats):
         for k, lag in enumerate(lags):
             print(i, j, k)
             try:
-                fl_pf_routes[i, k, j] = bmm._offline_map_match_fl(graph,
+                fl_pf_routes[i, j, k] = bmm._offline_map_match_fl(graph,
                                                                   route_polyline,
                                                                   n,
                                                                   timestamps=time_interval,
@@ -134,11 +134,12 @@ for i in range(num_repeats):
             print(f'FL PF failures: {n_pf_failures}')
             clear_cache()
 
-            if lag == 0 and fl_bsi_routes[i, k, j] is not None:
-                fl_bsi_routes[i, k, j] = fl_pf_routes[i, k, j].copy()
+            if lag == 0 and fl_pf_routes[i, j, k] is not None:
+                fl_bsi_routes[i, j, k] = fl_pf_routes[i, j, k].copy()
+                print(f'FL BSi {i} {j} {k}:', fl_bsi_routes[i, j, k].time)
             else:
                 # try:
-                fl_bsi_routes[i, k, j] = bmm._offline_map_match_fl(graph,
+                fl_bsi_routes[i, j, k] = bmm._offline_map_match_fl(graph,
                                                                    route_polyline,
                                                                    n,
                                                                    timestamps=time_interval,
@@ -148,7 +149,7 @@ for i in range(num_repeats):
                                                                    max_rejections=max_rejections,
                                                                    initial_d_truncate=initial_truncation,
                                                                    **proposal_dict)
-                print(f'FL BSi {i} {j} {k}:', fl_bsi_routes[i, k, j].time)
+                print(f'FL BSi {i} {j} {k}:', fl_bsi_routes[i, j, k].time)
                 # except:
                 #     n_bsi_failures += 1
                 print(f'FL BSi failures: {n_bsi_failures}')
@@ -198,10 +199,10 @@ np.save(save_dir + 'fl_bsi_tv', fl_bsi_tvs)
 np.save(save_dir + 'fl_pf_times', fl_pf_times)
 np.save(save_dir + 'fl_bsi_times', fl_bsi_times)
 
-fl_pf_tvs = np.load(save_dir + 'fl_pf_tv.npy', allow_pickle=True)
-fl_bsi_tvs = np.load(save_dir + 'fl_bsi_tv.npy', allow_pickle=True)
-fl_pf_times = np.load(save_dir + 'fl_pf_times.npy', allow_pickle=True)
-fl_bsi_times = np.load(save_dir + 'fl_bsi_times.npy', allow_pickle=True)
+# fl_pf_tvs = np.load(save_dir + 'fl_pf_tv.npy', allow_pickle=True)
+# fl_bsi_tvs = np.load(save_dir + 'fl_bsi_tv.npy', allow_pickle=True)
+# fl_pf_times = np.load(save_dir + 'fl_pf_times.npy', allow_pickle=True)
+# fl_bsi_times = np.load(save_dir + 'fl_bsi_times.npy', allow_pickle=True)
 
 fig, axes = plot_metric_over_time(setup_dict,
                                   save_dir,
