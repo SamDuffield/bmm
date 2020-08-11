@@ -22,6 +22,7 @@ from bmm.src.tools.edges import get_geometry
 from bmm.src.tools.edges import discretise_edge
 from bmm.src.tools.edges import observation_time_indices
 from bmm.src.tools.edges import observation_time_rows
+from bmm.src.tools.edges import long_lat_to_utm
 
 from bmm.src.inference.particles import MMParticles
 

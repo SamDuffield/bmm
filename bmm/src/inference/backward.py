@@ -117,6 +117,7 @@ def rejection_backward_sample(fixed_particle: np.ndarray,
                               filter_weights: np.ndarray,
                               time_interval: float,
                               next_time_index: int,
+                              prior_bound: float,
                               mm_model: MapMatchingModel,
                               max_rejections: int,
                               return_sampled_index: bool = False) -> Union[Optional[np.ndarray], tuple]:
@@ -129,6 +130,7 @@ def rejection_backward_sample(fixed_particle: np.ndarray,
     :param filter_weights: weights for filter_particles
     :param time_interval: time between observations at backwards sampling time
     :param next_time_index: index of second observation time in fixed_particle
+    :param prior_bound: bound on distance transition density
     :param mm_model: MapMatchingModel
     :param max_rejections: number of rejections to attempt, if none succeed return None
     :param return_sampled_index: whether to return index of selected back sample
@@ -155,8 +157,7 @@ def rejection_backward_sample(fixed_particle: np.ndarray,
                                                                       fixed_particle[None, next_time_index, 5:7],
                                                                       smoothing_distance)
 
-        if np.random.uniform() < smoothing_distance_prior * smoothing_deviation_prior \
-                / mm_model.prior_bound(time_interval):
+        if np.random.uniform() < smoothing_distance_prior * smoothing_deviation_prior / prior_bound:
             fixed_particle[1:(next_time_index + 1), -1] += distance_j_to_k
             out_part = np.append(filter_particle, fixed_particle[1:], axis=0)
             if return_sampled_index:
@@ -220,11 +221,14 @@ def backward_simulate(graph: MultiDiGraph,
     for i in range(num_obs - 2, -1, -1):
         next_time = filter_particles[i + 1].latest_observation_time
 
+        if not full_sampling:
+            prior_bound = mm_model.prior_bound(time_interval_arr[i])
+
         if dev_norm:
             sampled_inds = np.zeros(n_samps, dtype=int)
 
         for j in range(n_samps):
-            fixed_particle = out_particles[j].copy()
+            fixed_particle = out_particles[j]
             first_edge_fixed = fixed_particle[0]
             first_edge_fixed_geom = get_geometry(graph, first_edge_fixed[1:4])
             first_edge_fixed_length = first_edge_fixed_geom.length
@@ -253,6 +257,7 @@ def backward_simulate(graph: MultiDiGraph,
                                                         filter_weights[i],
                                                         time_interval_arr[i],
                                                         fixed_next_time_index,
+                                                        prior_bound,
                                                         mm_model,
                                                         max_rejections,
                                                         return_sampled_index=dev_norm)

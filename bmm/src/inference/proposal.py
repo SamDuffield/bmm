@@ -29,6 +29,39 @@ def get_out_edges(graph: MultiDiGraph,
     return np.atleast_2d([[u, v, k] for u, v, k in graph.out_edges(node, keys=True)])
 
 
+@lru_cache(maxsize=2 ** 8)
+def get_possible_routes_all_cached(graph: MultiDiGraph,
+                                   u: int,
+                                   v: int,
+                                   k: int,
+                                   d_max: float,
+                                   num_inter_cut_off: int) -> list:
+    in_route = np.array([[0., u, v, k, 1., 0., 0., 0., 0.]])
+    return get_possible_routes(graph, in_route, d_max, all_routes=True, num_inter_cut_off=num_inter_cut_off)
+
+
+def get_all_possible_routes_overshoot(graph: MultiDiGraph,
+                                      in_edge: np.ndarray,
+                                      d_max: float,
+                                      num_inter_cut_off: int = np.inf) -> list:
+    in_edge_geom = get_geometry(graph, in_edge[-1, 1:4])
+    in_edge_length = in_edge_geom.length
+    extra_dist = (1 - in_edge[-1, 4]) * in_edge_length
+
+    if extra_dist > d_max:
+        return get_possible_routes(graph, in_edge, d_max, all_routes=True, num_inter_cut_off=num_inter_cut_off)
+
+    all_possible_routes_overshoot = get_possible_routes_all_cached(graph, *in_edge[-1, 1:4],
+                                                                   d_max, num_inter_cut_off)
+
+    out_routes = []
+    for i in range(len(all_possible_routes_overshoot)):
+        temp_route = all_possible_routes_overshoot[i].copy()
+        temp_route[:, -1] += extra_dist
+        out_routes.append(temp_route)
+    return out_routes
+
+
 def get_possible_routes(graph: MultiDiGraph,
                         in_route: np.ndarray,
                         dist: float,
@@ -94,7 +127,7 @@ def get_possible_routes(graph: MultiDiGraph,
 
     start_edge_and_position[-2] = n_inter
 
-    if len(intersection_edges) == 1 and intersection_edges[0][1] == start_edge_and_position[1]\
+    if len(intersection_edges) == 1 and intersection_edges[0][1] == start_edge_and_position[1] \
             and intersection_edges[0][2] == start_edge_and_position[3]:
         # Dead-end and two-way -> Only option is u-turn
         if all_routes:
@@ -103,7 +136,7 @@ def get_possible_routes(graph: MultiDiGraph,
         new_routes = []
         for new_edge in intersection_edges:
             # If not u-turn or loop continue route search on new edge
-            if not (new_edge[1] == start_edge_and_position[1] and new_edge[2] == start_edge_and_position[3])\
+            if not (new_edge[1] == start_edge_and_position[1] and new_edge[2] == start_edge_and_position[3]) \
                     and not (new_edge == in_route[:, 1:4]).all(1).any() \
                     and len(in_route) < num_inter_cut_off:
                 add_edge = np.array([[0, *new_edge, 0, 0, 0, 0, start_edge_and_position[-1]]])
@@ -232,8 +265,10 @@ def optimal_proposal(graph: MultiDiGraph,
     # Extract all possible routes from previous position
     start_position = particle[-1:].copy()
     start_position[0, -1] = 0
-    possible_routes = get_possible_routes(graph, start_position, d_max, all_routes=True,
-                                          num_inter_cut_off=num_inter_cut_off)
+    # possible_routes = get_possible_routes(graph, start_position, d_max, all_routes=True,
+    #                                       num_inter_cut_off=num_inter_cut_off)
+    possible_routes = get_all_possible_routes_overshoot(graph, start_position, d_max,
+                                                        num_inter_cut_off=num_inter_cut_off)
 
     # Get all possible positions on each route
     discretised_routes_indices_list = []

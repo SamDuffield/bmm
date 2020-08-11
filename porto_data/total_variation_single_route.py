@@ -128,7 +128,7 @@ for i in range(num_repeats):
                                                                   max_rejections=max_rejections,
                                                                   initial_d_truncate=initial_truncation,
                                                                   **proposal_dict)
-                print(f'FL PF {i} {j} {k}: {fl_pf_routes[i, k, j].time}')
+                print(f'FL PF {i} {j} {k}: {fl_pf_routes[i, j, k].time}')
             except:
                 n_pf_failures += 1
             print(f'FL PF failures: {n_pf_failures}')

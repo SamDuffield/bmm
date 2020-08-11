@@ -10,7 +10,7 @@ from collections import OrderedDict
 
 import numpy as np
 from numba import njit
-from scipy.special import gammainc, digamma
+from scipy.special import gammainc, digamma, gamma
 from scipy.stats import gamma as gamma_dist
 from scipy.stats import lognorm as lognorm_dist
 from tweedie import tweedie
@@ -149,7 +149,7 @@ class MapMatchingModel:
 
         deviations = np.sqrt(np.sum((previous_cart_coord - route_cart_coords) ** 2, axis=1))
         diffs = np.abs(deviations - distances)
-        return np.exp(-diffs * self.deviation_beta)  # / self.deviation_beta
+        return np.exp(-diffs * self.deviation_beta)
 
     def intersection_prior_evaluate(self,
                                     between_obs_route: np.ndarray) -> float:
@@ -222,9 +222,16 @@ class GammaMapMatchingModel(MapMatchingModel):
             zero_dist_prob_check = zero_dist_prob[non_zero_inds] if isinstance(time_interval, np.ndarray) \
                 else zero_dist_prob
 
-            out_arr[non_zero_inds] = gamma_dist.pdf(distance[non_zero_inds] / time_int_check,
-                                                    a=self.distance_params['a_speed'],
-                                                    scale=1 / self.distance_params['b_speed']) \
+            # out_arr[non_zero_inds] = gamma_dist.pdf(distance[non_zero_inds] / time_int_check,
+            #                                         a=self.distance_params['a_speed'],
+            #                                         scale=1 / self.distance_params['b_speed']) \
+            #                          * (1 - zero_dist_prob_check) / time_int_check
+
+            speeds = distance[non_zero_inds] / time_int_check
+            out_arr[non_zero_inds] = self.distance_params['b_speed'] ** self.distance_params['a_speed'] \
+                                     / gamma(self.distance_params['a_speed']) \
+                                     * speeds ** (self.distance_params['a_speed'] - 1) \
+                                     * np.exp(-self.distance_params['b_speed'] * speeds) \
                                      * (1 - zero_dist_prob_check) / time_int_check
 
         return np.squeeze(out_arr)
@@ -283,13 +290,13 @@ class GammaMapMatchingModel(MapMatchingModel):
 
         gamma_mode = (self.distance_params['a_speed'] - 1) / self.distance_params['b_speed']
 
-        distance_bound = max(gamma_dist.pdf(gamma_mode,
-                                            a=self.distance_params['a_speed'],
-                                            scale=1 / self.distance_params['b_speed']) * (1 - zero_dist_prob)
+        distance_bound = max(self.distance_params['b_speed'] ** self.distance_params['a_speed'] \
+                             / gamma(self.distance_params['a_speed']) \
+                             * gamma_mode ** (self.distance_params['a_speed'] - 1) \
+                             * np.exp(-self.distance_params['b_speed'] * gamma_mode) * (1 - zero_dist_prob)
                              / time_interval,
                              zero_dist_prob)
-
-        return distance_bound if self.deviation_beta == 0 else distance_bound / self.deviation_beta
+        return distance_bound
 
 
 def pdf_gamma_mv(vals: Union[float, np.ndarray],

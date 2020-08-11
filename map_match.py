@@ -28,7 +28,7 @@ data_path = process_data_path + "/data/portotaxi_06052014_06052014_utm_1730_1745
 raw_data = read_data(data_path, 100).get_chunk()
 
 # Select single polyline
-single_index = np.random.choice(100, 1)[0]
+# single_index = np.random.choice(100, 1)[0]
 single_index = 0
 # single_index = 68         # deviation to rule out
 # single_index = 44         # map incorrect? + 54
@@ -42,20 +42,19 @@ poly_single = np.asarray(poly_single_list)
 print(single_index)
 
 # Number of particles
-n_samps = 50
+n_samps = 100
 
-polyline_truncation = None
+polyline_truncation = 20
 
-max_rejects = 5
+max_rejects = 20
 
 # Run offline map-matching
-for ind in range(10):
-    particles = _offline_map_match_fl(graph, poly_single[:polyline_truncation], n_samps, timestamps=15,
-                                      lag=10,
-                                      d_refine=1,
-                                      max_rejections=max_rejects,
-                                      update='BSi',
-                                      proposal='optimal')
+particles = _offline_map_match_fl(graph, poly_single[:polyline_truncation], n_samps, timestamps=15,
+                                  lag=3,
+                                  d_refine=1,
+                                  max_rejections=max_rejects,
+                                  update='BSi',
+                                  proposal='optimal')
 
 # particles = _offline_map_match_fl(graph, poly_single[:polyline_truncation], n_samps, timestamps=15,
 #                                   lag=3,
@@ -92,6 +91,6 @@ print(particles.time)
 print(particles.time / len(poly_single))
 
 # # Plot
-plot(graph, particles, poly_single)
-plt.show()
+# plot(graph, particles, poly_single)
+# plt.show()
 

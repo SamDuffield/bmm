@@ -47,12 +47,15 @@ def dist_box_plot(particle_distances, viterbi_distances=None):
 # Histograms
 def dist_hist(particle_distances, viterbi_distances=None):
     fig, axes = plt.subplots(len(particle_distances), sharex=True)
+    axes[-1].set_xlabel('m')
     # axes[0].xlim = (0, 165)
     for i, d in enumerate(particle_distances):
-        axes[i].hist(d, bins=30, color='purple', alpha=0.5, zorder=0, density=True)
+        axes[i].hist(d, bins=50, color='purple', alpha=0.5, zorder=0, density=True)
         axes[i].set_yticklabels([])
         if viterbi_distances is not None:
-            axes[i].scatter(viterbi_distances[i], 0, s=50, zorder=1, color='blue')
+            axes[i].scatter(viterbi_distances[i], 0, s=100, zorder=1, color='blue')
+        axes[i].set_ylabel(f'$d_{i+1}$')
+    plt.tight_layout()
     return fig, axes
 
 

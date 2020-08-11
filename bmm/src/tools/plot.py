@@ -12,7 +12,7 @@ from matplotlib import pyplot as plt
 from bmm.src.tools.edges import interpolate_path, cartesianise_path, observation_time_rows
 
 
-def plot(graph, particles=None, polyline=None, particles_alpha=None, label_start_end=True):
+def plot(graph, particles=None, polyline=None, particles_alpha=None, label_start_end=True, **kwargs):
     """
     Plots particle approximation of trajectory
     :param graph: NetworkX MultiDiGraph
@@ -32,7 +32,8 @@ def plot(graph, particles=None, polyline=None, particles_alpha=None, label_start
     :return: fig, ax
     """
     fig, ax = ox.plot_graph(graph, show=False, close=False, edge_color='lightgrey',
-                            node_size=0, edge_linewidth=3)
+                            node_size=0, edge_linewidth=3, **kwargs)
+    ax.set_aspect("equal")
 
     start_end_points = None
 

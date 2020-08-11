@@ -190,7 +190,7 @@ def get_truncated_discrete_edges(graph: MultiDiGraph,
                                  coord: np.ndarray,
                                  d_refine: float,
                                  d_truncate: float,
-                                 return_dists_to_coord: bool = False)\
+                                 return_dists_to_coord: bool = False) \
         -> Union[Tuple[np.ndarray, np.ndarray], np.ndarray]:
     """
     Discretises edges within dist_retain of coord
@@ -265,7 +265,23 @@ def observation_time_rows(path: np.ndarray) -> np.ndarray:
     return path[observation_time_indices(path[:, 0])]
 
 
-
+def long_lat_to_utm(points: Union[list, np.ndarray], graph=None) -> np.ndarray:
+    """
+    Converts a collection of long-lat points to UTM
+    :param points: points to be projected, shape = (N, 2)
+    :param graph: optional graph containing desired crs in graph.gra['crs']
+    :return: array of projected points
+    """
+    points = np.atleast_2d(points)
+    points_gdf = GeoDataFrame({'index': np.arange(len(points)),
+                               'x': points[:, 0],
+                               'y': points[:, 1]})
+    points_gdf.crs = '+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs' # long lat crs
+    points_gdf['geometry'] = points_gdf.apply(lambda row: Point(row['x'], row['y']), axis=1)
+    points_gdf_utm = ox.projection.project_gdf(points_gdf, to_crs=str(graph.graph['crs']) if graph is not None else None)
+    points_gdf_utm['x'] = points_gdf_utm['geometry'].map(lambda point: point.x)
+    points_gdf_utm['y'] = points_gdf_utm['geometry'].map(lambda point: point.y)
+    return np.squeeze(np.array(points_gdf_utm[['x', 'y']]))
 
 
 
@@ -333,8 +349,3 @@ def cartesianise_path(graph, path, t_column=True, observation_time_only=False):
         cart_points[i, :] = edge_interpolate(edge_geom, point[3 + start_col])
 
     return np.atleast_2d(cart_points)
-
-
-
-
-
