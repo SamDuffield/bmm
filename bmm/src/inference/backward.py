@@ -81,16 +81,15 @@ def full_backward_sample(fixed_particle: np.ndarray,
             else:
                 return None
 
-    smoothing_weights = np.zeros(n)
-    smoothing_weights[possible_inds] = filter_weights[possible_inds] \
-                                       * mm_model.distance_prior_evaluate(smoothing_distances[possible_inds],
-                                                                          time_interval) \
-                                       * mm_model.deviation_prior_evaluate(new_prev_cart_coords[possible_inds],
-                                                                           fixed_particle[None, next_time_index, 5:7],
-                                                                           smoothing_distances[possible_inds])
+    smoothing_weights = filter_weights[possible_inds] \
+                        * mm_model.distance_prior_evaluate(smoothing_distances[possible_inds],
+                                                           time_interval) \
+                        * mm_model.deviation_prior_evaluate(new_prev_cart_coords[possible_inds],
+                                                            fixed_particle[None, next_time_index, 5:7],
+                                                            smoothing_distances[possible_inds])
     smoothing_weights /= smoothing_weights.sum()
 
-    sampled_index = np.random.choice(n, 1, p=smoothing_weights)[0]
+    sampled_index = np.where(possible_inds)[0][np.random.choice(len(smoothing_weights), 1, p=smoothing_weights)[0]]
 
     fixed_particle[1:(next_time_index + 1), -1] += distances_j_to_k[sampled_index]
 

@@ -39,7 +39,7 @@ raw_data = read_data(data_path, 100).get_chunk()
 
 # Select single route
 route_index = 0
-route_polyline = np.asarray(raw_data['POLYLINE_UTM'][route_index])[:4]
+route_polyline = np.asarray(raw_data['POLYLINE_UTM'][route_index])
 
 # Save directory
 save_dir = f'{process_data_path}/simulations/porto/{route_index}/{run_indicator}/'
@@ -48,7 +48,7 @@ save_dir = f'{process_data_path}/simulations/porto/{route_index}/{run_indicator}
 fig_route, ax_route = bmm.plot(graph, polyline=route_polyline)
 
 # Setup
-seed = 0
+seed = 1
 np.random.seed(seed)
 
 # Model parameters

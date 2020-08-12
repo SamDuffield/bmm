@@ -117,8 +117,8 @@ def plot_metric_over_time(setup_dict, save_dir, fl_pf_metric, fl_pf_time, fl_bsi
     fig, axes = plt.subplots(3, 2, sharex='all', sharey='all', figsize=(8, 6))
     for j, n in enumerate(setup_dict['fl_n_samps']):
         for k, lag in enumerate(lags):
-            axes[j, 0].plot(t_linspace, fl_pf_metric[k, j], label=f'Lag: {lag}')
-            lines[k], = axes[j, 1].plot(t_linspace, fl_bsi_metric[k, j], label=f'Lag: {lag}')
+            axes[j, 0].plot(t_linspace, fl_pf_metric[j, k], label=f'Lag: {lag}')
+            lines[k], = axes[j, 1].plot(t_linspace, fl_bsi_metric[j, k], label=f'Lag: {lag}')
 
         if ffbsi_metric is not None:
             lines[len(lags)], = axes[j, 0].plot(t_linspace, ffbsi_metric[j], label='FFBSi')
@@ -126,10 +126,10 @@ def plot_metric_over_time(setup_dict, save_dir, fl_pf_metric, fl_pf_time, fl_bsi
 
     for j, n in enumerate(setup_dict['fl_n_samps']):
         for k, lag in enumerate(lags):
-            axes[j, 0].text(left_start, up_start - k * shift, "{:.1f}".format(fl_pf_time[k, j]),
+            axes[j, 0].text(left_start, up_start - k * shift, "{:.1f}".format(fl_pf_time[j, k]),
                             color=lines[k].get_color(),
                             fontsize=fontsize, transform=axes[j, 0].transAxes)
-            axes[j, 1].text(left_start, up_start - k * shift, "{:.1f}".format(fl_bsi_time[k, j]),
+            axes[j, 1].text(left_start, up_start - k * shift, "{:.1f}".format(fl_bsi_time[j, k]),
                             color=lines[k].get_color(),
                             fontsize=fontsize, transform=axes[j, 1].transAxes)
 
