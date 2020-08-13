@@ -178,6 +178,7 @@ def rejection_fixed_lag_stitch(j: int,
                                min_resample_time: float,
                                stitch_time_interval: float,
                                min_resample_time_indices: Union[list, np.ndarray],
+                               prior_bound: float,
                                mm_model: MapMatchingModel,
                                max_rejections: int) -> Union[np.ndarray, None]:
     """
@@ -191,6 +192,7 @@ def rejection_fixed_lag_stitch(j: int,
     :param min_resample_time: first observation time after stitching
     :param stitch_time_interval: time between stitching observations
     :param min_resample_time_indices: indices for row of min_resample_time in new_particles
+    :param prior_bound: bound on distance transition density
     :param mm_model: MapMatchingModel
     :param max_rejections: number of rejections to attempt, if none succeed return None
     :return: stitched particle
@@ -227,7 +229,7 @@ def rejection_fixed_lag_stitch(j: int,
                                                                           new_stitching_distance)
 
         if np.random.uniform() < new_stitching_distance_prior * new_stitching_deviation_prior\
-                / mm_model.prior_bound(stitch_time_interval):
+                / prior_bound:
             out_particle = np.append(fixed_particle, new_particle[1:], axis=0)
 
             return out_particle
@@ -287,7 +289,7 @@ def fixed_lag_stitch_post_split(graph: MultiDiGraph,
     else:
         ess_stitch_track = None
 
-        # distance_prior_bound = get_distance_prior_bound()
+        prior_bound = mm_model.prior_bound(stitch_time_interval)
         adjusted_weights = new_weights / (distance_prior_evals * deviation_prior_evals)
         adjusted_weights /= np.sum(adjusted_weights)
 
@@ -326,6 +328,7 @@ def fixed_lag_stitch_post_split(graph: MultiDiGraph,
                                                           new_particles, adjusted_weights,
                                                           min_resample_time, stitch_time_interval,
                                                           min_resample_time_indices,
+                                                          prior_bound,
                                                           mm_model,
                                                           max_rejections)
             if out_particles[j] is None:

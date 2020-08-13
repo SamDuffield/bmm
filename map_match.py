@@ -42,9 +42,9 @@ poly_single = np.asarray(poly_single_list)
 print(single_index)
 
 # Number of particles
-n_samps = 200
+n_samps = 100
 
-polyline_truncation = 30
+polyline_truncation = None
 
 max_rejects = 0
 
@@ -91,5 +91,5 @@ print(particles.time)
 print(particles.time / len(poly_single))
 
 # # Plot
-# plot(graph, particles, poly_single)
-# plt.show()
+plot(graph, particles, poly_single)
+plt.show()

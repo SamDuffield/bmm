@@ -166,7 +166,8 @@ def sample_route(graph, model, time_interval, length, start_position=None, cart_
         prior_probs = distance_prior_evals \
                       * route_intersection_prior_evals \
                       * deviation_prior_evals
-        prior_probs[distances > 1e-5] *= (1 - prior_probs[distances <= 1e-5][0]) / prior_probs[distances > 1e-5].sum()
+        # prior_probs[distances > 1e-5] *= (1 - prior_probs[distances <= 1e-5][0]) / prior_probs[distances > 1e-5].sum()
+        prior_probs /= prior_probs.sum()
 
         # Choose one
         sampled_route_index = np.random.choice(len(discretised_routes), 1, p=prior_probs)[0]

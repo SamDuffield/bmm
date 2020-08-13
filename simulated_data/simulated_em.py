@@ -23,7 +23,8 @@ timestamps = 15
 
 gen_model = bmm.GammaMapMatchingModel()
 # gen_model.max_speed = 30
-gen_model.zero_dist_prob_neg_exponent = -np.log(0.25) / timestamps
+# gen_model.zero_dist_prob_neg_exponent = -np.log(0.25) / timestamps
+gen_model.distance_params['zero_dist_prob_neg_exponent'] = -np.log(0.25) / timestamps
 gen_model.distance_params['a_speed'] = 1.
 gen_model.distance_params['b_speed'] = 1/15
 gen_model.deviation_beta = 0.05
@@ -80,11 +81,13 @@ for repeat_int in range(num_repeats):
     tune_model.distance_params['a_speed'] = 1.
     tune_model.distance_params_bounds['a_speed'] = (1., 1.)
     tune_model.distance_params['b_speed'] = 0.1
-    tune_model.zero_dist_prob_neg_exponent = -np.log(0.2) / timestamps
+    # tune_model.zero_dist_prob_neg_exponent = -np.log(0.2) / timestamps
+    tune_model.distance_params['zero_dist_prob_neg_exponent'] = -np.log(0.2) / timestamps
     tune_model.deviation_beta = 0.01
     tune_model.gps_sd = 7.
 
     # tune_model.zero_dist_prob_neg_exponent = gen_model.zero_dist_prob_neg_exponent
+    # tune_model.distance_params['zero_dist_prob_neg_exponent'] = gen_model.distance_params['zero_dist_prob_neg_exponent']
     # tune_model.distance_params['a_speed'] = gen_model.distance_params['a_speed']
     # tune_model.distance_params_bounds['a_speed'] = (1., 1.)
     # tune_model.distance_params['b_speed'] = gen_model.distance_params['b_speed']

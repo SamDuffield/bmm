@@ -45,6 +45,7 @@ def offline_em(graph: MultiDiGraph,
     :param n_iter: number of EM iterations
     :param gradient_stepsize_scale: starting stepsize
     :param gradient_stepsize_neg_exp: rate of decay of stepsize, in [0.5, 1]
+    :param **kwargs additional arguments for FFBSi
     :return: dict of optimised parameters
     """
 
@@ -171,19 +172,19 @@ def optimise_hyperparameters(mm_model: MapMatchingModel,
                                               np.concatenate([time_interval_arr] * len(map_matching)))
         sq_obs_dists = np.append(sq_obs_dists, sq_obs_dists_single)
 
-    # Optimise zero dist prob
-    def zero_dist_prob_root_func(neg_exp: float) -> float:
-        return - np.sum(- time_interval_arrs_concat * (distances < 1e-5)
-                        + time_interval_arrs_concat * np.exp(-neg_exp * time_interval_arrs_concat)
-                        / (1 - np.exp(-neg_exp * time_interval_arrs_concat)) * (distances >= 1e-5))
+    # # Optimise zero dist prob
+    # def zero_dist_prob_root_func(neg_exp: float) -> float:
+    #     return - np.sum(- time_interval_arrs_concat * (distances < 1e-5)
+    #                     + time_interval_arrs_concat * np.exp(-neg_exp * time_interval_arrs_concat)
+    #                     / (1 - np.exp(-neg_exp * time_interval_arrs_concat)) * (distances >= 1e-5))
+    #
+    # mm_model.zero_dist_prob_neg_exponent = root_scalar(zero_dist_prob_root_func, bracket=(1e-3, 1e20)).root
+    #
+    # pos_distances = distances[distances > 1e-5]
+    # pos_time_interval_arrs_concat = time_interval_arrs_concat[distances > 1e-5]
 
-    mm_model.zero_dist_prob_neg_exponent = root_scalar(zero_dist_prob_root_func, bracket=(1e-3, 1e20)).root
-
-    print(-np.log(np.mean(distances < 1e-5)) / 15)
-    print(root_scalar(zero_dist_prob_root_func, bracket=(1e-5, 1e20)).root)
-
-    pos_distances = distances[distances > 1e-5]
-    pos_time_interval_arrs_concat = time_interval_arrs_concat[distances > 1e-5]
+    pos_distances = distances
+    pos_time_interval_arrs_concat = time_interval_arrs_concat
 
     bounds = list(mm_model.distance_params_bounds.values())
     bounds = [(a-1e-5, a+1e-5) if a == b else (a, b) for a, b in bounds]
@@ -247,24 +248,31 @@ def gradient_em_step(mm_model: MapMatchingModel,
     # Z, *dZ/dalpha, dZ/dbeta where alpha = distance_params and beta = deviation_beta
     dev_norm_quants = np.concatenate(dev_norm_quants)
 
-    # Optimise zero dist prob
-    def zero_dist_prob_root_func(neg_exp: float) -> float:
-        return - np.sum(- time_interval_arrs_concat * (distances < 1e-5)
-                        + time_interval_arrs_concat * np.exp(-neg_exp * time_interval_arrs_concat)
-                        / (1 - np.exp(-neg_exp * time_interval_arrs_concat)) * (distances >= 1e-5))
+    # # Optimise zero dist prob
+    # def zero_dist_prob_root_func(neg_exp: float) -> float:
+    #     return - np.sum(- time_interval_arrs_concat * (distances < 1e-5)
+    #                     + time_interval_arrs_concat * np.exp(-neg_exp * time_interval_arrs_concat)
+    #                     / (1 - np.exp(-neg_exp * time_interval_arrs_concat)) * (distances >= 1e-5))
+    #
+    # mm_model.zero_dist_prob_neg_exponent = root_scalar(zero_dist_prob_root_func, bracket=(1e-5, 1e20)).root
+    # pos_distances = distances[distances > 1e-5]
+    # pos_time_interval_arrs_concat = time_interval_arrs_concat[distances > 1e-5]
+    # pos_dev_norm_quants = dev_norm_quants[distances > 1e-5]
+    # pos_devs = devs[distances > 1e-5]
 
-    mm_model.zero_dist_prob_neg_exponent = root_scalar(zero_dist_prob_root_func, bracket=(1e-5, 1e20)).root
-    pos_distances = distances[distances > 1e-5]
-    pos_time_interval_arrs_concat = time_interval_arrs_concat[distances > 1e-5]
-    pos_dev_norm_quants = dev_norm_quants[distances > 1e-5]
-    pos_devs = devs[distances > 1e-5]
+    pos_distances = distances
+    pos_time_interval_arrs_concat = time_interval_arrs_concat
+    pos_dev_norm_quants = dev_norm_quants
+    pos_devs = devs
 
-    distance_gradient_evals = (mm_model.distance_prior_gradient(pos_distances, pos_time_interval_arrs_concat)
-                               / mm_model.distance_prior_evaluate(pos_distances, pos_time_interval_arrs_concat)
-                               - pos_dev_norm_quants[:, 1:-1].T / pos_dev_norm_quants[:, 0]).sum(axis=1) \
+    non_zero_inds = pos_dev_norm_quants[:, 0] > 0
+
+    distance_gradient_evals = (mm_model.distance_prior_gradient(pos_distances, pos_time_interval_arrs_concat)[:, non_zero_inds]
+                               / mm_model.distance_prior_evaluate(pos_distances, pos_time_interval_arrs_concat)[non_zero_inds]
+                               - pos_dev_norm_quants[non_zero_inds, 1:-1].T / pos_dev_norm_quants[non_zero_inds, 0]).sum(axis=1) \
                               / n_particles
 
-    deviation_beta_gradient_evals = (-pos_devs - pos_dev_norm_quants[:, -1] / pos_dev_norm_quants[:, 0]).sum() \
+    deviation_beta_gradient_evals = (-pos_devs[non_zero_inds] - pos_dev_norm_quants[non_zero_inds, -1] / pos_dev_norm_quants[non_zero_inds, 0]).sum() \
                                     / n_particles
 
     # Take gradient step in distance params

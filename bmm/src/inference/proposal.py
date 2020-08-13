@@ -223,7 +223,8 @@ def intersection_prior_evaluate(routes: list,
     evals = np.zeros(len(routes))
 
     for i, route in enumerate(routes):
-        evals[i] = mm_model.intersection_prior_evaluate(route)
+        if route is not None:
+            evals[i] = mm_model.intersection_prior_evaluate(route)
     return evals
 
 
@@ -325,13 +326,11 @@ def optimal_proposal(graph: MultiDiGraph,
                   * route_intersection_prior_evals \
                   * deviation_prior_evals
 
-    prior_probs_norm_const = prior_probs[distances > 1e-5].sum()
+    # prior_probs_norm_const = prior_probs[distances > 1e-5].sum()
+    # prior_probs[distances > 1e-5] *= (1 - prior_probs[distances < 1e-5][0]) / prior_probs_norm_const
 
-    prior_probs[distances > 1e-5] *= (1 - prior_probs[distances < 1e-5][0]) / prior_probs_norm_const
-
-    # else:
-    #     prior_probs_norm_const = prior_probs.sum()
-    #     prior_probs /= prior_probs_norm_const
+    prior_probs_norm_const = prior_probs.sum()
+    prior_probs /= prior_probs_norm_const
 
     # Calculate sample probabilities
     sample_probs = prior_probs[likelihood_evals > 0] * likelihood_evals[likelihood_evals > 0]
@@ -359,15 +358,26 @@ def optimal_proposal(graph: MultiDiGraph,
         deviations = np.abs(deviations - discretised_routes[:, -1])
 
         # Z, dz/d alpha, dZ/d beta (alpha is all distance parameters, beta is deviation parameter)
+        # dev_norm_quants = np.array([prior_probs_norm_const,
+        #                             *np.sum(mm_model.distance_prior_gradient(distances[distances > 1e-5], time_interval)
+        #                                     .reshape(2, np.sum(distances > 1e-5))
+        #                                     * route_intersection_prior_evals[distances > 1e-5]
+        #                                     * deviation_prior_evals[distances > 1e-5], axis=-1),
+        #                             -np.sum(deviations[distances > 1e-5]
+        #                                     * distance_prior_evals[distances > 1e-5]
+        #                                     * route_intersection_prior_evals[distances > 1e-5]
+        #                                     * deviation_prior_evals[distances > 1e-5])
+        #                             ])
+
         dev_norm_quants = np.array([prior_probs_norm_const,
-                                    *np.sum(mm_model.distance_prior_gradient(distances[distances > 1e-5], time_interval)
-                                            .reshape(2, np.sum(distances > 1e-5))
-                                            * route_intersection_prior_evals[distances > 1e-5]
-                                            * deviation_prior_evals[distances > 1e-5], axis=-1),
-                                    -np.sum(deviations[distances > 1e-5]
-                                            * distance_prior_evals[distances > 1e-5]
-                                            * route_intersection_prior_evals[distances > 1e-5]
-                                            * deviation_prior_evals[distances > 1e-5])
+                                    *np.sum(mm_model.distance_prior_gradient(distances, time_interval)
+                                            .reshape(len(mm_model.distance_params), len(distances))
+                                            * route_intersection_prior_evals
+                                            * deviation_prior_evals, axis=-1),
+                                    -np.sum(deviations
+                                            * distance_prior_evals
+                                            * route_intersection_prior_evals
+                                            * deviation_prior_evals)
                                     ])
 
         return proposal_out, prop_weight, dev_norm_quants

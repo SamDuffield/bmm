@@ -30,7 +30,7 @@ _, process_data_path = source_data()
 
 graph = load_graph()
 
-run_indicator = 6
+run_indicator = 7
 
 # Load taxi data
 # data_path = data.utils.choose_data()
@@ -48,7 +48,7 @@ save_dir = f'{process_data_path}/simulations/porto/{route_index}/{run_indicator}
 fig_route, ax_route = bmm.plot(graph, polyline=route_polyline)
 
 # Setup
-seed = 1
+seed = 123
 np.random.seed(seed)
 
 # Model parameters
@@ -56,11 +56,12 @@ time_interval = 15
 
 # Inference parameters
 ffbsi_n_samps = int(1e3)
-fl_n_samps = np.array([50, 100, 200])
+# fl_n_samps = np.array([50, 100, 200])
+fl_n_samps = np.array([50, 100])
 lags = np.array([0, 3, 10])
-max_rejections = 20
+max_rejections = 0
 initial_truncation = None
-num_repeats = 20
+num_repeats = 3
 proposal_dict = {'proposal': 'optimal'}
 
 setup_dict = {'seed': seed,
@@ -93,6 +94,10 @@ with open(save_dir + 'proposal_dict', 'w+') as f:
 
 # Setup map-matching model
 mm_model = bmm.GammaMapMatchingModel()
+mm_model.deviation_beta = 0
+mm_model.gps_sd = 7
+mm_model.distance_params['zero_dist_prob_neg_exponent'] = 0.2
+# mm_model.distance_params['b_speed'] =
 # mm_model.gps_sd = gps_sd
 # mm_model.intersection_penalisation = intersection_penalisation
 
@@ -198,7 +203,7 @@ np.save(save_dir + 'fl_pf_tv', fl_pf_tvs)
 np.save(save_dir + 'fl_bsi_tv', fl_bsi_tvs)
 np.save(save_dir + 'fl_pf_times', fl_pf_times)
 np.save(save_dir + 'fl_bsi_times', fl_bsi_times)
-
+#
 # fl_pf_tvs = np.load(save_dir + 'fl_pf_tv.npy', allow_pickle=True)
 # fl_bsi_tvs = np.load(save_dir + 'fl_bsi_tv.npy', allow_pickle=True)
 # fl_pf_times = np.load(save_dir + 'fl_pf_times.npy', allow_pickle=True)

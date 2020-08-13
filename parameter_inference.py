@@ -44,7 +44,8 @@ del raw_data
 
 # Initiate model
 mm_model = bmm.GammaMapMatchingModel()
-mm_model.zero_dist_prob_neg_exponent = -np.log(0.2) / timestamps
+# mm_model.zero_dist_prob_neg_exponent = -np.log(0.2) / timestamps
+mm_model.distance_params['zero_dist_prob_neg_exponent'] = -np.log(0.2) / timestamps
 mm_model.distance_params['a_speed'] = 1.
 mm_model.distance_params_bounds['a_speed'] = (1., 1.)
 mm_model.distance_params['b_speed'] = 0.1
@@ -57,5 +58,6 @@ mm_model.gps_sd = 7.
 
 params_track = bmm.offline_em(graph, mm_model, timestamps, polylines, n_iter=n_iter, max_rejections=0,
                               n_ffbsi=n_particles, initial_d_truncate=50,
-                              gradient_stepsize_scale=1e-5, gradient_stepsize_neg_exp=0.5)
+                              gradient_stepsize_scale=1e-5, gradient_stepsize_neg_exp=0.5,
+                              num_inter_cut_off=10)
 

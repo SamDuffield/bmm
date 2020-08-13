@@ -14,6 +14,7 @@ from bmm.src.inference.resampling import multinomial
 from bmm.src.tools.edges import get_geometry
 from bmm.src.inference.particles import MMParticles
 from bmm.src.inference.model import MapMatchingModel
+from bmm.src.inference.proposal import intersection_prior_evaluate
 
 
 def full_backward_sample(fixed_particle: np.ndarray,
@@ -86,7 +87,9 @@ def full_backward_sample(fixed_particle: np.ndarray,
                                                            time_interval) \
                         * mm_model.deviation_prior_evaluate(new_prev_cart_coords[possible_inds],
                                                             fixed_particle[None, next_time_index, 5:7],
-                                                            smoothing_distances[possible_inds])
+                                                            smoothing_distances[possible_inds]) \
+                        * intersection_prior_evaluate(filter_particles.particles, mm_model)[possible_inds]
+
     smoothing_weights /= smoothing_weights.sum()
 
     sampled_index = np.where(possible_inds)[0][np.random.choice(len(smoothing_weights), 1, p=smoothing_weights)[0]]
