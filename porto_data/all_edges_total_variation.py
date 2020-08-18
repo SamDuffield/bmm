@@ -24,7 +24,7 @@ _, process_data_path = source_data()
 
 graph = load_graph()
 
-run_indicator = 0
+run_indicator = 10
 
 # Load taxi data
 # data_path = data.utils.choose_data()
@@ -138,6 +138,12 @@ np.save(save_dir + 'fl_pf', fl_pf_routes)
 np.save(save_dir + 'fl_bsi', fl_bsi_routes)
 np.save(save_dir + 'ffbsi', ffbsi_routes)
 
+# fl_pf_routes = np.load(save_dir + 'fl_pf.npy', allow_pickle=True)
+# fl_bsi_routes = np.load(save_dir + 'fl_bsi.npy', allow_pickle=True)
+# ffbsi_routes = np.load(save_dir + 'ffbsi.npy', allow_pickle=True)
+# with open(save_dir + 'setup_dict') as f:
+#     setup_dict = json.load(f)
+
 fl_pf_tvs = np.empty(fl_pf_routes.shape)
 fl_bsi_tvs = np.empty_like(fl_pf_tvs)
 for i in range(len(route_polylines)):
@@ -156,10 +162,12 @@ np.save(save_dir + 'fl_bsi_tv', fl_bsi_tvs)
 # fl_bsi_tvs = np.load(save_dir + 'fl_bsi_tv.npy', allow_pickle=True)
 
 
-def plot_conv_tv(tv_mat, leg=False):
+def plot_conv_tv(tv_mat, mins=None, maxs=None, leg=False):
     fig, ax = plt.subplots()
     for i in range(tv_mat.shape[1]):
-        ax.plot(fl_n_samps, tv_mat[:, i], label=f'Lag: {lags[i]}')
+        line, = ax.plot(fl_n_samps, tv_mat[:, i], label=f'Lag: {lags[i]}', zorder=2)
+        if maxs is not None and mins is not None:
+            ax.fill_between(fl_n_samps, mins[:, i], maxs[:, i], color=line.get_color(), alpha=0.2, zorder=1)
 
     plt.tight_layout()
     if leg:
@@ -167,8 +175,12 @@ def plot_conv_tv(tv_mat, leg=False):
     return fig, ax
 
 
-fig_pf, ax_pf = plot_conv_tv(np.mean(fl_pf_tvs, axis=(0, 1)))
-plt.savefig(save_dir + 'pf_comp.png', dpi=400)
-fig_bsi, ax_bsi = plot_conv_tv(np.mean(fl_bsi_tvs, axis=(0, 1)), leg=True)
-plt.savefig(save_dir + 'bsi_comp.png', dpi=400)
+fig_pf, ax_pf = plot_conv_tv(np.mean(fl_pf_tvs, axis=(0, 1)),
+                             np.min(fl_pf_tvs, axis=(0, 1)),
+                             np.max(fl_pf_tvs, axis=(0, 1)))
+plt.savefig(save_dir + 'pf_comp_err.png', dpi=400)
+fig_bsi, ax_bsi = plot_conv_tv(np.mean(fl_bsi_tvs, axis=(0, 1)),
+                               np.min(fl_bsi_tvs, axis=(0, 1)),
+                               np.max(fl_bsi_tvs, axis=(0, 1)), leg=True)
+plt.savefig(save_dir + 'bsi_comp_err.png', dpi=400)
 

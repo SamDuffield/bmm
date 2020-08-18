@@ -30,7 +30,7 @@ _, process_data_path = source_data()
 
 graph = load_graph()
 
-run_indicator = 7
+run_indicator = 8
 
 # Load taxi data
 # data_path = data.utils.choose_data()
@@ -44,11 +44,8 @@ route_polyline = np.asarray(raw_data['POLYLINE_UTM'][route_index])
 # Save directory
 save_dir = f'{process_data_path}/simulations/porto/{route_index}/{run_indicator}/'
 
-# Plot route
-fig_route, ax_route = bmm.plot(graph, polyline=route_polyline)
-
 # Setup
-seed = 123
+seed = 0
 np.random.seed(seed)
 
 # Model parameters
@@ -56,13 +53,13 @@ time_interval = 15
 
 # Inference parameters
 ffbsi_n_samps = int(1e3)
-# fl_n_samps = np.array([50, 100, 200])
-fl_n_samps = np.array([50, 100])
+fl_n_samps = np.array([50, 100, 200])
 lags = np.array([0, 3, 10])
-max_rejections = 0
+max_rejections = 20
 initial_truncation = None
-num_repeats = 3
-proposal_dict = {'proposal': 'optimal'}
+num_repeats = 20
+proposal_dict = {'proposal': 'optimal',
+                 'num_inter_cut_off': 10}
 
 setup_dict = {'seed': seed,
               'time_interval': time_interval,
@@ -81,9 +78,6 @@ print(setup_dict)
 if not os.path.exists(save_dir):
     os.makedirs(save_dir)
 
-# Save route figure
-fig_route.savefig(save_dir + 'route.png', dpi=350)
-
 # Save simulation parameters
 with open(save_dir + 'setup_dict', 'w+') as f:
     json.dump(setup_dict, f)
@@ -94,12 +88,11 @@ with open(save_dir + 'proposal_dict', 'w+') as f:
 
 # Setup map-matching model
 mm_model = bmm.GammaMapMatchingModel()
-mm_model.deviation_beta = 0
-mm_model.gps_sd = 7
-mm_model.distance_params['zero_dist_prob_neg_exponent'] = 0.2
-# mm_model.distance_params['b_speed'] =
-# mm_model.gps_sd = gps_sd
-# mm_model.intersection_penalisation = intersection_penalisation
+mm_model.distance_params['zero_dist_prob_neg_exponent'] = -np.log(0.155) / 15
+mm_model.distance_params['a_speed'] = 1.
+mm_model.distance_params['b_speed'] = 0.095
+mm_model.deviation_beta = 0.04
+mm_model.gps_sd = 6.
 
 # Run FFBSi
 ffbsi_route = bmm.offline_map_match(graph,
@@ -143,20 +136,20 @@ for i in range(num_repeats):
                 fl_bsi_routes[i, j, k] = fl_pf_routes[i, j, k].copy()
                 print(f'FL BSi {i} {j} {k}:', fl_bsi_routes[i, j, k].time)
             else:
-                # try:
-                fl_bsi_routes[i, j, k] = bmm._offline_map_match_fl(graph,
-                                                                   route_polyline,
-                                                                   n,
-                                                                   timestamps=time_interval,
-                                                                   mm_model=mm_model,
-                                                                   lag=lag,
-                                                                   update='BSi',
-                                                                   max_rejections=max_rejections,
-                                                                   initial_d_truncate=initial_truncation,
-                                                                   **proposal_dict)
-                print(f'FL BSi {i} {j} {k}:', fl_bsi_routes[i, j, k].time)
-                # except:
-                #     n_bsi_failures += 1
+                try:
+                    fl_bsi_routes[i, j, k] = bmm._offline_map_match_fl(graph,
+                                                                       route_polyline,
+                                                                       n,
+                                                                       timestamps=time_interval,
+                                                                       mm_model=mm_model,
+                                                                       lag=lag,
+                                                                       update='BSi',
+                                                                       max_rejections=max_rejections,
+                                                                       initial_d_truncate=initial_truncation,
+                                                                       **proposal_dict)
+                    print(f'FL BSi {i} {j} {k}:', fl_bsi_routes[i, j, k].time)
+                except:
+                    n_bsi_failures += 1
                 print(f'FL BSi failures: {n_bsi_failures}')
 
                 clear_cache()
@@ -184,6 +177,8 @@ fl_bsi_tvs = np.empty_like(fl_pf_tvs)
 fl_pf_times = np.empty((setup_dict['num_repeats'], len(setup_dict['fl_n_samps']), len(setup_dict['lags'])))
 fl_bsi_times = np.empty_like(fl_pf_times)
 
+inc_alpha = True
+
 # Calculate TV distances from FFBSi
 for i in range(setup_dict['num_repeats']):
     for j, n in enumerate(setup_dict['fl_n_samps']):
@@ -191,12 +186,14 @@ for i in range(setup_dict['num_repeats']):
             print(i, j, k)
             fl_pf_tvs[i, j, k] = each_edge_route_total_variation(ffbsi_route.particles,
                                                                  fl_pf_routes[i, j, k].particles,
-                                                                 observation_times)
+                                                                 observation_times,
+                                                                 include_alpha=inc_alpha)
             fl_pf_times[i, j, k] = fl_pf_routes[i, j, k].time
 
             fl_bsi_tvs[i, j, k] = each_edge_route_total_variation(ffbsi_route.particles,
                                                                   fl_bsi_routes[i, j, k].particles,
-                                                                  observation_times)
+                                                                  observation_times,
+                                                                  include_alpha=inc_alpha)
             fl_bsi_times[i, j, k] = fl_bsi_routes[i, j, k].time
 
 np.save(save_dir + 'fl_pf_tv', fl_pf_tvs)

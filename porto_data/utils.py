@@ -99,6 +99,13 @@ def append_zeros(list_arr, max_len):
             list_arr[i] = np.append(path, np.zeros(max_len - len(path)))
     return list_arr
 
+def append_zeros_2d(list_arr, max_len):
+    for i in range(len(list_arr)):
+        path = list_arr[i]
+        if len(path) < max_len:
+            list_arr[i] = np.append(path, np.zeros((max_len - len(path), path.shape[1])), axis=0)
+    return list_arr
+
 
 def all_edges_total_variation(particles_one,
                               particles_two):

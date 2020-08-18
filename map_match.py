@@ -2,7 +2,7 @@
 # Module: map_match.py
 # Description: Script that loads graph and polyline before running map-matching algorithm.
 #
-# Web: https://github.com/SamDuffield/bayesian-traffic
+# Web: https://github.com/SamDuffield/bmm
 ########################################################################################################################
 
 import numpy as np
@@ -42,54 +42,33 @@ poly_single = np.asarray(poly_single_list)
 print(single_index)
 
 # Number of particles
-n_samps = 100
+n_samps = 200
 
 polyline_truncation = None
 
-max_rejects = 0
+max_rejects = 20
 
 # Run offline map-matching
-# particles = _offline_map_match_fl(graph, poly_single[:polyline_truncation], n_samps, timestamps=15,
-#                                   lag=10,
-#                                   d_refine=1,
-#                                   max_rejections=max_rejects,
-#                                   update='PF',
-#                                   proposal='optimal')
-
 # particles = _offline_map_match_fl(graph, poly_single[:polyline_truncation], n_samps, timestamps=15,
 #                                   lag=3,
 #                                   d_refine=1,
 #                                   max_rejections=max_rejects,
-#                                   proposal='optimal',
-#                                   update='BSi'
-#                                   # dist_expand=50,
-#                                   # var=5
-#                                   )
+#                                   update='PF')
+
+particles = _offline_map_match_fl(graph, poly_single[:polyline_truncation], n_samps, timestamps=15,
+                                  lag=3,
+                                  d_refine=1,
+                                  max_rejections=max_rejects,
+                                  update='BSi')
 
 # particles = offline_map_match(graph, poly_single[:polyline_truncation], n_samps, timestamps=15,
 #                               d_refine=1,
 #                               max_rejections=max_rejects,
-#                               proposal='dist_then_edge',
-#                               ess_threshold=0.5,
-#                               var=5)
-
-# particles = offline_map_match(graph, poly_single[:polyline_truncation], n_samps, timestamps=15,
-#                               d_refine=1,
-#                               max_rejections=max_rejects,
-#                               proposal='aux_dist',
-#                               ess_threshold=0.5,
-#                               dist_expand=50,
-#                               var=5)
-
-particles = offline_map_match(graph, poly_single[:polyline_truncation], n_samps, timestamps=15,
-                              d_refine=1,
-                              max_rejections=max_rejects,
-                              proposal='optimal',
-                              ess_threshold=0.5)
+#                               ess_threshold=0.5)
 
 print(particles.time)
 print(particles.time / len(poly_single))
 
-# # Plot
-plot(graph, particles, poly_single)
-plt.show()
+# Plot
+# plot(graph, particles, poly_single)
+# plt.show()

@@ -18,9 +18,7 @@ from bmm.src.inference.particles import MMParticles
 from bmm.src.inference.model import MapMatchingModel, GammaMapMatchingModel
 from bmm.src.inference.smc import get_time_interval_array
 from bmm.src.tools.edges import observation_time_rows
-from bmm.src.inference.proposal import optimal_proposal, auxiliary_distance_proposal, dist_then_edge_proposal
-from bmm.src.inference.backward import backward_simulate
-from bmm.src.inference.smc import initiate_particles
+from bmm.src.inference.smc import offline_map_match
 
 
 def offline_em(graph: MultiDiGraph,
@@ -70,12 +68,13 @@ def offline_em(graph: MultiDiGraph,
 
     for k in range(n_iter):
         # Run FFBSi over all given polylines with latest hyperparameters
-        map_matchings = [offline_map_match_dev_quants(graph,
-                                                      polyline,
-                                                      n_ffbsi,
-                                                      time_ints_single,
-                                                      mm_model,
-                                                      **kwargs)
+        map_matchings = [offline_map_match(graph,
+                                           polyline,
+                                           n_ffbsi,
+                                           time_ints_single,
+                                           mm_model,
+                                           store_norm_quants=not no_deviation_prior,
+                                           ** kwargs)
                          for time_ints_single, polyline in zip(time_interval_arrs, polylines)]
 
         if no_deviation_prior:
@@ -187,7 +186,7 @@ def optimise_hyperparameters(mm_model: MapMatchingModel,
     pos_time_interval_arrs_concat = time_interval_arrs_concat
 
     bounds = list(mm_model.distance_params_bounds.values())
-    bounds = [(a-1e-5, a+1e-5) if a == b else (a, b) for a, b in bounds]
+    bounds = [(a - 1e-5, a + 1e-5) if a == b else (a, b) for a, b in bounds]
 
     # Optimise distance params
     def distance_minim_func(distance_params_vals: np.ndarray) -> float:
@@ -267,12 +266,16 @@ def gradient_em_step(mm_model: MapMatchingModel,
 
     non_zero_inds = pos_dev_norm_quants[:, 0] > 0
 
-    distance_gradient_evals = (mm_model.distance_prior_gradient(pos_distances, pos_time_interval_arrs_concat)[:, non_zero_inds]
-                               / mm_model.distance_prior_evaluate(pos_distances, pos_time_interval_arrs_concat)[non_zero_inds]
-                               - pos_dev_norm_quants[non_zero_inds, 1:-1].T / pos_dev_norm_quants[non_zero_inds, 0]).sum(axis=1) \
+    distance_gradient_evals = (mm_model.distance_prior_gradient(pos_distances, pos_time_interval_arrs_concat)[:,
+                               non_zero_inds]
+                               / mm_model.distance_prior_evaluate(pos_distances, pos_time_interval_arrs_concat)[
+                                   non_zero_inds]
+                               - pos_dev_norm_quants[non_zero_inds, 1:-1].T / pos_dev_norm_quants[
+                                   non_zero_inds, 0]).sum(axis=1) \
                               / n_particles
 
-    deviation_beta_gradient_evals = (-pos_devs[non_zero_inds] - pos_dev_norm_quants[non_zero_inds, -1] / pos_dev_norm_quants[non_zero_inds, 0]).sum() \
+    deviation_beta_gradient_evals = (-pos_devs[non_zero_inds] - pos_dev_norm_quants[non_zero_inds, -1] /
+                                     pos_dev_norm_quants[non_zero_inds, 0]).sum() \
                                     / n_particles
 
     # Take gradient step in distance params
@@ -291,7 +294,6 @@ def gradient_em_step(mm_model: MapMatchingModel,
     mm_model.gps_sd = min(max(np.sqrt(sq_obs_dists.mean() / 2),
                               mm_model.gps_sd_bounds[0]),
                           mm_model.gps_sd_bounds[1])
-
 
 #
 #
@@ -381,135 +383,131 @@ def gradient_em_step(mm_model: MapMatchingModel,
 #
 #
 
-
-def offline_map_match_dev_quants(graph: MultiDiGraph,
-                                 polyline: np.ndarray,
-                                 n_samps: int,
-                                 timestamps: Union[float, np.ndarray],
-                                 mm_model: MapMatchingModel = GammaMapMatchingModel(),
-                                 proposal: str = 'optimal',
-                                 d_refine: int = 1,
-                                 initial_d_truncate: float = None,
-                                 max_rejections: int = 20,
-                                 ess_threshold: float = 1,
-                                 **kwargs) -> MMParticles:
-    """
-    Runs offline map-matching. I.e. receives a full polyline and returns an equal probability collection
-    of trajectories.
-    Additionally stores prior/transition density normalising quantities for each filter particle
-    Forward-filtering backward-simulation implementation - no fixed-lag approximation needed for offline inference.
-    :param graph: encodes road network, simplified and projected to UTM
-    :param polyline: series of cartesian coordinates in UTM
-    :param n_samps: int
-        number of particles
-    :param timestamps: seconds
-        either float if all times between observations are the same, or a series of timestamps in seconds/UNIX timestamp
-    :param mm_model: MapMatchingModel
-    :param proposal: either 'optimal' or 'aux_dist'
-        defaults to optimal (discretised) proposal
-    :param d_refine: metres, resolution of distance discretisation
-    :param initial_d_truncate: distance beyond which to assume zero likelihood probability at time zero
-        defaults to 5 * mm_model.gps_sd
-    :param max_rejections: number of rejections to attempt before doing full fixed-lag stitching
-        0 will do full fixed-lag stitching and track ess_stitch
-    :param ess_threshold: in [0,1], particle filter resamples if ess < ess_threshold * n_samps
-    :param kwargs: optional parameters to pass to proposal
-        i.e. d_max, d_refine or var
-        as well as ess_threshold for backward simulation update
-    :return: MMParticles object
-    """
-    if proposal == 'optimal':
-        proposal_func = optimal_proposal
-    elif proposal == 'aux_dist':
-        proposal_func = auxiliary_distance_proposal
-    elif proposal == 'dist_then_edge':
-        proposal_func = dist_then_edge_proposal
-    else:
-        raise ValueError("Proposal " + str(proposal) + "not recognised, see bmm.proposals for valid options")
-
-    num_obs = len(polyline)
-
-    ess_all = max_rejections == 0
-
-    start = tm()
-
-    filter_particles = [None] * num_obs
-    filter_weights = np.zeros((num_obs, n_samps))
-
-    # Initiate filter_particles
-    filter_particles[0] = initiate_particles(graph, polyline[0], n_samps, mm_model=mm_model,
-                                             d_refine=d_refine, d_truncate=initial_d_truncate,
-                                             ess_all=ess_all)
-    filter_weights[0] = 1 / n_samps
-    live_weights = filter_weights[0].copy()
-
-    ess_pf = np.zeros(num_obs)
-    ess_pf[0] = n_samps
-
-    print("0 PF ESS: " + str(ess_pf[0]))
-
-    if 'd_refine' in inspect.getfullargspec(proposal_func)[0]:
-        kwargs['d_refine'] = d_refine
-
-    time_interval_arr = get_time_interval_array(timestamps, num_obs)
-
-    dev_norm_quants = np.zeros((num_obs - 1, n_samps, len(mm_model.distance_params) + 2))
-
-    # Forward filtering, storing x_t-1, x_t ~ p(x_t-1:t|y_t)
-    for i in range(num_obs - 1):
-        if ess_pf[i] < ess_threshold * n_samps:
-            # live_particles = multinomial(filter_particles[i], live_weights)
-            resample_inds = np.random.choice(n_samps, n_samps, replace=True, p=live_weights)
-            live_particles = filter_particles[i].copy()
-            live_particles.particles = [live_particles.particles[ind].copy() for ind in resample_inds]
-            live_weights = np.ones(n_samps) / n_samps
-            not_prop_inds = np.arange(n_samps)[~np.isin(np.arange(n_samps), resample_inds)]
-
-        else:
-            resample_inds = np.arange(n_samps)
-            live_particles = filter_particles[i]
-            not_prop_inds = []
-
-        temp_weights = np.zeros(n_samps)
-        filter_particles[i + 1] = live_particles.copy()
-        for j in range(n_samps):
-            prop_output = proposal_func(graph, live_particles[j], polyline[i + 1],
-                                        time_interval_arr[i],
-                                        mm_model,
-                                        full_smoothing=False,
-                                        store_dev_norm_quants=True,
-                                        **kwargs)
-
-            filter_particles[i + 1][j], temp_weights[j], dev_norm_quants[i, resample_inds[j]] = prop_output
-
-        for k in not_prop_inds:
-            if filter_particles[i][k] is not None:
-                prop_output = proposal_func(graph, filter_particles[i][k].copy(), polyline[i + 1],
-                                            time_interval_arr[i],
-                                            mm_model,
-                                            full_smoothing=False,
-                                            store_dev_norm_quants=True,
-                                            **kwargs)
-
-                _, _, dev_norm_quants[i, k] = prop_output
-
-        temp_weights *= live_weights
-        temp_weights /= np.sum(temp_weights)
-        filter_weights[i + 1] = temp_weights.copy()
-        live_weights = temp_weights.copy()
-        ess_pf[i + 1] = 1 / np.sum(temp_weights ** 2)
-
-        print(str(filter_particles[i + 1].latest_observation_time) + " PF ESS: " + str(ess_pf[i + 1]))
-
-    # Backward simulation
-    out_particles = backward_simulate(graph,
-                                      filter_particles, filter_weights,
-                                      time_interval_arr,
-                                      mm_model,
-                                      max_rejections,
-                                      verbose=True,
-                                      dev_norm_quants=dev_norm_quants)
-
-    end = tm()
-    out_particles.time = end - start
-    return out_particles
+#
+# def offline_map_match_dev_quants(graph: MultiDiGraph,
+#                                  polyline: np.ndarray,
+#                                  n_samps: int,
+#                                  timestamps: Union[float, np.ndarray],
+#                                  mm_model: MapMatchingModel = GammaMapMatchingModel(),
+#                                  proposal: str = 'optimal',
+#                                  d_refine: int = 1,
+#                                  initial_d_truncate: float = None,
+#                                  max_rejections: int = 20,
+#                                  ess_threshold: float = 1,
+#                                  **kwargs) -> MMParticles:
+#     """
+#     Runs offline map-matching. I.e. receives a full polyline and returns an equal probability collection
+#     of trajectories.
+#     Additionally stores prior/transition density normalising quantities for each filter particle
+#     Forward-filtering backward-simulation implementation - no fixed-lag approximation needed for offline inference.
+#     :param graph: encodes road network, simplified and projected to UTM
+#     :param polyline: series of cartesian coordinates in UTM
+#     :param n_samps: int
+#         number of particles
+#     :param timestamps: seconds
+#         either float if all times between observations are the same, or a series of timestamps in seconds/UNIX timestamp
+#     :param mm_model: MapMatchingModel
+#     :param proposal: either 'optimal' or 'aux_dist'
+#         defaults to optimal (discretised) proposal
+#     :param d_refine: metres, resolution of distance discretisation
+#     :param initial_d_truncate: distance beyond which to assume zero likelihood probability at time zero
+#         defaults to 5 * mm_model.gps_sd
+#     :param max_rejections: number of rejections to attempt before doing full fixed-lag stitching
+#         0 will do full fixed-lag stitching and track ess_stitch
+#     :param ess_threshold: in [0,1], particle filter resamples if ess < ess_threshold * n_samps
+#     :param kwargs: optional parameters to pass to proposal
+#         i.e. d_max, d_refine or var
+#         as well as ess_threshold for backward simulation update
+#     :return: MMParticles object
+#     """
+#     if proposal == 'optimal':
+#         proposal_func = optimal_proposal
+#     else:
+#         raise ValueError("Proposal " + str(proposal) + "not recognised, see bmm.proposals for valid options")
+#
+#     num_obs = len(polyline)
+#
+#     ess_all = max_rejections == 0
+#
+#     start = tm()
+#
+#     filter_particles = [None] * num_obs
+#     filter_weights = np.zeros((num_obs, n_samps))
+#
+#     # Initiate filter_particles
+#     filter_particles[0] = initiate_particles(graph, polyline[0], n_samps, mm_model=mm_model,
+#                                              d_refine=d_refine, d_truncate=initial_d_truncate,
+#                                              ess_all=ess_all)
+#     filter_weights[0] = 1 / n_samps
+#     live_weights = filter_weights[0].copy()
+#
+#     ess_pf = np.zeros(num_obs)
+#     ess_pf[0] = n_samps
+#
+#     print("0 PF ESS: " + str(ess_pf[0]))
+#
+#     if 'd_refine' in inspect.getfullargspec(proposal_func)[0]:
+#         kwargs['d_refine'] = d_refine
+#
+#     time_interval_arr = get_time_interval_array(timestamps, num_obs)
+#
+#     dev_norm_quants = np.zeros((num_obs - 1, n_samps, len(mm_model.distance_params) + 2))
+#
+#     # Forward filtering, storing x_t-1, x_t ~ p(x_t-1:t|y_t)
+#     for i in range(num_obs - 1):
+#         if ess_pf[i] < ess_threshold * n_samps:
+#             # live_particles = multinomial(filter_particles[i], live_weights)
+#             resample_inds = np.random.choice(n_samps, n_samps, replace=True, p=live_weights)
+#             live_particles = filter_particles[i].copy()
+#             live_particles.particles = [live_particles.particles[ind].copy() for ind in resample_inds]
+#             live_weights = np.ones(n_samps) / n_samps
+#             not_prop_inds = np.arange(n_samps)[~np.isin(np.arange(n_samps), resample_inds)]
+#
+#         else:
+#             resample_inds = np.arange(n_samps)
+#             live_particles = filter_particles[i]
+#             not_prop_inds = []
+#
+#         temp_weights = np.zeros(n_samps)
+#         filter_particles[i + 1] = live_particles.copy()
+#         for j in range(n_samps):
+#             prop_output = proposal_func(graph, live_particles[j], polyline[i + 1],
+#                                         time_interval_arr[i],
+#                                         mm_model,
+#                                         full_smoothing=False,
+#                                         store_norm_quants=True,
+#                                         **kwargs)
+#
+#             filter_particles[i + 1][j], temp_weights[j], dev_norm_quants[i, resample_inds[j]] = prop_output
+#
+#         for k in not_prop_inds:
+#             if filter_particles[i][k] is not None:
+#                 prop_output = proposal_func(graph, filter_particles[i][k].copy(), polyline[i + 1],
+#                                             time_interval_arr[i],
+#                                             mm_model,
+#                                             full_smoothing=False,
+#                                             store_norm_quants=True,
+#                                             **kwargs)
+#
+#                 _, _, dev_norm_quants[i, k] = prop_output
+#
+#         temp_weights *= live_weights
+#         temp_weights /= np.sum(temp_weights)
+#         filter_weights[i + 1] = temp_weights.copy()
+#         live_weights = temp_weights.copy()
+#         ess_pf[i + 1] = 1 / np.sum(temp_weights ** 2)
+#
+#         print(str(filter_particles[i + 1].latest_observation_time) + " PF ESS: " + str(ess_pf[i + 1]))
+#
+#     # Backward simulation
+#     out_particles = backward_simulate(graph,
+#                                       filter_particles, filter_weights,
+#                                       time_interval_arr,
+#                                       mm_model,
+#                                       max_rejections,
+#                                       verbose=True,
+#                                       dev_norm_quants=dev_norm_quants)
+#
+#     end = tm()
+#     out_particles.time = end - start
+#     return out_particles

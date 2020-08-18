@@ -7,14 +7,14 @@
 
 from time import time as tm
 import inspect
-from typing import Callable, Union
+from typing import Callable, Union, Tuple
 
 import numpy as np
 from networkx.classes import MultiDiGraph
 
 import bmm.src.tools.edges
 from bmm.src.inference.particles import MMParticles
-from bmm.src.inference.proposal import optimal_proposal, auxiliary_distance_proposal, dist_then_edge_proposal
+from bmm.src.inference.proposal import optimal_proposal
 from bmm.src.inference.resampling import fixed_lag_stitching, multinomial, fixed_lag_stitch_post_split
 from bmm.src.inference.backward import backward_simulate
 from bmm.src.inference.model import MapMatchingModel, GammaMapMatchingModel
@@ -32,10 +32,6 @@ def get_proposal(proposal_str: str) -> Callable:
     """
     if proposal_str == 'optimal':
         proposal_func = optimal_proposal
-    elif proposal_str == 'aux_dist':
-        proposal_func = auxiliary_distance_proposal
-    elif proposal_str == 'dist_then_edge':
-        proposal_func = dist_then_edge_proposal
     else:
         raise ValueError(f"Proposal {proposal_str} not recognised, see bmm.proposals for valid options")
 
@@ -152,22 +148,29 @@ def update_particles_flpf(graph: MultiDiGraph,
     """
     start = tm()
 
-    # Initiate particle output
-    out_particles = particles.copy()
-
-    # Initiate weight output
-    weights = np.zeros(particles.n)
-
     # Propose and weight for each particle
-    for j in range(particles.n):
-        out_particles[j], weights[j] = proposal_func(graph, out_particles[j], new_observation,
-                                                     time_interval, mm_model, full_smoothing=True, **kwargs)
+    out_particles, weights, new_norm_constants = propose_particles(proposal_func,
+                                                                   None,
+                                                                   graph,
+                                                                   particles,
+                                                                   new_observation,
+                                                                   time_interval,
+                                                                   mm_model,
+                                                                   full_smoothing=True,
+                                                                   store_norm_quants=False,
+                                                                   **kwargs)
 
     # Normalise weights
     weights /= sum(weights)
 
     if np.any(np.isnan(weights)):
         raise ZeroDivisionError('Map-matching failed (all weights zero)')
+
+    # Store norm constants
+    if hasattr(out_particles, 'prior_norm'):
+        out_particles.prior_norm = np.vstack([out_particles.prior_norm, new_norm_constants])
+    else:
+        out_particles.prior_norm = new_norm_constants[None]
 
     # Store ESS
     out_particles.ess_pf = np.append(out_particles.ess_pf, 1 / np.sum(weights ** 2))
@@ -214,6 +217,8 @@ def update_particles_flbs(graph: MultiDiGraph,
     """
     start = tm()
 
+    filter_particles = particles.filter_particles
+
     # Extract basic quantities
     n = particles.n
     observation_times = np.append(particles.observation_times, particles.observation_times[-1] + time_interval)
@@ -223,22 +228,22 @@ def update_particles_flbs(graph: MultiDiGraph,
     # Initiate particle output
     out_particles = particles.copy()
 
-    # Initiate weight output
-    weights = np.zeros(n)
-
-    # Initiate new filter particles
-    latest_filter_particles = out_particles.filter_particles[-1].copy()
-
     # Which particles to propose from (out_particles have been resampled, filter_particles haven't)
     previous_resample = particles.ess_pf[-1] < ess_threshold * n
-    base_particles = out_particles if previous_resample else out_particles.filter_particles[-1]
+    base_particles = out_particles if previous_resample else particles.filter_particles[-1].copy()
 
-    # Propose and weight for each particle
-    for j in range(n):
-        latest_filter_particles[j], weights[j] = proposal_func(graph, base_particles[j], new_observation,
-                                                               time_interval, mm_model,
-                                                               full_smoothing=False,
-                                                               **kwargs)
+    latest_filter_particles, weights, temp_prior_norm = propose_particles(proposal_func,
+                                                                          None,
+                                                                          graph,
+                                                                          base_particles,
+                                                                          new_observation,
+                                                                          time_interval,
+                                                                          mm_model,
+                                                                          full_smoothing=False,
+                                                                          store_norm_quants=False,
+                                                                          **kwargs)
+
+    filter_particles[-1].prior_norm = temp_prior_norm
 
     # Update weights if not resampled
     if not previous_resample:
@@ -249,7 +254,7 @@ def update_particles_flbs(graph: MultiDiGraph,
 
     # Append new filter particles and weights, discard old ones
     start_point = 1 if stitching_required else 0
-    out_particles.filter_particles = out_particles.filter_particles[start_point:] + [latest_filter_particles]
+    filter_particles = particles.filter_particles[start_point:] + [latest_filter_particles]
     out_particles.filter_weights = np.append(out_particles.filter_weights[start_point:], weights[np.newaxis], axis=0)
 
     # Store ESS
@@ -260,12 +265,15 @@ def update_particles_flbs(graph: MultiDiGraph,
 
     # Run backward simulation
     backward_particles = backward_simulate(graph,
-                                           out_particles.filter_particles,
+                                           filter_particles,
                                            out_particles.filter_weights,
                                            out_particles.time_intervals[-lag:] if lag != 0 else [],
                                            mm_model,
                                            max_rejections,
-                                           store_ess_back=False)
+                                           store_ess_back=False,
+                                           store_norm_quants=True)
+    backward_particles.prior_norm = backward_particles.dev_norm_quants[0]
+    del backward_particles.dev_norm_quants
 
     if stitching_required:
         # Largest time not to be resampled
@@ -289,6 +297,8 @@ def update_particles_flbs(graph: MultiDiGraph,
 
     else:
         out_particles.particles = backward_particles.particles
+
+    out_particles.filter_particles = filter_particles
 
     end = tm()
     out_particles.time += end - start
@@ -330,7 +340,7 @@ def update_particles(graph: MultiDiGraph,
 
     proposal_func = get_proposal(proposal)
 
-    if update == 'PF':
+    if update == 'PF' or lag == 0:
         return update_particles_flpf(graph,
                                      particles,
                                      new_observation,
@@ -370,7 +380,7 @@ def _offline_map_match_fl(graph: MultiDiGraph,
     Runs offline map-matching but uses online fixed-lag techniques.
     Only recommended for simulation purposes.
     :param graph: encodes road network, simplified and projected to UTM
-    :param polyline: series of cartesian cooridnates in UTM
+    :param polyline: series of cartesian coordinates in UTM
     :param n_samps: int
         number of particles
     :param timestamps: seconds
@@ -412,7 +422,7 @@ def _offline_map_match_fl(graph: MultiDiGraph,
 
     time_interval_arr = get_time_interval_array(timestamps, num_obs)
 
-    if update == 'PF':
+    if update == 'PF' or lag == 0:
         update_func = update_particles_flpf
     elif update == 'BSi':
         update_func = update_particles_flbs
@@ -440,6 +450,7 @@ def offline_map_match(graph: MultiDiGraph,
                       initial_d_truncate: float = None,
                       max_rejections: int = 20,
                       ess_threshold: float = 1,
+                      store_norm_quants: bool = False,
                       **kwargs) -> MMParticles:
     """
     Runs offline map-matching. I.e. receives a full polyline and returns an equal probability collection
@@ -460,19 +471,13 @@ def offline_map_match(graph: MultiDiGraph,
     :param max_rejections: number of rejections to attempt before doing full fixed-lag stitching
         0 will do full fixed-lag stitching and track ess_stitch
     :param ess_threshold: in [0,1], particle filter resamples if ess < ess_threshold * n_samps
+    :param store_norm_quants: if True normalisation quanitities (including gradient evals) returned in out_particles
     :param kwargs: optional parameters to pass to proposal
         i.e. d_max, d_refine or var
         as well as ess_threshold for backward simulation update
     :return: MMParticles object
     """
-    if proposal == 'optimal':
-        proposal_func = optimal_proposal
-    elif proposal == 'aux_dist':
-        proposal_func = auxiliary_distance_proposal
-    elif proposal == 'dist_then_edge':
-        proposal_func = dist_then_edge_proposal
-    else:
-        raise ValueError("Proposal " + str(proposal) + "not recognised, see bmm.proposals for valid options")
+    proposal_func = get_proposal(proposal)
 
     num_obs = len(polyline)
 
@@ -502,22 +507,21 @@ def offline_map_match(graph: MultiDiGraph,
 
     # Forward filtering, storing x_t-1, x_t ~ p(x_t-1:t|y_t)
     for i in range(num_obs - 1):
-        if ess_pf[i] < ess_threshold * n_samps:
-            live_particles = multinomial(filter_particles[i], live_weights)
-            live_weights = np.ones(n_samps) / n_samps
-        else:
-            live_particles = filter_particles[i]
+        resample = ess_pf[i] < ess_threshold * n_samps
+        filter_particles[i + 1], temp_weights, temp_prior_norm = propose_particles(proposal_func,
+                                                                                   live_weights if resample else None,
+                                                                                   graph,
+                                                                                   filter_particles[i],
+                                                                                   polyline[i + 1],
+                                                                                   time_interval_arr[i],
+                                                                                   mm_model,
+                                                                                   full_smoothing=False,
+                                                                                   store_norm_quants=store_norm_quants,
+                                                                                   **kwargs)
 
-        temp_weights = np.zeros(n_samps)
-        filter_particles[i + 1] = live_particles.copy()
-        for j in range(n_samps):
-            filter_particles[i + 1][j], temp_weights[j] = proposal_func(graph, live_particles[j], polyline[i + 1],
-                                                                        time_interval_arr[i],
-                                                                        mm_model,
-                                                                        full_smoothing=False,
-                                                                        **kwargs)
-
-        temp_weights *= live_weights
+        filter_particles[i].prior_norm = temp_prior_norm
+        if not resample:
+            temp_weights *= live_weights
         temp_weights /= np.sum(temp_weights)
         filter_weights[i + 1] = temp_weights.copy()
         live_weights = temp_weights.copy()
@@ -527,12 +531,79 @@ def offline_map_match(graph: MultiDiGraph,
 
     # Backward simulation
     out_particles = backward_simulate(graph,
-                                      filter_particles, filter_weights,
+                                      filter_particles,
+                                      filter_weights,
                                       time_interval_arr,
                                       mm_model,
                                       max_rejections,
-                                      verbose=True)
+                                      verbose=True,
+                                      store_norm_quants=store_norm_quants)
 
     end = tm()
     out_particles.time = end - start
     return out_particles
+
+
+def propose_particles(proposal_func: Callable,
+                      resample_weights: Union[None, np.ndarray],
+                      graph: MultiDiGraph,
+                      particles: MMParticles,
+                      new_observation: np.ndarray,
+                      time_interval: float,
+                      mm_model: MapMatchingModel,
+                      full_smoothing: bool = True,
+                      store_norm_quants: bool = False,
+                      **kwargs) -> Tuple[MMParticles, np.ndarray, np.ndarray]:
+    """
+    Samples a single particle from the (distance discretised) optimal proposal.
+    :param proposal_func: function to proposal single particle
+    :param resample_weights: weights for resampling, None for no resampling
+    :param graph: encodes road network, simplified and projected to UTM
+    :param particles: all particles at last observation time
+    :param new_observation: cartesian coordinate in UTM
+    :param time_interval: time between last observation and newly received observation
+    :param mm_model: MapMatchingModel
+    :param full_smoothing: if True returns full trajectory
+        otherwise returns only x_t-1 to x_t
+    :param store_norm_quants: whether to additionally return quantities needed for gradient EM step
+        assuming deviation prior is used
+    :return: particle, unnormalised weight, prior_norm(_quants)
+    """
+    n_samps = particles.n
+    out_particles = particles.copy()
+
+    if resample_weights is not None:
+        resample_inds = np.random.choice(n_samps, n_samps, replace=True, p=resample_weights)
+        not_prop_inds = np.arange(n_samps)[~np.isin(np.arange(n_samps), resample_inds)]
+    else:
+        resample_inds = np.arange(n_samps)
+        not_prop_inds = []
+
+    weights = np.zeros(n_samps)
+    prior_norms = np.zeros((n_samps, len(mm_model.distance_params) + 2)) if store_norm_quants else np.zeros(n_samps)
+    for j in range(n_samps):
+        in_particle = particles[resample_inds[j]]
+        in_particle = in_particle.copy() if in_particle is not None else None
+        out_particles[j], weights[j], prior_norms[resample_inds[j]] = proposal_func(graph,
+                                                                                    in_particle,
+                                                                                    new_observation,
+                                                                                    time_interval,
+                                                                                    mm_model,
+                                                                                    full_smoothing=full_smoothing,
+                                                                                    store_norm_quants=store_norm_quants,
+                                                                                    **kwargs)
+    for k in not_prop_inds:
+        if particles[k] is not None:
+            prior_norms[k] = proposal_func(graph,
+                                           particles[k].copy(),
+                                           new_observation,
+                                           time_interval,
+                                           mm_model,
+                                           full_smoothing=full_smoothing,
+                                           store_norm_quants=store_norm_quants,
+                                           only_norm_const=True,
+                                           **kwargs)
+        else:
+            prior_norms[k] = np.zeros_like(prior_norms[resample_inds[0]])
+
+    return out_particles, weights, prior_norms

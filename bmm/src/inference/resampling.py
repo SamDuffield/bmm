@@ -40,7 +40,12 @@ def multinomial(particles: Union[list, np.ndarray, MMParticles],
         if particles.n != n:
             raise ValueError("Length of MMParticles to be resampled and weights do not conform")
         out_particles = particles.copy()
-        out_particles.particles = [out_particles.particles[i].copy() for i in sampled_indices]
+        out_particles.particles = [out_particles.particles[i] for i in sampled_indices]
+        if hasattr(out_particles, 'prior_norm'):
+            if out_particles.prior_norm.shape[1] == n:
+                out_particles.prior_norm = out_particles.prior_norm[:, sampled_indices]
+            else:
+                out_particles.prior_norm = out_particles.prior_norm[sampled_indices]
     elif isinstance(particles, np.ndarray):
         if len(particles) != n:
             raise ValueError("Length of particles (numpy.ndarray) to be resampled and weights do not conform")
@@ -62,8 +67,7 @@ def full_fixed_lag_stitch(j: int,
                           min_resample_time: float,
                           stitch_time_interval: float,
                           min_resample_time_indices: Union[list, np.ndarray],
-                          distance_prior_evals: np.ndarray,
-                          deviation_prior_evals: np.ndarray,
+                          original_prior_evals: np.ndarray,
                           mm_model: MapMatchingModel,
                           return_ess_stitch: bool = False) -> Union[np.ndarray, Tuple[np.ndarray, float]]:
     """
@@ -77,8 +81,7 @@ def full_fixed_lag_stitch(j: int,
     :param min_resample_time: first observation time after stitching
     :param stitch_time_interval: time between stitching observations
     :param min_resample_time_indices: indices for row of min_resample_time in new_particles
-    :param distance_prior_evals: pre-stitch distance prior evaluations for new_particles
-    :param deviation_prior_evals: pre-stitch deviation prior evaluations for new_particles
+    :param original_prior_evals: pre-stitch distance*deviation/Z prior evaluations for new_particles
     :param mm_model: MapMatchingModel
     :param return_ess_stitch: whether to calculate and return the ESS of the full stitching weights
     :return: stitched particle (and ess_stitch if return_ess_stitch)
@@ -129,19 +132,19 @@ def full_fixed_lag_stitch(j: int,
     new_stitching_distances_trimmed = new_stitching_distances[possible_inds]
     new_cart_coords_trimmed = new_cart_coords[possible_inds]
 
+    original_prior_evals_trimmed = original_prior_evals[possible_inds]
+
     pf_weights_trimmed = pf_weights[possible_inds]
     stitched_distance_prior_evals_trimmed = mm_model.distance_prior_evaluate(new_stitching_distances_trimmed,
                                                                              stitch_time_interval)
-    original_distance_prior_evals_trimmed = distance_prior_evals[possible_inds]
 
     stitched_deviation_prior_trimmed = mm_model.deviation_prior_evaluate(fixed_particle[-1, 5:7],
                                                                          new_cart_coords_trimmed,
                                                                          new_stitching_distances_trimmed)
-    original_deviation_prior_evals_trimmed = deviation_prior_evals[possible_inds]
 
-    res_weights[possible_inds] = pf_weights_trimmed \
-                                 * stitched_distance_prior_evals_trimmed / original_distance_prior_evals_trimmed \
-                                 * stitched_deviation_prior_trimmed / original_deviation_prior_evals_trimmed
+    res_weights[possible_inds] = pf_weights_trimmed / original_prior_evals_trimmed \
+                                 * stitched_distance_prior_evals_trimmed \
+                                 * stitched_deviation_prior_trimmed
 
     # Normalise adjusted resample weights
     with np.errstate(invalid='ignore'):
@@ -228,12 +231,11 @@ def rejection_fixed_lag_stitch(j: int,
                                                                           min_resample_time_indices[new_index], 5:7],
                                                                           new_stitching_distance)
 
-        if np.random.uniform() < new_stitching_distance_prior * new_stitching_deviation_prior\
+        if np.random.uniform() < new_stitching_distance_prior * new_stitching_deviation_prior \
                 / prior_bound:
             out_particle = np.append(fixed_particle, new_particle[1:], axis=0)
 
             return out_particle
-
     return None
 
 
@@ -278,7 +280,13 @@ def fixed_lag_stitch_post_split(graph: MultiDiGraph,
                                                               new_coords,
                                                               originial_stitching_distances)
 
-    out_particles = fixed_particles.copy()
+    original_prior_evals = np.zeros(n)
+    pos_inds = new_particles.prior_norm != 0
+    original_prior_evals[pos_inds] = distance_prior_evals[pos_inds] \
+                                     * deviation_prior_evals[pos_inds] \
+                                     / new_particles.prior_norm[pos_inds]
+
+    out_particles = fixed_particles
 
     # Initiate some required quantities depending on whether to do rejection sampling or not
     if full_fixed_lag_resample:
@@ -290,7 +298,8 @@ def fixed_lag_stitch_post_split(graph: MultiDiGraph,
         ess_stitch_track = None
 
         prior_bound = mm_model.prior_bound(stitch_time_interval)
-        adjusted_weights = new_weights / (distance_prior_evals * deviation_prior_evals)
+        adjusted_weights = new_weights
+        adjusted_weights[original_prior_evals != 0] /= original_prior_evals[original_prior_evals != 0]
         adjusted_weights /= np.sum(adjusted_weights)
 
     # Iterate through particles
@@ -317,8 +326,7 @@ def fixed_lag_stitch_post_split(graph: MultiDiGraph,
                                                                           new_weights,
                                                                           min_resample_time, stitch_time_interval,
                                                                           min_resample_time_indices,
-                                                                          distance_prior_evals,
-                                                                          deviation_prior_evals,
+                                                                          original_prior_evals,
                                                                           mm_model,
                                                                           True)
 
@@ -338,8 +346,7 @@ def fixed_lag_stitch_post_split(graph: MultiDiGraph,
                                                          new_weights,
                                                          min_resample_time, stitch_time_interval,
                                                          min_resample_time_indices,
-                                                         distance_prior_evals,
-                                                         deviation_prior_evals,
+                                                         original_prior_evals,
                                                          mm_model,
                                                          False)
 
@@ -422,6 +429,8 @@ def fixed_lag_stitching(graph: MultiDiGraph,
         max_fixed_time_indices[j] = np.where(out_particles[j][:, 0] == max_fixed_time)[0][0]
         fixed_particles[j] = out_particles[j][:(max_fixed_time_indices[j] + 1)]
         new_particles[j] = out_particles[j][max_fixed_time_indices[j]:]
+
+    new_particles.prior_norm = out_particles.prior_norm[m - lag - 1]
 
     # Stitch
     out_particles = fixed_lag_stitch_post_split(graph,

@@ -28,7 +28,6 @@ class MMParticles:
             alpha: in [0,1], position along edge
             x: float, metres, cartesian x coordinate
             y: float, metres, cartesian y coordinate
-            n_inter: int, number of options if intersection
             d: float, metres, distance travelled since previous observation time
 
     As well as some useful properties:
@@ -50,18 +49,32 @@ class MMParticles:
             x: float, metres, cartesian x coordinate
             y: float, metres, cartesian y coordinate
         """
-        self.n = len(initial_positions)
-        self.particles = [np.zeros((1, 9)) for _ in range(self.n)]
-        for i in range(self.n):
-            self.particles[i][0, 1:7] = initial_positions[i]
-        self.time_intervals = np.array([])
-        self.ess_pf = np.zeros(1)
-        self.time = 0
+        if initial_positions is not None:
+            self.n = len(initial_positions)
+            self.particles = [np.zeros((1, 8)) for _ in range(self.n)]
+            for i in range(self.n):
+                self.particles[i][0, 1:7] = initial_positions[i]
+            self.time_intervals = np.array([])
+            self.ess_pf = np.zeros(1)
+            self.time = 0
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return 'bmm.MMParticles'
 
     def copy(self) -> 'MMParticles':
+        out_part = MMParticles(None)
+        out_part.n = self.n
+        out_part.particles = [p.copy() if p is not None else None for p in self.particles]
+        for key, value in self.__dict__.items():
+            if isinstance(value, np.ndarray):
+                out_part.__dict__[key] = value.copy()
+            # elif isinstance(value, list):
+            #     out_part.__dict__[key] = [p.copy() if p is not None else None for p in value]
+            elif not isinstance(value, list):
+                out_part.__dict__[key] = value
+        return out_part
+
+    def deepcopy(self) -> 'MMParticles':
         return copy.deepcopy(self)
 
     def __len__(self) -> int:

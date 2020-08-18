@@ -429,9 +429,9 @@ class GammaMapMatchingModel(MapMatchingModel):
 
         gamma_mode = (self.distance_params['a_speed'] - 1) / self.distance_params['b_speed']
 
-        distance_bound = max(self.distance_params['b_speed'] ** self.distance_params['a_speed'] \
-                             / gamma(self.distance_params['a_speed']) \
-                             * gamma_mode ** (self.distance_params['a_speed'] - 1) \
+        distance_bound = max(self.distance_params['b_speed'] ** self.distance_params['a_speed']
+                             / gamma(self.distance_params['a_speed'])
+                             * gamma_mode ** (self.distance_params['a_speed'] - 1)
                              * np.exp(-self.distance_params['b_speed'] * gamma_mode) * (1 - zero_dist_prob)
                              / time_interval,
                              zero_dist_prob)

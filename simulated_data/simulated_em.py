@@ -33,9 +33,9 @@ num_inter_cut_off = None
 
 # Generate simulated routes
 num_repeats = 1
-num_routes = 20
+num_routes = 1
 min_route_length = 10
-max_route_length = 50
+max_route_length = 20
 sample_d_refine = 1
 n_iter = 50
 
@@ -93,7 +93,7 @@ for repeat_int in range(num_repeats):
     # tune_model.distance_params['b_speed'] = gen_model.distance_params['b_speed']
     # tune_model.deviation_beta = gen_model.deviation_beta
     # tune_model.gps_sd = gen_model.gps_sd
-
+    #
     # tune_model.deviation_beta_bounds = (0, 0)
 
     params_track_single = bmm.offline_em(cam_graph, tune_model, timestamps, observations, n_iter=n_iter,

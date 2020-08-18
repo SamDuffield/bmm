@@ -97,7 +97,7 @@ def random_positions(graph, n=1):
 # Function to sample a route (given a start position, route length and time_interval (assumed constant))
 def sample_route(graph, model, time_interval, length, start_position=None, cart_route=False, observations=False,
                  d_refine=1, num_inter_cut_off=None, num_pos_route_cap=np.inf):
-    route = np.zeros((1, 9))
+    route = np.zeros((1, 8))
 
     if start_position is None:
         start_position = random_positions(graph, 1)
@@ -153,9 +153,6 @@ def sample_route(graph, model, time_interval, length, start_position=None, cart_
         distances = discretised_routes[:, -1]
         distance_prior_evals = model.distance_prior_evaluate(distances, time_interval)
 
-        # Intersection prior evals
-        route_intersection_prior_evals = bmm.src.inference.proposal.intersection_prior_evaluate(possible_routes, model)[discretised_routes_indices]
-
         # Deviation prior evals
         deviation_prior_evals = model.deviation_prior_evaluate(route[-1, 5:7],
                                                                discretised_routes[:, 1:3],
@@ -164,7 +161,6 @@ def sample_route(graph, model, time_interval, length, start_position=None, cart_
 
         # Normalise prior/transition probabilities
         prior_probs = distance_prior_evals \
-                      * route_intersection_prior_evals \
                       * deviation_prior_evals
         # prior_probs[distances > 1e-5] *= (1 - prior_probs[distances <= 1e-5][0]) / prior_probs[distances > 1e-5].sum()
         prior_probs /= prior_probs.sum()
@@ -177,7 +173,6 @@ def sample_route(graph, model, time_interval, length, start_position=None, cart_
         sampled_route[0, 5:7] = 0
         sampled_route[-1, 0] = route[-1, 0] + time_interval
         sampled_route[-1, 4:7] = discretised_routes[sampled_route_index][0:3]
-        sampled_route[-1, -2] = 0
         sampled_route[-1, -1] = discretised_routes[sampled_route_index][-1]
 
         route = np.append(route, sampled_route, axis=0)

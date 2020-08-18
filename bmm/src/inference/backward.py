@@ -14,7 +14,6 @@ from bmm.src.inference.resampling import multinomial
 from bmm.src.tools.edges import get_geometry
 from bmm.src.inference.particles import MMParticles
 from bmm.src.inference.model import MapMatchingModel
-from bmm.src.inference.proposal import intersection_prior_evaluate
 
 
 def full_backward_sample(fixed_particle: np.ndarray,
@@ -45,6 +44,9 @@ def full_backward_sample(fixed_particle: np.ndarray,
     """
     n = filter_particles.n
 
+    norm_consts = filter_particles.prior_norm[:, 0] if filter_particles.prior_norm.ndim == 2\
+        else filter_particles.prior_norm
+
     smoothing_distances = np.empty(n)
     smoothing_distances[:] = np.nan
 
@@ -52,7 +54,7 @@ def full_backward_sample(fixed_particle: np.ndarray,
     new_prev_cart_coords = np.empty((n, 2))
 
     for k in range(n):
-        if filter_weights[k] == 0:
+        if filter_weights[k] == 0 or norm_consts[k] == 0:
             continue
 
         filter_particle = filter_particles[k]
@@ -88,7 +90,7 @@ def full_backward_sample(fixed_particle: np.ndarray,
                         * mm_model.deviation_prior_evaluate(new_prev_cart_coords[possible_inds],
                                                             fixed_particle[None, next_time_index, 5:7],
                                                             smoothing_distances[possible_inds]) \
-                        * intersection_prior_evaluate(filter_particles.particles, mm_model)[possible_inds]
+                        / norm_consts[possible_inds]
 
     smoothing_weights /= smoothing_weights.sum()
 
@@ -178,7 +180,7 @@ def backward_simulate(graph: MultiDiGraph,
                       max_rejections: int,
                       verbose: bool = False,
                       store_ess_back: bool = None,
-                      dev_norm_quants: np.ndarray = None) -> MMParticles:
+                      store_norm_quants: bool = False) -> MMParticles:
     """
     Given particle filter output, run backwards simulation to output smoothed trajectories
     :param graph: encodes road network, simplified and projected to UTM
@@ -190,8 +192,7 @@ def backward_simulate(graph: MultiDiGraph,
         0 will do full backward simulation and track ess_back
     :param verbose: print ess_pf or ess_back
     :param store_ess_back: whether to store ess_back (if possible) in MMParticles object
-    :param dev_norm_quants: optional deviation normalisation quantities
-        if given will be backward sampled and returned as an attribute in out_particles
+    :param store_norm_quants: if True normalisation quantities returned in out_particles
     :return: MMParticles object
     """
     n_samps = filter_particles[-1].n
@@ -208,7 +209,7 @@ def backward_simulate(graph: MultiDiGraph,
     if np.all(filter_weights[-1] == filter_weights[-1][0]):
         out_particles = filter_particles[-1].copy()
     else:
-        out_particles = multinomial(filter_particles[-1].copy(), filter_weights[-1])
+        out_particles = multinomial(filter_particles[-1], filter_weights[-1])
     if full_sampling:
         ess_back = np.zeros((num_obs, n_samps))
         ess_back[0] = 1 / (filter_weights[-1] ** 2).sum()
@@ -218,7 +219,8 @@ def backward_simulate(graph: MultiDiGraph,
     if num_obs < 2:
         return out_particles
 
-    dev_norm = dev_norm_quants is not None
+    if store_norm_quants:
+        norm_quants = np.zeros((num_obs - 1, *filter_particles[0].prior_norm.shape))
 
     for i in range(num_obs - 2, -1, -1):
         next_time = filter_particles[i + 1].latest_observation_time
@@ -226,7 +228,17 @@ def backward_simulate(graph: MultiDiGraph,
         if not full_sampling:
             prior_bound = mm_model.prior_bound(time_interval_arr[i])
 
-        if dev_norm:
+            adjusted_weights = filter_weights[i].copy()
+            if filter_particles[i].prior_norm.ndim == 2:
+                prior_norm = filter_particles[i].prior_norm[:, 0]
+            else:
+                prior_norm = filter_particles[i].prior_norm
+
+            good_inds = np.logical_and(adjusted_weights != 0, prior_norm != 0)
+            adjusted_weights[good_inds] /= prior_norm[good_inds]
+            adjusted_weights /= adjusted_weights.sum()
+
+        if store_norm_quants:
             sampled_inds = np.zeros(n_samps, dtype=int)
 
         for j in range(n_samps):
@@ -238,50 +250,53 @@ def backward_simulate(graph: MultiDiGraph,
 
             if full_sampling:
                 back_output = full_backward_sample(fixed_particle,
-                                                   first_edge_fixed, first_edge_fixed_length,
+                                                   first_edge_fixed,
+                                                   first_edge_fixed_length,
                                                    filter_particles[i],
                                                    filter_weights[i],
                                                    time_interval_arr[i],
                                                    fixed_next_time_index,
                                                    mm_model,
                                                    return_ess_back=True,
-                                                   return_sampled_index=dev_norm)
+                                                   return_sampled_index=store_norm_quants)
 
-                if dev_norm:
+                if store_norm_quants:
                     out_particles[j], ess_back[i, j], sampled_inds[j] = back_output
                 else:
                     out_particles[j], ess_back[i, j] = back_output
 
             else:
                 back_output = rejection_backward_sample(fixed_particle,
-                                                        first_edge_fixed, first_edge_fixed_length,
+                                                        first_edge_fixed,
+                                                        first_edge_fixed_length,
                                                         filter_particles[i],
-                                                        filter_weights[i],
+                                                        adjusted_weights,
                                                         time_interval_arr[i],
                                                         fixed_next_time_index,
                                                         prior_bound,
                                                         mm_model,
                                                         max_rejections,
-                                                        return_sampled_index=dev_norm)
+                                                        return_sampled_index=store_norm_quants)
 
-                if (dev_norm and back_output[0] is None) or (not dev_norm and back_output is None):
+                if (store_norm_quants and back_output[0] is None) or (not store_norm_quants and back_output is None):
                     back_output = full_backward_sample(fixed_particle,
-                                                       first_edge_fixed, first_edge_fixed_length,
+                                                       first_edge_fixed,
+                                                       first_edge_fixed_length,
                                                        filter_particles[i],
                                                        filter_weights[i],
                                                        time_interval_arr[i],
                                                        fixed_next_time_index,
                                                        mm_model,
                                                        return_ess_back=False,
-                                                       return_sampled_index=dev_norm)
+                                                       return_sampled_index=store_norm_quants)
 
-                if dev_norm:
+                if store_norm_quants:
                     out_particles[j], sampled_inds[j] = back_output
                 else:
                     out_particles[j] = back_output
 
-        if dev_norm:
-            dev_norm_quants[i] = dev_norm_quants[i][sampled_inds]
+        if store_norm_quants:
+            norm_quants[i] = filter_particles[i].prior_norm[sampled_inds]
 
         none_inds = np.array([p is None or None in p for p in out_particles])
         good_inds = ~none_inds
@@ -290,8 +305,8 @@ def backward_simulate(graph: MultiDiGraph,
             none_inds_res_indices = np.random.choice(n_samps, n_samps - n_good, p=good_inds / n_good)
             for i_none, j_none in enumerate(np.where(none_inds)[0]):
                 out_particles[j_none] = out_particles[none_inds_res_indices[i_none]].copy()
-                if dev_norm:
-                    dev_norm_quants[i:, j_none] = dev_norm_quants[i:, none_inds_res_indices[i_none]]
+                if store_norm_quants:
+                    norm_quants[i:, j_none] = norm_quants[i:, none_inds_res_indices[i_none]]
             if store_ess_back:
                 out_particles.ess_back[i, none_inds] = n_samps
 
@@ -305,7 +320,7 @@ def backward_simulate(graph: MultiDiGraph,
         if store_ess_back:
             out_particles.ess_back = ess_back
 
-    if dev_norm:
-        out_particles.dev_norm_quants = dev_norm_quants
+    if store_norm_quants:
+        out_particles.dev_norm_quants = norm_quants
 
     return out_particles
