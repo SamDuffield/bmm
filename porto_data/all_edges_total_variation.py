@@ -24,7 +24,7 @@ _, process_data_path = source_data()
 
 graph = load_graph()
 
-run_indicator = 10
+run_indicator = 9
 
 # Load taxi data
 # data_path = data.utils.choose_data()
@@ -51,7 +51,7 @@ fl_n_samps = np.array([50, 100, 150, 200])
 lags = np.array([0, 3, 10])
 max_rejections = 0
 initial_truncation = None
-num_repeats = 1
+num_repeats = 35
 proposal_dict = {'proposal': 'optimal'}
 
 setup_dict = {'seed': seed,
@@ -71,7 +71,7 @@ if not os.path.exists(save_dir):
 with open(save_dir + 'setup_dict', 'w+') as f:
     json.dump(setup_dict, f)
 
-mm_model = bmm.GammaMapMatchingModel()
+mm_model = bmm.ExponentialMapMatchingModel()
 
 # Run MM
 ffbsi_routes = np.empty(len(route_polylines), dtype='object')
@@ -107,10 +107,10 @@ for i in range(len(route_polylines)):
                                                                          max_rejections=max_rejections,
                                                                          initial_d_truncate=initial_truncation,
                                                                          **proposal_dict)
+                    print(f'FL PF {i} {j} {k} {l}: {fl_pf_routes[i, j, k, l].time}')
                 except:
                     n_pf_failures += 1
                 print(f'FL PF failures: {n_pf_failures}')
-                print(f'FL PF {i} {j} {k} {l}: {fl_pf_routes[i, j, k, l].time}')
                 clear_cache()
 
                 if lags[l] == 0:
@@ -128,10 +128,10 @@ for i in range(len(route_polylines)):
                                                                               max_rejections=max_rejections,
                                                                               initial_d_truncate=initial_truncation,
                                                                               **proposal_dict)
+                        print(f'FL PF {i} {j} {k} {l}: {fl_pf_routes[i, j, k, l].time}')
                     except:
                         n_bsi_failures += 1
                 print(f'FL BSi failures: {n_bsi_failures}')
-                print(f'FL BSi {i} {j} {k} {l}: {fl_bsi_routes[i, j, k, l].time}')
                 clear_cache()
 
 np.save(save_dir + 'fl_pf', fl_pf_routes)
@@ -150,8 +150,8 @@ for i in range(len(route_polylines)):
     for j in range(num_repeats):
         for k in range(len(fl_n_samps)):
             for l in range(len(lags)):
-                fl_pf_tvs[i, j, k, l] = all_edges_total_variation(ffbsi_routes[i], fl_pf_routes[i, j, k, l])
-                fl_bsi_tvs[i, j, k, l] = all_edges_total_variation(ffbsi_routes[i], fl_bsi_routes[i, j, k, l])
+                fl_pf_tvs[i, j, k, l] = all_edges_total_variation(ffbsi_routes[i], fl_pf_routes[i, j, k, l]) if fl_pf_routes[i, j, k, l] is not None else 1
+                fl_bsi_tvs[i, j, k, l] = all_edges_total_variation(ffbsi_routes[i], fl_bsi_routes[i, j, k, l]) if fl_bsi_routes[i, j, k, l] is not None else 1
 
 np.save(save_dir + 'fl_pf_tv', fl_pf_tvs)
 np.save(save_dir + 'fl_bsi_tv', fl_bsi_tvs)
@@ -183,4 +183,3 @@ fig_bsi, ax_bsi = plot_conv_tv(np.mean(fl_bsi_tvs, axis=(0, 1)),
                                np.min(fl_bsi_tvs, axis=(0, 1)),
                                np.max(fl_bsi_tvs, axis=(0, 1)), leg=True)
 plt.savefig(save_dir + 'bsi_comp_err.png', dpi=400)
-

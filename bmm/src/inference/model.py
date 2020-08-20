@@ -41,7 +41,7 @@ class MapMatchingModel:
         self.gps_sd_bounds = (0, np.inf)
         self.likelihood_d_truncate = np.inf
 
-        self.deviation_beta = 0.0263
+        self.deviation_beta = 0.017
         self.deviation_beta_bounds = (0, np.inf)
 
         self.max_speed = 50
@@ -112,15 +112,6 @@ class MapMatchingModel:
         deviations = np.sqrt(np.sum((previous_cart_coord - route_cart_coords) ** 2, axis=1))
         diffs = np.abs(deviations - distances)
         return np.exp(-diffs * self.deviation_beta)
-
-    def intersection_prior_evaluate(self,
-                                    between_obs_route: np.ndarray) -> float:
-        """
-        Evaluate intersection prior.
-        :param between_obs_route: edges traversed between observation times
-        :return: intersection prior density evaluation
-        """
-        return _intersection_prior_evaluate(between_obs_route, self.intersection_penalisation)
 
     def likelihood_evaluate(self,
                             route_cart_coords: np.ndarray,
