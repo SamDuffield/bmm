@@ -159,6 +159,8 @@ def each_edge_route_total_variation(particles_one,
                 curr_ind = np.where(p1[:, 0] == current_time)[0][0]
 
                 p1_ed = p1[prev_ind:(curr_ind + 1), 1:(4 + alpha_extend)].copy()
+                if include_alpha:
+                    p1_ed[0, 3] = 0.
                 p1_ed_len = len(p1_ed)
                 if p1_ed_len > p1_edges.shape[1]:
                     p1_edges = np.append(p1_edges, np.zeros((p1_edges.shape[0],
@@ -174,6 +176,8 @@ def each_edge_route_total_variation(particles_one,
                 curr_ind = np.where(p2[:, 0] == current_time)[0][0]
 
                 p2_ed = p2[prev_ind:(curr_ind + 1), 1:(4 + alpha_extend)].copy()
+                if include_alpha:
+                    p2_ed[0, 3] = 0
                 p2_ed_len = len(p2_ed)
                 if p2_ed_len > p2_edges.shape[1]:
                     p2_edges = np.append(p2_edges, np.zeros((p2_edges.shape[0],

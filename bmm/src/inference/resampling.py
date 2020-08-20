@@ -127,7 +127,7 @@ def full_fixed_lag_stitch(j: int,
 
     # Calculate adjusted weight
     res_weights = np.zeros(n)
-    possible_inds = ~np.isnan(new_stitching_distances)
+    possible_inds = np.logical_and(~np.isnan(new_stitching_distances), original_prior_evals != 0)
 
     new_stitching_distances_trimmed = new_stitching_distances[possible_inds]
     new_cart_coords_trimmed = new_cart_coords[possible_inds]

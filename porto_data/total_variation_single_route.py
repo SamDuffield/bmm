@@ -55,7 +55,7 @@ time_interval = 15
 ffbsi_n_samps = int(1e3)
 fl_n_samps = np.array([50, 100, 200])
 lags = np.array([0, 3, 10])
-max_rejections = 20
+max_rejections = 0
 initial_truncation = None
 num_repeats = 20
 proposal_dict = {'proposal': 'optimal',
@@ -177,24 +177,31 @@ fl_bsi_tvs = np.empty_like(fl_pf_tvs)
 fl_pf_times = np.empty((setup_dict['num_repeats'], len(setup_dict['fl_n_samps']), len(setup_dict['lags'])))
 fl_bsi_times = np.empty_like(fl_pf_times)
 
-inc_alpha = True
+inc_alpha = False
 
 # Calculate TV distances from FFBSi
 for i in range(setup_dict['num_repeats']):
     for j, n in enumerate(setup_dict['fl_n_samps']):
         for k, lag in enumerate(setup_dict['lags']):
             print(i, j, k)
-            fl_pf_tvs[i, j, k] = each_edge_route_total_variation(ffbsi_route.particles,
-                                                                 fl_pf_routes[i, j, k].particles,
-                                                                 observation_times,
-                                                                 include_alpha=inc_alpha)
-            fl_pf_times[i, j, k] = fl_pf_routes[i, j, k].time
-
-            fl_bsi_tvs[i, j, k] = each_edge_route_total_variation(ffbsi_route.particles,
-                                                                  fl_bsi_routes[i, j, k].particles,
-                                                                  observation_times,
-                                                                  include_alpha=inc_alpha)
-            fl_bsi_times[i, j, k] = fl_bsi_routes[i, j, k].time
+            if fl_pf_routes[i, j, k] is not None:
+                fl_pf_tvs[i, j, k] = each_edge_route_total_variation(ffbsi_route.particles,
+                                                                     fl_pf_routes[i, j, k].particles,
+                                                                     observation_times,
+                                                                     include_alpha=inc_alpha)
+                fl_pf_times[i, j, k] = fl_pf_routes[i, j, k].time
+            else:
+                fl_pf_tvs[i, j, k] = 1.
+                fl_pf_times[i, j, k] = 0.
+            if fl_bsi_routes[i, j, k] is not None:
+                fl_bsi_tvs[i, j, k] = each_edge_route_total_variation(ffbsi_route.particles,
+                                                                      fl_bsi_routes[i, j, k].particles,
+                                                                      observation_times,
+                                                                      include_alpha=inc_alpha)
+                fl_bsi_times[i, j, k] = fl_bsi_routes[i, j, k].time
+            else:
+                fl_bsi_tvs[i, j, k] = 1.
+                fl_bsi_times[i, j, k] = 0.
 
 np.save(save_dir + 'fl_pf_tv', fl_pf_tvs)
 np.save(save_dir + 'fl_bsi_tv', fl_bsi_tvs)
@@ -209,9 +216,9 @@ np.save(save_dir + 'fl_bsi_times', fl_bsi_times)
 fig, axes = plot_metric_over_time(setup_dict,
                                   save_dir,
                                   np.mean(fl_pf_tvs, axis=0),
-                                  np.mean(fl_pf_times, axis=0),
+                                  np.sum(fl_pf_times, axis=0) / np.sum(fl_pf_times > 0, axis=0),
                                   np.mean(fl_bsi_tvs, axis=0),
-                                  np.mean(fl_bsi_times, axis=0))
+                                  np.sum(fl_bsi_times, axis=0) / np.sum(fl_bsi_times > 0, axis=0))
 
 sub_route_plot_xlim = (532399.6154033017, 532860.7133234204)
 sub_route_plot_ylim = (4556923.901931656, 4557388.957773835)

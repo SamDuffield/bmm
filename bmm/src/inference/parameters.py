@@ -15,7 +15,7 @@ from networkx.classes import MultiDiGraph
 from scipy.optimize import minimize, root_scalar
 
 from bmm.src.inference.particles import MMParticles
-from bmm.src.inference.model import MapMatchingModel, GammaMapMatchingModel
+from bmm.src.inference.model import MapMatchingModel
 from bmm.src.inference.smc import get_time_interval_array
 from bmm.src.tools.edges import observation_time_rows
 from bmm.src.inference.smc import offline_map_match
@@ -47,8 +47,7 @@ def offline_em(graph: MultiDiGraph,
     :return: dict of optimised parameters
     """
 
-    params_track = {'zero_dist_prob_neg_exponent': np.asarray(mm_model.zero_dist_prob_neg_exponent),
-                    'distance_params': {key: np.asarray(value) for key, value in mm_model.distance_params.items()},
+    params_track = {'distance_params': {key: np.asarray(value) for key, value in mm_model.distance_params.items()},
                     'deviation_beta': np.asarray(mm_model.deviation_beta),
                     'gps_sd': np.asarray(mm_model.gps_sd)}
 
@@ -103,8 +102,6 @@ def update_params_track(params_track: dict,
     :param mm_model: MapMatchingModel with hyperparameters updated
     :return: params_track with new hyperparameters updated
     """
-    params_track['zero_dist_prob_neg_exponent'] = np.append(params_track['zero_dist_prob_neg_exponent'],
-                                                            mm_model.zero_dist_prob_neg_exponent)
     params_track['distance_params'] = {key: np.append(params_track['distance_params'][key], value)
                                        for key, value in mm_model.distance_params.items()}
     params_track['deviation_beta'] = np.append(params_track['deviation_beta'], mm_model.deviation_beta)
@@ -264,18 +261,27 @@ def gradient_em_step(mm_model: MapMatchingModel,
     pos_dev_norm_quants = dev_norm_quants
     pos_devs = devs
 
-    non_zero_inds = pos_dev_norm_quants[:, 0] > 0
+    # non_zero_inds = pos_dev_norm_quants[:, 0] > 0
+    #
+    # distance_gradient_evals = (mm_model.distance_prior_gradient(pos_distances, pos_time_interval_arrs_concat)[:,
+    #                            non_zero_inds]
+    #                            / mm_model.distance_prior_evaluate(pos_distances, pos_time_interval_arrs_concat)[
+    #                                non_zero_inds]
+    #                            - pos_dev_norm_quants[non_zero_inds, 1:-1].T / pos_dev_norm_quants[
+    #                                non_zero_inds, 0]).sum(axis=1) \
+    #                           / n_particles
+    #
+    # deviation_beta_gradient_evals = (-pos_devs[non_zero_inds] - pos_dev_norm_quants[non_zero_inds, -1] /
+    #                                  pos_dev_norm_quants[non_zero_inds, 0]).sum() \
+    #                                 / n_particles
 
-    distance_gradient_evals = (mm_model.distance_prior_gradient(pos_distances, pos_time_interval_arrs_concat)[:,
-                               non_zero_inds]
-                               / mm_model.distance_prior_evaluate(pos_distances, pos_time_interval_arrs_concat)[
-                                   non_zero_inds]
-                               - pos_dev_norm_quants[non_zero_inds, 1:-1].T / pos_dev_norm_quants[
-                                   non_zero_inds, 0]).sum(axis=1) \
+    distance_gradient_evals = (mm_model.distance_prior_gradient(pos_distances, pos_time_interval_arrs_concat)
+                               / mm_model.distance_prior_evaluate(pos_distances, pos_time_interval_arrs_concat)
+                               - pos_dev_norm_quants[:, 1:-1].T / pos_dev_norm_quants[:, 0]).sum(axis=1) \
                               / n_particles
 
-    deviation_beta_gradient_evals = (-pos_devs[non_zero_inds] - pos_dev_norm_quants[non_zero_inds, -1] /
-                                     pos_dev_norm_quants[non_zero_inds, 0]).sum() \
+    deviation_beta_gradient_evals = (-pos_devs - pos_dev_norm_quants[:, -1] /
+                                     pos_dev_norm_quants[:, 0]).sum() \
                                     / n_particles
 
     # Take gradient step in distance params

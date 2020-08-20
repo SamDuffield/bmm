@@ -42,11 +42,13 @@ poly_single = np.asarray(poly_single_list)
 print(single_index)
 
 # Number of particles
-n_samps = 200
+n_samps = 100
 
 polyline_truncation = None
 
-max_rejects = 20
+max_rejects = 0
+
+num_inter_cut_off = 5
 
 # Run offline map-matching
 # particles = _offline_map_match_fl(graph, poly_single[:polyline_truncation], n_samps, timestamps=15,
@@ -55,16 +57,17 @@ max_rejects = 20
 #                                   max_rejections=max_rejects,
 #                                   update='PF')
 
-particles = _offline_map_match_fl(graph, poly_single[:polyline_truncation], n_samps, timestamps=15,
-                                  lag=3,
-                                  d_refine=1,
-                                  max_rejections=max_rejects,
-                                  update='BSi')
+# particles = _offline_map_match_fl(graph, poly_single[:polyline_truncation], n_samps, timestamps=15,
+#                                   lag=3,
+#                                   d_refine=1,
+#                                   max_rejections=max_rejects,
+#                                   update='BSi',
+#                                   num_inter_cut_off=num_inter_cut_off)
 
-# particles = offline_map_match(graph, poly_single[:polyline_truncation], n_samps, timestamps=15,
-#                               d_refine=1,
-#                               max_rejections=max_rejects,
-#                               ess_threshold=0.5)
+particles = offline_map_match(graph, poly_single[:polyline_truncation], n_samps, timestamps=15,
+                              d_refine=1,
+                              max_rejections=max_rejects,
+                              ess_threshold=0.5)
 
 print(particles.time)
 print(particles.time / len(poly_single))

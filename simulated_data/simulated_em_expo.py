@@ -21,13 +21,12 @@ cam_graph = cambridge_graph()
 
 timestamps = 15
 
-gen_model = bmm.GammaMapMatchingModel()
+gen_model = bmm.ExponentialMapMatchingModel()
 # gen_model.max_speed = 30
 # gen_model.zero_dist_prob_neg_exponent = -np.log(0.25) / timestamps
-gen_model.distance_params['zero_dist_prob_neg_exponent'] = -np.log(0.22) / timestamps
-gen_model.distance_params['a_speed'] = 1.
-gen_model.distance_params['b_speed'] = 1/12.5
-gen_model.deviation_beta = 0.028
+gen_model.distance_params['zero_dist_prob_neg_exponent'] = -np.log(0.25) / timestamps # 0.12647466565905877
+gen_model.distance_params['lambda_speed'] = 1/15 # 0.06666
+gen_model.deviation_beta = 0.03
 gen_model.gps_sd = 3.
 
 num_inter_cut_off = None
@@ -78,30 +77,24 @@ for repeat_int in range(num_repeats):
     # plt.plot(linsp, gen_model.distance_params['b_speed'] * np.exp(-gen_model.distance_params['b_speed']*linsp))
 
     # Run EM
-    tune_model = bmm.GammaMapMatchingModel()
-    tune_model.distance_params['a_speed'] = 1.
-    tune_model.distance_params_bounds['a_speed'] = (1., 1.)
-    tune_model.distance_params['b_speed'] = 0.1
-    # tune_model.zero_dist_prob_neg_exponent = -np.log(0.2) / timestamps
-    tune_model.distance_params['zero_dist_prob_neg_exponent'] = -np.log(0.1) / timestamps
+    tune_model = bmm.ExponentialMapMatchingModel()
+    tune_model.distance_params['zero_dist_prob_neg_exponent'] = -np.log(0.2) / timestamps
+    tune_model.distance_params['lambda_speed'] = 1/10
     tune_model.deviation_beta = 0.01
     tune_model.gps_sd = 7.
 
-    tune_model = bmm.GammaMapMatchingModel()
-    tune_model.zero_dist_prob_neg_exponent = gen_model.zero_dist_prob_neg_exponent
-    tune_model.distance_params['zero_dist_prob_neg_exponent'] = gen_model.distance_params['zero_dist_prob_neg_exponent']
-    tune_model.distance_params['a_speed'] = gen_model.distance_params['a_speed']
-    tune_model.distance_params_bounds['a_speed'] = (1., 1.)
-    tune_model.distance_params['b_speed'] = gen_model.distance_params['b_speed']
-    tune_model.deviation_beta = gen_model.deviation_beta
-    tune_model.gps_sd = gen_model.gps_sd
+    # tune_model = bmm.ExponentialMapMatchingModel()
+    # tune_model.distance_params['zero_dist_prob_neg_exponent'] = gen_model.distance_params['zero_dist_prob_neg_exponent']
+    # tune_model.distance_params['lambda_speed'] = gen_model.distance_params['lambda_speed']
+    # tune_model.deviation_beta = gen_model.deviation_beta
+    # tune_model.gps_sd = gen_model.gps_sd
 
     # tune_model.deviation_beta_bounds = (0, 0)
 
     params_track_single = bmm.offline_em(cam_graph, tune_model, timestamps, observations, n_iter=n_iter,
                                          max_rejections=0,
                                          initial_d_truncate=50, num_inter_cut_off=num_inter_cut_off,
-                                         gradient_stepsize_scale=1e-5, gradient_stepsize_neg_exp=0.5)
+                                         gradient_stepsize_scale=1e-5, gradient_stepsize_neg_exp=0.1)
 
     params_track.append(params_track_single)
 

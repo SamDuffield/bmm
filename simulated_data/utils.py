@@ -157,11 +157,9 @@ def sample_route(graph, model, time_interval, length, start_position=None, cart_
         deviation_prior_evals = model.deviation_prior_evaluate(route[-1, 5:7],
                                                                discretised_routes[:, 1:3],
                                                                discretised_routes[:, -1])
-        deviation_prior_evals[distances < 1e-5] = 1.
 
         # Normalise prior/transition probabilities
-        prior_probs = distance_prior_evals \
-                      * deviation_prior_evals
+        prior_probs = distance_prior_evals * deviation_prior_evals
         # prior_probs[distances > 1e-5] *= (1 - prior_probs[distances <= 1e-5][0]) / prior_probs[distances > 1e-5].sum()
         prior_probs /= prior_probs.sum()
 

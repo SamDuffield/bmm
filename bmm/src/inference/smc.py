@@ -17,7 +17,7 @@ from bmm.src.inference.particles import MMParticles
 from bmm.src.inference.proposal import optimal_proposal
 from bmm.src.inference.resampling import fixed_lag_stitching, multinomial, fixed_lag_stitch_post_split
 from bmm.src.inference.backward import backward_simulate
-from bmm.src.inference.model import MapMatchingModel, GammaMapMatchingModel
+from bmm.src.inference.model import MapMatchingModel, ExponentialMapMatchingModel
 
 updates = ('PF', 'BSi')
 
@@ -60,7 +60,7 @@ def get_time_interval_array(timestamps: Union[float, np.ndarray],
 def initiate_particles(graph: MultiDiGraph,
                        first_observation: np.ndarray,
                        n_samps: int,
-                       mm_model: MapMatchingModel = GammaMapMatchingModel(),
+                       mm_model: MapMatchingModel = ExponentialMapMatchingModel(),
                        d_refine: float = 1,
                        d_truncate: float = None,
                        ess_all: bool = True,
@@ -310,7 +310,7 @@ def update_particles(graph: MultiDiGraph,
                      particles: MMParticles,
                      new_observation: np.ndarray,
                      time_interval: float,
-                     mm_model: MapMatchingModel = GammaMapMatchingModel(),
+                     mm_model: MapMatchingModel = ExponentialMapMatchingModel(),
                      proposal: str = 'optimal',
                      update: str = 'PF',
                      lag: int = 3,
@@ -368,7 +368,7 @@ def _offline_map_match_fl(graph: MultiDiGraph,
                           polyline: np.ndarray,
                           n_samps: int,
                           timestamps: Union[float, np.ndarray],
-                          mm_model: MapMatchingModel = GammaMapMatchingModel(),
+                          mm_model: MapMatchingModel = ExponentialMapMatchingModel(),
                           proposal: str = 'optimal',
                           update: str = 'PF',
                           lag: int = 3,
@@ -444,7 +444,7 @@ def offline_map_match(graph: MultiDiGraph,
                       polyline: np.ndarray,
                       n_samps: int,
                       timestamps: Union[float, np.ndarray],
-                      mm_model: MapMatchingModel = GammaMapMatchingModel(),
+                      mm_model: MapMatchingModel = ExponentialMapMatchingModel(),
                       proposal: str = 'optimal',
                       d_refine: int = 1,
                       initial_d_truncate: float = None,

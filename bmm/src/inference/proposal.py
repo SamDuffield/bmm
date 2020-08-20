@@ -14,7 +14,7 @@ from numba import njit
 from networkx.classes import MultiDiGraph
 
 from bmm.src.tools.edges import get_geometry, edge_interpolate, discretise_edge
-from bmm.src.inference.model import pdf_gamma_mv, cdf_gamma_mv, MapMatchingModel
+from bmm.src.inference.model import MapMatchingModel
 
 
 @lru_cache(maxsize=2 ** 8)
@@ -114,8 +114,8 @@ def get_possible_routes(graph: MultiDiGraph,
 
     intersection_edges = get_out_edges(graph, start_edge_and_position[2]).copy()
 
-    if intersection_edges.shape[1] == 0:
-        # Dead-end and one-way
+    if intersection_edges.shape[1] == 0 or len(in_route) >= num_inter_cut_off:
+        # Dead-end and one-way or exceeded max intersections
         if all_routes:
             return [in_route]
         else:
@@ -133,9 +133,8 @@ def get_possible_routes(graph: MultiDiGraph,
         new_routes = []
         for new_edge in intersection_edges:
             # If not u-turn or loop continue route search on new edge
-            if not (new_edge[1] == start_edge_and_position[1] and new_edge[2] == start_edge_and_position[3]) \
-                    and not (new_edge == in_route[:, 1:4]).all(1).any() \
-                    and len(in_route) < num_inter_cut_off:
+            if (not (new_edge[1] == start_edge_and_position[1] and new_edge[2] == start_edge_and_position[3])) \
+                    and (not (new_edge == in_route[:, 1:4]).all(1).any()):
                 add_edge = np.array([[0, *new_edge, 0, 0, 0, start_edge_and_position[-1]]])
                 new_route = np.append(in_route,
                                       add_edge,
@@ -293,8 +292,7 @@ def optimal_proposal(graph: MultiDiGraph,
     # deviation_prior_evals[distances < 1e-5] = 1.
 
     # Normalise prior/transition probabilities
-    prior_probs = distance_prior_evals \
-                  * deviation_prior_evals
+    prior_probs = distance_prior_evals * deviation_prior_evals
 
     # prior_probs_norm_const = prior_probs[distances > 1e-5].sum()
     # prior_probs[distances > 1e-5] *= (1 - prior_probs[distances < 1e-5][0]) / prior_probs_norm_const
