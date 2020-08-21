@@ -30,7 +30,7 @@ _, process_data_path = source_data()
 
 graph = load_graph()
 
-run_indicator = 8
+run_indicator = 123
 
 # Load taxi data
 # data_path = data.utils.choose_data()
@@ -57,7 +57,7 @@ fl_n_samps = np.array([50, 100, 200])
 lags = np.array([0, 3, 10])
 max_rejections = 0
 initial_truncation = None
-num_repeats = 20
+num_repeats = 1
 proposal_dict = {'proposal': 'optimal',
                  'num_inter_cut_off': 10}
 
@@ -87,11 +87,11 @@ with open(save_dir + 'proposal_dict', 'w+') as f:
     json.dump(proposal_dict, f)
 
 # Setup map-matching model
-mm_model = bmm.GammaMapMatchingModel()
-mm_model.distance_params['zero_dist_prob_neg_exponent'] = -np.log(0.155) / 15
+mm_model = bmm.ExponentialMapMatchingModel()
+mm_model.distance_params['zero_dist_prob_neg_exponent'] = -np.log(0.05) / 15
 mm_model.distance_params['a_speed'] = 1.
-mm_model.distance_params['b_speed'] = 0.095
-mm_model.deviation_beta = 0.04
+mm_model.distance_params['b_speed'] = 0.1
+mm_model.deviation_beta = 0.05
 mm_model.gps_sd = 6.
 
 # Run FFBSi
@@ -177,7 +177,7 @@ fl_bsi_tvs = np.empty_like(fl_pf_tvs)
 fl_pf_times = np.empty((setup_dict['num_repeats'], len(setup_dict['fl_n_samps']), len(setup_dict['lags'])))
 fl_bsi_times = np.empty_like(fl_pf_times)
 
-inc_alpha = False
+inc_alpha = True
 
 # Calculate TV distances from FFBSi
 for i in range(setup_dict['num_repeats']):

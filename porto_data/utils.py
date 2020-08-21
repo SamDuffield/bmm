@@ -26,70 +26,14 @@ def total_variation_edges(edges_one,
     all_edges = np.concatenate([edges_one, edges_two])
     all_edges = np.unique(all_edges, axis=0)
 
+    axes = tuple(i for i in range(1, all_edges.ndim))
+
     tv = 0.
     for edge in all_edges:
-        p_1 = np.sum(np.all(edges_one == edge, axis=(1, 2))) / n1
-        p_2 = np.sum(np.all(edges_two == edge, axis=(1, 2))) / n2
+        p_1 = np.sum(np.all(edges_one == edge, axis=axes)) / n1
+        p_2 = np.sum(np.all(edges_two == edge, axis=axes)) / n2
         tv = tv + np.abs(p_1 - p_2)
     return tv / 2
-
-
-#
-# def each_edge_route_total_variation(particles_one,
-#                                     particles_two,
-#                                     observation_times):
-#     m = observation_times.size
-#     tv_each_time = np.zeros(m)
-#
-#     for i in range(m):
-#         if i == 0:
-#             p1_first_edges = np.array([p[:1, 1:5].copy() for p in particles_one])
-#             p2_first_edges = np.array([p[:1, 1:5].copy() for p in particles_two])
-#
-#             tv_each_time[i] = total_variation_edges(p1_first_edges, p2_first_edges)
-#         else:
-#             prev_time = observation_times[i - 1]
-#             current_time = observation_times[i]
-#
-#             p1_edges = np.zeros((len(particles_one), 1, 4))
-#             for j, p1 in enumerate(particles_one):
-#                 prev_ind = np.where(p1[:, 0] == prev_time)[0][0]
-#                 curr_ind = np.where(p1[:, 0] == current_time)[0][0]
-#
-#                 p1_ed = p1[prev_ind:(curr_ind + 1), 1:5].copy()
-#                 p1_ed[0, 3] = 0.
-#                 p1_ed_len = len(p1_ed)
-#                 if p1_ed_len > p1_edges.shape[1]:
-#                     p1_edges = np.append(p1_edges, np.zeros((p1_edges.shape[0],
-#                                                              p1_ed_len - p1_edges.shape[1],
-#                                                              4)),
-#                                          axis=1)
-#
-#                 p1_edges[j, :p1_ed_len] = p1_ed
-#
-#             p2_edges = np.zeros((len(particles_two), p1_edges.shape[1], 4))
-#             for j, p2 in enumerate(particles_two):
-#                 prev_ind = np.where(p2[:, 0] == prev_time)[0][0]
-#                 curr_ind = np.where(p2[:, 0] == current_time)[0][0]
-#
-#                 p2_ed = p2[prev_ind:(curr_ind + 1), 1:5].copy()
-#                 p2_ed[0, 3] = 0
-#                 p2_ed_len = len(p2_ed)
-#                 if p2_ed_len > p2_edges.shape[1]:
-#                     p2_edges = np.append(p2_edges, np.zeros((p2_edges.shape[0],
-#                                                              p2_ed_len - p2_edges.shape[1], 4)),
-#                                          axis=1)
-#
-#                 p2_edges[j, :p2_ed_len] = p2_ed
-#
-#             if p1_edges.shape[1] < p2_edges.shape[1]:
-#                 p1_edges = np.append(p1_edges, np.zeros((p1_edges.shape[0],
-#                                                          p2_edges.shape[1] - p1_edges.shape[1], 4)),
-#                                      axis=1)
-#
-#             tv_each_time[i] = total_variation_edges(p1_edges, p2_edges)
-#
-#     return tv_each_time
 
 
 def append_zeros(list_arr, max_len):
@@ -98,6 +42,7 @@ def append_zeros(list_arr, max_len):
         if len(path) < max_len:
             list_arr[i] = np.append(path, np.zeros(max_len - len(path)))
     return list_arr
+
 
 def append_zeros_2d(list_arr, max_len):
     for i in range(len(list_arr)):
@@ -158,9 +103,7 @@ def each_edge_route_total_variation(particles_one,
                 prev_ind = np.where(p1[:, 0] == prev_time)[0][0]
                 curr_ind = np.where(p1[:, 0] == current_time)[0][0]
 
-                p1_ed = p1[prev_ind:(curr_ind + 1), 1:(4 + alpha_extend)].copy()
-                if include_alpha:
-                    p1_ed[0, 3] = 0.
+                p1_ed = p1[(prev_ind + 1):(curr_ind + 1), 1:(4 + alpha_extend)].copy()
                 p1_ed_len = len(p1_ed)
                 if p1_ed_len > p1_edges.shape[1]:
                     p1_edges = np.append(p1_edges, np.zeros((p1_edges.shape[0],
@@ -175,9 +118,7 @@ def each_edge_route_total_variation(particles_one,
                 prev_ind = np.where(p2[:, 0] == prev_time)[0][0]
                 curr_ind = np.where(p2[:, 0] == current_time)[0][0]
 
-                p2_ed = p2[prev_ind:(curr_ind + 1), 1:(4 + alpha_extend)].copy()
-                if include_alpha:
-                    p2_ed[0, 3] = 0
+                p2_ed = p2[(prev_ind + 1):(curr_ind + 1), 1:(4 + alpha_extend)].copy()
                 p2_ed_len = len(p2_ed)
                 if p2_ed_len > p2_edges.shape[1]:
                     p2_edges = np.append(p2_edges, np.zeros((p2_edges.shape[0],
@@ -195,6 +136,39 @@ def each_edge_route_total_variation(particles_one,
             tv_each_time[i] = total_variation_edges(p1_edges, p2_edges)
 
     return tv_each_time
+
+
+# def each_position_total_variation(particles_one,
+#                                   particles_two,
+#                                   observation_times,
+#                                   include_alpha=False):
+#     m = observation_times.size
+#     tv_each_time = np.zeros(m)
+#
+#     alpha_extend = include_alpha * 1
+#
+#     for i in range(m):
+#         if i == 0:
+#             p1_first_edges = np.array([p[0, 1:(4 + alpha_extend)] for p in particles_one])
+#             p2_first_edges = np.array([p[0, 1:(4 + alpha_extend)] for p in particles_two])
+#
+#             tv_each_time[i] = total_variation_edges(p1_first_edges, p2_first_edges)
+#         else:
+#             current_time = observation_times[i]
+#
+#             p1_edges = np.zeros((len(particles_one), (3 + alpha_extend)))
+#             for j, p1 in enumerate(particles_one):
+#                 curr_ind = np.where(p1[:, 0] == current_time)[0][0]
+#                 p1_edges[j] = p1[curr_ind, 1:(4 + alpha_extend)].copy()
+#
+#             p2_edges = np.zeros((len(particles_two), (3 + alpha_extend)))
+#             for j, p2 in enumerate(particles_two):
+#                 curr_ind = np.where(p2[:, 0] == current_time)[0][0]
+#                 p2_edges[j] = p2[curr_ind, 1:(4 + alpha_extend)].copy()
+#
+#             tv_each_time[i] = total_variation_edges(p1_edges, p2_edges)
+#
+#     return tv_each_time
 
 
 # Plot proportion routes correct

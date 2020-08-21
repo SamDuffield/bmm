@@ -23,13 +23,13 @@ timestamps = 15
 
 gen_model = bmm.ExponentialMapMatchingModel()
 # gen_model.max_speed = 30
-# gen_model.zero_dist_prob_neg_exponent = -np.log(0.25) / timestamps
-gen_model.distance_params['zero_dist_prob_neg_exponent'] = -np.log(0.25) / timestamps # 0.12647466565905877
-gen_model.distance_params['lambda_speed'] = 1/15 # 0.06666
+gen_model.distance_params['zero_dist_prob_neg_exponent'] = -np.log(0.1) / timestamps # 0.1535056728662697
+gen_model.distance_params['lambda_speed'] = 1/15
 gen_model.deviation_beta = 0.03
-gen_model.gps_sd = 3.
+gen_model.gps_sd = 2.5
 
 num_inter_cut_off = None
+num_pos_routes_cap = 100
 
 # Generate simulated routes
 num_repeats = 1
@@ -46,7 +46,7 @@ for repeat_int in range(num_repeats):
     print(repeat_int, '\n\n')
 
     routes = [sample_route(cam_graph, gen_model, timestamps, max_route_length, d_refine=sample_d_refine,
-              num_inter_cut_off=num_inter_cut_off) for _ in range(num_routes)]
+              num_inter_cut_off=num_inter_cut_off, num_pos_route_cap=num_pos_routes_cap) for _ in range(num_routes)]
     true_polylines = [bmm.observation_time_rows(rou)[:, 5:7] for rou in routes]
     routes_obs_rows = [bmm.observation_time_rows(rou) for rou in routes]
     len_routes = [len(rou) for rou in routes]
@@ -56,7 +56,7 @@ for repeat_int in range(num_repeats):
         for i in range(num_routes):
             if len_obs[i] < min_route_length:
                 routes[i] = sample_route(cam_graph, gen_model, timestamps, max_route_length, d_refine=sample_d_refine,
-                                         num_inter_cut_off=num_inter_cut_off)
+                                         num_inter_cut_off=num_inter_cut_off, num_pos_route_cap=num_pos_routes_cap)
         true_polylines = [bmm.observation_time_rows(rou)[:, 5:7] for rou in routes]
         routes_obs_rows = [bmm.observation_time_rows(rou) for rou in routes]
         len_routes = [len(rou) for rou in routes]
@@ -78,7 +78,7 @@ for repeat_int in range(num_repeats):
 
     # Run EM
     tune_model = bmm.ExponentialMapMatchingModel()
-    tune_model.distance_params['zero_dist_prob_neg_exponent'] = -np.log(0.2) / timestamps
+    tune_model.distance_params['zero_dist_prob_neg_exponent'] = -np.log(0.075) / timestamps
     tune_model.distance_params['lambda_speed'] = 1/10
     tune_model.deviation_beta = 0.01
     tune_model.gps_sd = 7.
@@ -94,7 +94,7 @@ for repeat_int in range(num_repeats):
     params_track_single = bmm.offline_em(cam_graph, tune_model, timestamps, observations, n_iter=n_iter,
                                          max_rejections=0,
                                          initial_d_truncate=50, num_inter_cut_off=num_inter_cut_off,
-                                         gradient_stepsize_scale=1e-5, gradient_stepsize_neg_exp=0.1)
+                                         gradient_stepsize_scale=1e-5, gradient_stepsize_neg_exp=0.25)
 
     params_track.append(params_track_single)
 

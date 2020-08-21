@@ -25,6 +25,7 @@ def offline_em(graph: MultiDiGraph,
                mm_model: MapMatchingModel,
                timestamps: Union[list, float],
                polylines: list,
+               save_path: str,
                n_ffbsi: int = 100,
                n_iter: int = 10,
                gradient_stepsize_scale: float = 1e-3,
@@ -39,6 +40,7 @@ def offline_em(graph: MultiDiGraph,
         either float if all times between observations are the same, or a series of timestamps in seconds/UNIX timestamp
         if timestamps given, must be in a list matching dimensions of polylines
     :param polylines: UTM polylines
+    :param save_path: path to save learned parameters
     :param n_ffbsi: number of samples for FFBSi algorithm
     :param n_iter: number of EM iterations
     :param gradient_stepsize_scale: starting stepsize
@@ -89,7 +91,7 @@ def offline_em(graph: MultiDiGraph,
 
         print(f'EM iter: {k}')
         print(params_track)
-        pickle.dump(params_track, open('param_track.pickle', 'wb'))
+        pickle.dump(params_track, open(save_path, 'wb'))
 
     return params_track
 

@@ -160,7 +160,6 @@ def sample_route(graph, model, time_interval, length, start_position=None, cart_
 
         # Normalise prior/transition probabilities
         prior_probs = distance_prior_evals * deviation_prior_evals
-        # prior_probs[distances > 1e-5] *= (1 - prior_probs[distances <= 1e-5][0]) / prior_probs[distances > 1e-5].sum()
         prior_probs /= prior_probs.sum()
 
         # Choose one

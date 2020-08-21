@@ -121,9 +121,6 @@ def get_possible_routes(graph: MultiDiGraph,
         else:
             return [None]
 
-    n_inter = max(1, np.sum(~((intersection_edges[:, 1] == start_edge_and_position[1]) *
-                              (intersection_edges[:, 2] == start_edge_and_position[3]))))
-
     if len(intersection_edges) == 1 and intersection_edges[0][1] == start_edge_and_position[1] \
             and intersection_edges[0][2] == start_edge_and_position[3]:
         # Dead-end and two-way -> Only option is u-turn
@@ -264,7 +261,7 @@ def optimal_proposal(graph: MultiDiGraph,
         else:
             discretised_edge_matrix[:, -1] += route[-2, -1]
 
-        discretised_edge_matrix = discretised_edge_matrix[discretised_edge_matrix[:, -1] < d_max]
+        discretised_edge_matrix = discretised_edge_matrix[discretised_edge_matrix[:, -1] < d_max + 1e-5]
 
         # Track route index and append to list
         if discretised_edge_matrix is not None and len(discretised_edge_matrix) > 0:
@@ -289,13 +286,9 @@ def optimal_proposal(graph: MultiDiGraph,
     deviation_prior_evals = mm_model.deviation_prior_evaluate(particle[-1, 5:7],
                                                               discretised_routes[:, 1:3],
                                                               discretised_routes[:, -1])
-    # deviation_prior_evals[distances < 1e-5] = 1.
 
     # Normalise prior/transition probabilities
     prior_probs = distance_prior_evals * deviation_prior_evals
-
-    # prior_probs_norm_const = prior_probs[distances > 1e-5].sum()
-    # prior_probs[distances > 1e-5] *= (1 - prior_probs[distances < 1e-5][0]) / prior_probs_norm_const
 
     prior_probs_norm_const = prior_probs.sum()
     if only_norm_const:
