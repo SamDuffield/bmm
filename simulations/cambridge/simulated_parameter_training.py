@@ -14,7 +14,7 @@ from utils import sample_route, download_cambridge_graph, load_graph
 
 import bmm
 
-np.random.seed(1)
+np.random.seed(0)
 
 # Load graph
 graph_path = os.getcwd() + '/cambridge_projected_simple.graphml'
@@ -39,7 +39,7 @@ num_pos_routes_cap = 100
 
 # Generate simulated routes
 num_routes = 20
-min_route_length = 20
+min_route_length = 10
 max_route_length = 50
 sample_d_refine = 1
 n_iter = 200

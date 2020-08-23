@@ -316,7 +316,7 @@ def optim_plus_devs(graph: MultiDiGraph,
                                           + [mm_model.deviation_beta]),
                                  method='trust-constr',
                                  bounds=bounds,
-                                 options={'maxfev': max_iter})
+                                 options={'maxiter': max_iter})
 
     for i, k in enumerate(mm_model.distance_params.keys()):
         mm_model.distance_params[k] = optim_dist_params.x[i]
