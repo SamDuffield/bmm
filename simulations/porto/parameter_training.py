@@ -48,5 +48,5 @@ params_track = bmm.offline_em(graph, mm_model, timestamps, polylines,
                               save_path=os.getcwd() + '/tuned_params.pickle',
                               n_iter=n_iter, max_rejections=0,
                               n_ffbsi=n_particles, initial_d_truncate=50,
-                              gradient_stepsize_scale=1e-5, gradient_stepsize_neg_exp=0.1,
+                              gradient_stepsize_scale=1e-5, gradient_stepsize_neg_exp=0.,
                               num_inter_cut_off=10, ess_threshold=0.8)

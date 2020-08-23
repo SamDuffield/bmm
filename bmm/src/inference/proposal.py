@@ -289,7 +289,22 @@ def optimal_proposal(graph: MultiDiGraph,
 
     prior_probs_norm_const = prior_probs.sum()
     if only_norm_const:
-        return prior_probs_norm_const
+        if store_norm_quants:
+            deviations = np.sqrt(np.sum((particle[-1, 5:7] - discretised_routes[:, 1:3]) ** 2, axis=1))
+            deviations = np.abs(deviations - discretised_routes[:, -1])
+
+            # Z, dZ/d(dist_params), dZ/d(deviation_beta)
+            dev_norm_quants = np.array([prior_probs_norm_const,
+                                        *np.sum(mm_model.distance_prior_gradient(distances, time_interval)
+                                                .reshape(len(mm_model.distance_params), len(distances))
+                                                * deviation_prior_evals, axis=-1),
+                                        -np.sum(deviations
+                                                * distance_prior_evals
+                                                * deviation_prior_evals)
+                                        ])
+            return dev_norm_quants
+        else:
+            return prior_probs_norm_const
     prior_probs /= prior_probs_norm_const
 
     # Likelihood evaluations

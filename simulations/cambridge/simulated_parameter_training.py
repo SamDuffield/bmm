@@ -29,7 +29,7 @@ timestamps = 15
 
 gen_model = bmm.ExponentialMapMatchingModel()
 gen_model.max_speed = 45
-gen_model.distance_params['zero_dist_prob_neg_exponent'] = -np.log(0.05) / timestamps
+gen_model.distance_params['zero_dist_prob_neg_exponent'] = -np.log(0.10) / timestamps # 0.1997154849035994
 gen_model.distance_params['lambda_speed'] = 1/15
 gen_model.deviation_beta = 0.05
 gen_model.gps_sd = 3.0
@@ -92,5 +92,5 @@ params_track_single = bmm.offline_em(cam_graph, tune_model, timestamps, observat
                                      n_iter=n_iter,
                                      max_rejections=0,
                                      initial_d_truncate=50, num_inter_cut_off=num_inter_cut_off,
-                                     gradient_stepsize_scale=1e-5, gradient_stepsize_neg_exp=0.)
+                                     gradient_stepsize_scale=1e-4, gradient_stepsize_neg_exp=0.5)
 

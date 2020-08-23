@@ -216,9 +216,9 @@ axes[3].set_ylabel(r'$\sigma_{GPS}$')
 
 if sim:
        line_colour = 'purple'
-       axes[0].hlines(0.05, 0, n_iter, colors=line_colour)
-       axes[1].hlines(1/15, 0, n_iter, colors=line_colour)
-       axes[2].hlines(0., 0, n_iter, colors=line_colour)
+       axes[0].hlines(0.10, 0, n_iter, colors=line_colour)
+       axes[1].hlines(1/15, 0, n_iter,  colors=line_colour)
+       axes[2].hlines(0.05, 0, n_iter, colors=line_colour)
        axes[3].hlines(3.0, 0, n_iter, colors=line_colour)
 
 plt.tight_layout()
