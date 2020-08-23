@@ -206,7 +206,7 @@ def process_proposal_output(particle: np.ndarray,
 
 def optimal_proposal(graph: MultiDiGraph,
                      particle: np.ndarray,
-                     new_observation: np.ndarray,
+                     new_observation: Union[None, np.ndarray],
                      time_interval: float,
                      mm_model: MapMatchingModel,
                      full_smoothing: bool = True,
@@ -272,9 +272,6 @@ def optimal_proposal(graph: MultiDiGraph,
     discretised_routes_indices = np.concatenate(discretised_routes_indices_list)
     discretised_routes = np.concatenate(discretised_routes_list)
 
-    # Likelihood evaluations
-    likelihood_evals = mm_model.likelihood_evaluate(discretised_routes[:, 1:3], new_observation)
-
     if len(discretised_routes) == 0 or (len(discretised_routes) == 1 and discretised_routes[0][-1] == 0):
         return 0. if only_norm_const else (None, 0., 0.)
 
@@ -294,6 +291,9 @@ def optimal_proposal(graph: MultiDiGraph,
     if only_norm_const:
         return prior_probs_norm_const
     prior_probs /= prior_probs_norm_const
+
+    # Likelihood evaluations
+    likelihood_evals = mm_model.likelihood_evaluate(discretised_routes[:, 1:3], new_observation)
 
     # Calculate sample probabilities
     sample_probs = prior_probs[likelihood_evals > 0] * likelihood_evals[likelihood_evals > 0]

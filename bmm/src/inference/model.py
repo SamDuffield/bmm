@@ -135,14 +135,14 @@ class ExponentialMapMatchingModel(MapMatchingModel):
                  lambda_speed: float = 0.06,
                  deviation_beta: float = 0.017):
         super().__init__()
+        self.min_zero_dist_prob = 0.01
+        self.max_zero_dist_prob = 0.5
         self.distance_params = OrderedDict({'zero_dist_prob_neg_exponent': zero_dist_prob_neg_exponent,
                                             'lambda_speed': lambda_speed})
-        self.distance_params_bounds = OrderedDict({'zero_dist_prob_neg_exponent': (1e-20, np.inf),
+        self.distance_params_bounds = OrderedDict({'zero_dist_prob_neg_exponent': (-np.log(self.max_zero_dist_prob)/15,
+                                                                                   -np.log(self.min_zero_dist_prob)/15),
                                                    'lambda_speed': (1e-20, np.inf)})
         self.deviation_beta = deviation_beta
-
-        self.min_zero_dist_prob = 0.01
-        self.max_zero_dist_prob = 0.9
 
     def zero_dist_prob(self,
                        time_interval: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
@@ -215,9 +215,10 @@ class ExponentialMapMatchingModel(MapMatchingModel):
 
         time_int_check = time_interval[non_zero_inds] if isinstance(time_interval, np.ndarray) else time_interval
 
-        out_arr[0] = - time_interval * ~non_zero_inds * self.zero_dist_prob(time_interval) \
-                     + non_zero_inds * self.zero_dist_prob(time_interval) \
-                     * self.distance_params['lambda_speed'] * np.exp(-self.distance_params['lambda_speed'] * speeds)
+        out_arr[0] = (- time_interval * ~non_zero_inds \
+                      + non_zero_inds \
+                      * self.distance_params['lambda_speed'] * np.exp(-self.distance_params['lambda_speed'] * speeds)) \
+                     * self.zero_dist_prob(time_interval)
 
         out_arr[1, non_zero_inds] = (1 - self.zero_dist_prob(time_int_check)) \
                                     * np.exp(
@@ -236,7 +237,7 @@ class ExponentialMapMatchingModel(MapMatchingModel):
         zero_dist_prob = self.zero_dist_prob(time_interval)
 
         distance_bound = max(zero_dist_prob,
-                             (1 - zero_dist_prob) * self.distance_params['lambda_speed'] / time_interval, )
+                             (1 - zero_dist_prob) * self.distance_params['lambda_speed'] / time_interval)
         return distance_bound
 
 
@@ -364,6 +365,3 @@ class GammaMapMatchingModel(MapMatchingModel):
                              / time_interval,
                              zero_dist_prob)
         return distance_bound
-
-
-

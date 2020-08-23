@@ -67,7 +67,7 @@ num_inter_cut_off = 5
 particles = offline_map_match(graph, poly_single[:polyline_truncation], n_samps, timestamps=15,
                               d_refine=1,
                               max_rejections=max_rejects,
-                              ess_threshold=0.5)
+                              ess_threshold=1.0)
 
 print(particles.time)
 print(particles.time / len(poly_single))

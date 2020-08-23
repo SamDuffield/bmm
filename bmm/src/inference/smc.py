@@ -595,7 +595,7 @@ def propose_particles(proposal_func: Callable,
     for k in not_prop_inds:
         if particles[k] is not None:
             prior_norms[k] = proposal_func(graph,
-                                           particles[k].copy(),
+                                           particles[k],
                                            new_observation,
                                            time_interval,
                                            mm_model,

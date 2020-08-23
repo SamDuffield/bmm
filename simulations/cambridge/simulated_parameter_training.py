@@ -6,11 +6,11 @@ import os
 import sys
 
 sim_dat_path = os.getcwd()
-repo_path = os.path.dirname(sim_dat_path)
+repo_path = os.path.dirname(os.path.dirname(sim_dat_path))
 sys.path.append(sim_dat_path)
 sys.path.append(repo_path)
 
-from simulations.cambridge.utils import sample_route, download_cambridge_graph, load_graph
+from utils import sample_route, download_cambridge_graph, load_graph
 
 import bmm
 
@@ -28,17 +28,17 @@ cam_graph = load_graph(graph_path)
 timestamps = 15
 
 gen_model = bmm.ExponentialMapMatchingModel()
-gen_model.max_speed = 40
-gen_model.distance_params['zero_dist_prob_neg_exponent'] = -np.log(0.05) / timestamps # 0.1535056728662697
+gen_model.max_speed = 45
+gen_model.distance_params['zero_dist_prob_neg_exponent'] = -np.log(0.05) / timestamps
 gen_model.distance_params['lambda_speed'] = 1/15
-gen_model.deviation_beta = 0.02
+gen_model.deviation_beta = 0.05
 gen_model.gps_sd = 3.0
 
 num_inter_cut_off = None
 num_pos_routes_cap = 100
 
 # Generate simulated routes
-num_routes = 50
+num_routes = 20
 min_route_length = 20
 max_route_length = 50
 sample_d_refine = 1
@@ -69,16 +69,16 @@ observations = [po + gen_model.gps_sd * np.random.normal(size=po.shape) for po i
 ###
 distances = np.concatenate([a[1:, -1] for a in routes_obs_rows])
 print(np.mean(distances < 1e-5))
-print(-np.log(np.mean(distances < 1e-5)) / 15)
+# print(-np.log(np.mean(distances < 1e-5)) / 15)
 print(np.sum(distances < 1e-5))
 
 # Run EM
 tune_model = bmm.ExponentialMapMatchingModel()
-tune_model.distance_params['zero_dist_prob_neg_exponent'] = -np.log(0.2) / timestamps
+tune_model.distance_params['zero_dist_prob_neg_exponent'] = -np.log(0.15) / timestamps
 tune_model.distance_params['lambda_speed'] = 1/10
-tune_model.deviation_beta = 0.05
-tune_model.gps_sd = 5.
-
+tune_model.deviation_beta = 0.1
+tune_model.gps_sd = 7.
+#
 # tune_model = bmm.ExponentialMapMatchingModel()
 # tune_model.distance_params['zero_dist_prob_neg_exponent'] = gen_model.distance_params['zero_dist_prob_neg_exponent']
 # tune_model.distance_params['lambda_speed'] = gen_model.distance_params['lambda_speed']
@@ -92,5 +92,5 @@ params_track_single = bmm.offline_em(cam_graph, tune_model, timestamps, observat
                                      n_iter=n_iter,
                                      max_rejections=0,
                                      initial_d_truncate=50, num_inter_cut_off=num_inter_cut_off,
-                                     gradient_stepsize_scale=1e-6, gradient_stepsize_neg_exp=0.5)
+                                     gradient_stepsize_scale=1e-5, gradient_stepsize_neg_exp=0.)
 
