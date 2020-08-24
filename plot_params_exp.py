@@ -51,6 +51,16 @@ params = {'distance_params': {'zero_dist_prob_neg_exponent': np.array([0.1264746
        5.7237403 , 5.70540954, 5.68787607, 5.66922007, 5.85499188,
        5.92535065, 5.80073228, 5.87635267, 5.73378729])}
 
+params = {'distance_params': {'zero_dist_prob_neg_exponent': np.array([0.12647467, 0.12993091, 0.13163937, 0.13202109, 0.13150834,
+       0.13051929, 0.12949164, 0.12944819, 0.12918997, 0.12857165,              
+       0.12784671]), 'lambda_speed': np.array([0.1       , 0.08885346, 0.08250819, 0.08067484, 0.08070665,
+       0.08256508, 0.08402057, 0.08376766, 0.08326716, 0.08422372,              
+       0.08475799])}, 'deviation_beta': np.array([0.1       , 0.08077366, 0.06426321, 0.05590916, 0.04849859,
+       0.04823344, 0.05358811, 0.05306635, 0.04750426, 0.04623181,              
+       0.04013691]), 'gps_sd': np.array([7.        , 6.65103022, 6.25780519, 6.02581846, 5.8128912 ,
+       5.7237403 , 5.70540954, 5.68787607, 5.66922007, 5.85499188,              
+       5.92535065])} 
+
 
 # Simulated data
 # sim = True
@@ -230,7 +240,7 @@ axes[3].set_ylabel(r'$\sigma_{GPS}$')
 if sim:
        line_colour = 'purple'
        axes[0].hlines(0.10, 0, n_iter, colors=line_colour)
-       axes[1].hlines(1/15, 0, n_iter,  colors=line_colour)
+       axes[1].hlines(1/20, 0, n_iter,  colors=line_colour)
        axes[2].hlines(0.05, 0, n_iter, colors=line_colour)
        axes[3].hlines(3.0, 0, n_iter, colors=line_colour)
 

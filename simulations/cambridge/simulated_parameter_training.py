@@ -30,7 +30,7 @@ timestamps = 15
 gen_model = bmm.ExponentialMapMatchingModel()
 gen_model.max_speed = 45
 gen_model.distance_params['zero_dist_prob_neg_exponent'] = -np.log(0.10) / timestamps # 0.1997154849035994
-gen_model.distance_params['lambda_speed'] = 1/15
+gen_model.distance_params['lambda_speed'] = 1/20
 gen_model.deviation_beta = 0.05
 gen_model.gps_sd = 3.0
 
@@ -39,7 +39,7 @@ num_pos_routes_cap = 100
 
 # Generate simulated routes
 num_routes = 20
-min_route_length = 20
+min_route_length = 30
 max_route_length = 50
 sample_d_refine = 1
 n_iter = 200

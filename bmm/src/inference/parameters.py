@@ -65,35 +65,42 @@ def offline_em(graph: MultiDiGraph,
     if no_deviation_prior:
         mm_model.deviation_beta = 0
 
-    time_interval_arrs = [get_time_interval_array(timestamps_single, len(polyline))
+    time_interval_arrs_full = [get_time_interval_array(timestamps_single, len(polyline))
                           for timestamps_single, polyline in zip(timestamps, polylines)]
 
     for k in range(n_iter):
         # Run FFBSi over all given polylines with latest hyperparameters
         mm_ind = 0
-        print(f'Polyline {mm_ind}')
         map_matchings = []
-        for time_ints_single, polyline in zip(time_interval_arrs, polylines):
+        time_interval_arrs_int = []
+        polylines_int = []
+        for time_ints_single, polyline in zip(time_interval_arrs_full, polylines):
+            print(f'Polyline {mm_ind}')
+            success = True
             try:
-                map_matchings.append(offline_map_match(graph,
-                                                   polyline,
-                                                   n_ffbsi,
-                                                   time_ints_single,
-                                                   mm_model,
-                                                   # store_norm_quants=not no_deviation_prior,
-                                                   **kwargs))
+                mm = offline_map_match(graph,
+                                       polyline,
+                                       n_ffbsi,
+                                       time_ints_single,
+                                       mm_model,
+                                       # store_norm_quants=not no_deviation_prior,
+                                       **kwargs)
             except ValueError:
                 print(f'Map-matching {mm_ind} failed')
-
+                success = False
+            if success:
+                map_matchings.append(mm)
+                time_interval_arrs_int.append(time_ints_single)
+                polylines_int.append(polyline)
             mm_ind += 1
 
         if no_deviation_prior:
             # Optimise hyperparameters
-            optimise_hyperparameters(mm_model, map_matchings, time_interval_arrs, polylines)
+            optimise_hyperparameters(mm_model, map_matchings, time_interval_arrs_int, polylines_int)
         else:
             # Take gradient step
             gradient_em_step(graph,
-                             mm_model, map_matchings, time_interval_arrs, polylines,
+                             mm_model, map_matchings, time_interval_arrs_int, polylines_int,
                              gradient_stepsize_scale / (k + 1) ** gradient_stepsize_neg_exp, **kwargs)
 
             # Optimise hyperparameters
