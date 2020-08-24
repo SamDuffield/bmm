@@ -39,7 +39,7 @@ num_pos_routes_cap = 100
 
 # Generate simulated routes
 num_routes = 20
-min_route_length = 10
+min_route_length = 20
 max_route_length = 50
 sample_d_refine = 1
 n_iter = 200
@@ -92,5 +92,5 @@ params_track_single = bmm.offline_em(cam_graph, tune_model, timestamps, observat
                                      n_iter=n_iter,
                                      max_rejections=0,
                                      initial_d_truncate=50, num_inter_cut_off=num_inter_cut_off,
-                                     gradient_stepsize_scale=1e-4, gradient_stepsize_neg_exp=0.5)
+                                     gradient_stepsize_scale=1e-5, gradient_stepsize_neg_exp=0)
 
