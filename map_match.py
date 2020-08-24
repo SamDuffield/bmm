@@ -67,7 +67,7 @@ num_inter_cut_off = 5
 particles = offline_map_match(graph, poly_single[:polyline_truncation], n_samps, timestamps=15,
                               d_refine=1,
                               max_rejections=max_rejects,
-                              ess_threshold=1.0)
+                              ess_threshold=1.0, store_norm_quants=True)
 
 print(particles.time)
 print(particles.time / len(poly_single))
@@ -75,3 +75,20 @@ print(particles.time / len(poly_single))
 # Plot
 # plot(graph, particles, poly_single)
 # plt.show()
+
+
+prior_norms = np.zeros(particles.dev_norm_quants.shape[:2])
+for n in range(n_samps):
+    obs_rows = bmm.observation_time_rows(particles[n])
+    for m in range(len(poly_single) - 1):
+        prior_norms[m, n] = optimal_proposal(graph,
+                                                                          obs_rows[m][None],
+                                                                          None,
+                                                                          15,
+                                                                          mm_model,
+                                                                          full_smoothing=False,
+                                                                          only_norm_const=True)
+
+
+
+

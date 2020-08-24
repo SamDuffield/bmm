@@ -276,8 +276,8 @@ def long_lat_to_utm(points: Union[list, np.ndarray], graph=None) -> np.ndarray:
     points_gdf = GeoDataFrame({'index': np.arange(len(points)),
                                'x': points[:, 0],
                                'y': points[:, 1]})
-    points_gdf.crs = '+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs' # long lat crs
     points_gdf['geometry'] = points_gdf.apply(lambda row: Point(row['x'], row['y']), axis=1)
+    points_gdf.crs = '+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs' # long lat crs
     points_gdf_utm = ox.projection.project_gdf(points_gdf, to_crs=str(graph.graph['crs']) if graph is not None else None)
     points_gdf_utm['x'] = points_gdf_utm['geometry'].map(lambda point: point.x)
     points_gdf_utm['y'] = points_gdf_utm['geometry'].map(lambda point: point.y)
