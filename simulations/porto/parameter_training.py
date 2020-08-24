@@ -10,7 +10,9 @@ import os
 import json
 import sys
 
-repo_path = os.getcwd()
+sim_dat_path = os.getcwd()
+repo_path = os.path.dirname(os.path.dirname(sim_dat_path))
+sys.path.append(sim_dat_path)
 sys.path.append(repo_path)
 
 import numpy as np
@@ -26,11 +28,11 @@ n_iter = 50
 n_particles = 100
 
 graph_path = os.getcwd() + '/portotaxi_graph_portugal-140101.osm._simple.graphml'
-graph_path = repo_path + '/simulations/porto-real/portotaxi_graph_portugal-140101.osm._simple.graphml'
+# graph_path = repo_path + '/simulations/porto/portotaxi_graph_portugal-140101.osm._simple.graphml'
 graph = ox.load_graphml(graph_path)
 
 train_data_path = os.getcwd() + '/training_data.csv'
-train_data_path = repo_path + '/simulations/porto-real//training_data.csv'
+# train_data_path = repo_path + '/simulations/porto/training_data.csv'
 # Load long-lat polylines
 polylines_ll = [np.array(json.loads(poly)) for poly in pd.read_csv(train_data_path)['POLYLINE']]
 # Convert to utm

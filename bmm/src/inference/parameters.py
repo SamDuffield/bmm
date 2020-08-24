@@ -12,6 +12,7 @@ import inspect
 
 import numpy as np
 from networkx.classes import MultiDiGraph
+from numpy.core._multiarray_umath import ndarray
 from scipy.optimize import minimize, root_scalar
 
 from bmm.src.inference.particles import MMParticles
@@ -69,14 +70,22 @@ def offline_em(graph: MultiDiGraph,
 
     for k in range(n_iter):
         # Run FFBSi over all given polylines with latest hyperparameters
-        map_matchings = [offline_map_match(graph,
-                                           polyline,
-                                           n_ffbsi,
-                                           time_ints_single,
-                                           mm_model,
-                                           # store_norm_quants=not no_deviation_prior,
-                                           **kwargs)
-                         for time_ints_single, polyline in zip(time_interval_arrs, polylines)]
+        mm_ind = 0
+        print(f'Polyline {mm_ind}')
+        map_matchings = []
+        for time_ints_single, polyline in zip(time_interval_arrs, polylines):
+            try:
+                map_matchings.append(offline_map_match(graph,
+                                                   polyline,
+                                                   n_ffbsi,
+                                                   time_ints_single,
+                                                   mm_model,
+                                                   # store_norm_quants=not no_deviation_prior,
+                                                   **kwargs))
+            except ValueError:
+                print(f'Map-matching {mm_ind} failed')
+
+            mm_ind += 1
 
         if no_deviation_prior:
             # Optimise hyperparameters
