@@ -121,10 +121,10 @@ def rejection_backward_sample(fixed_particle: np.ndarray,
                               filter_weights: np.ndarray,
                               time_interval: float,
                               next_time_index: int,
-                              prior_bound: float,
+                              pos_distance_prior_bound: float,
                               mm_model: MapMatchingModel,
                               max_rejections: int,
-                              return_sampled_index: bool = False) -> Union[Optional[np.ndarray], tuple]:
+                              return_sampled_index: bool = False) -> Union[Optional[np.ndarray], tuple, int]:
     """
     Attempt up to max_rejections of rejection sampling to backwards sample a single particle
     :param fixed_particle: trajectory prior to stitching time
@@ -134,7 +134,7 @@ def rejection_backward_sample(fixed_particle: np.ndarray,
     :param filter_weights: weights for filter_particles
     :param time_interval: time between observations at backwards sampling time
     :param next_time_index: index of second observation time in fixed_particle
-    :param prior_bound: bound on distance transition density
+    :param pos_distance_prior_bound: bound on distance transition density given positive
     :param mm_model: MapMatchingModel
     :param max_rejections: number of rejections to attempt, if none succeed return None
     :param return_sampled_index: whether to return index of selected back sample
@@ -156,12 +156,15 @@ def rejection_backward_sample(fixed_particle: np.ndarray,
 
         smoothing_distance = fixed_particle[next_time_index, -1] + distance_j_to_k
 
+        if smoothing_distance < 1e-5:
+            return (0, filter_index) if return_sampled_index else 0
+
         smoothing_distance_prior = mm_model.distance_prior_evaluate(smoothing_distance, time_interval)
         smoothing_deviation_prior = mm_model.deviation_prior_evaluate(filter_particle[-1, 5:7],
                                                                       fixed_particle[None, next_time_index, 5:7],
                                                                       smoothing_distance)
 
-        if np.random.uniform() < smoothing_distance_prior * smoothing_deviation_prior / prior_bound:
+        if np.random.uniform() < smoothing_distance_prior * smoothing_deviation_prior / pos_distance_prior_bound:
             fixed_particle[1:(next_time_index + 1), -1] += distance_j_to_k
             out_part = np.append(filter_particle, fixed_particle[1:], axis=0)
             if return_sampled_index:
@@ -226,7 +229,7 @@ def backward_simulate(graph: MultiDiGraph,
         next_time = filter_particles[i + 1].latest_observation_time
 
         if not full_sampling:
-            prior_bound = mm_model.prior_bound(time_interval_arr[i])
+            pos_prior_bound = mm_model.pos_distance_prior_bound(time_interval_arr[i])
 
             adjusted_weights = filter_weights[i].copy()
             if filter_particles[i].prior_norm.ndim == 2:
@@ -237,10 +240,12 @@ def backward_simulate(graph: MultiDiGraph,
             good_inds = np.logical_and(adjusted_weights != 0, prior_norm != 0)
             adjusted_weights[good_inds] /= prior_norm[good_inds]
             adjusted_weights /= adjusted_weights.sum()
+            store_out_parts = out_particles.copy()
 
         if store_norm_quants:
             sampled_inds = np.zeros(n_samps, dtype=int)
 
+        resort_to_full = False
         for j in range(n_samps):
             fixed_particle = out_particles[j]
             first_edge_fixed = fixed_particle[0]
@@ -273,12 +278,14 @@ def backward_simulate(graph: MultiDiGraph,
                                                         adjusted_weights,
                                                         time_interval_arr[i],
                                                         fixed_next_time_index,
-                                                        prior_bound,
+                                                        pos_prior_bound,
                                                         mm_model,
                                                         max_rejections,
                                                         return_sampled_index=store_norm_quants)
 
-                if (store_norm_quants and back_output[0] is None) or (not store_norm_quants and back_output is None):
+                first_back_output = back_output[0] if store_norm_quants else back_output
+
+                if first_back_output is None:
                     back_output = full_backward_sample(fixed_particle,
                                                        first_edge_fixed,
                                                        first_edge_fixed_length,
@@ -290,6 +297,34 @@ def backward_simulate(graph: MultiDiGraph,
                                                        return_ess_back=False,
                                                        return_sampled_index=store_norm_quants)
 
+                if isinstance(first_back_output, int) and first_back_output == 0:
+                    resort_to_full = True
+                    break
+
+                if store_norm_quants:
+                    out_particles[j], sampled_inds[j] = back_output
+                else:
+                    out_particles[j] = back_output
+
+        if resort_to_full:
+            for j in range(n_samps):
+                fixed_particle = store_out_parts[j]
+                first_edge_fixed = fixed_particle[0]
+                first_edge_fixed_geom = get_geometry(graph, first_edge_fixed[1:4])
+                first_edge_fixed_length = first_edge_fixed_geom.length
+                fixed_next_time_index = np.where(fixed_particle[:, 0] == next_time)[0][0]
+
+
+                back_output = full_backward_sample(fixed_particle,
+                                                   first_edge_fixed,
+                                                   first_edge_fixed_length,
+                                                   filter_particles[i],
+                                                   filter_weights[i],
+                                                   time_interval_arr[i],
+                                                   fixed_next_time_index,
+                                                   mm_model,
+                                                   return_ess_back=False,
+                                                   return_sampled_index=store_norm_quants)
                 if store_norm_quants:
                     out_particles[j], sampled_inds[j] = back_output
                 else:
