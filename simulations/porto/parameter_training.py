@@ -28,11 +28,9 @@ n_iter = 200
 n_particles = 100
 
 graph_path = os.getcwd() + '/portotaxi_graph_portugal-140101.osm._simple.graphml'
-# graph_path = repo_path + '/simulations/porto/portotaxi_graph_portugal-140101.osm._simple.graphml'
 graph = ox.load_graphml(graph_path)
 
 train_data_path = os.getcwd() + '/training_data.csv'
-# train_data_path = repo_path + '/simulations/porto/training_data.csv'
 
 # Load long-lat polylines
 polylines_ll = [np.array(json.loads(poly)) for poly in pd.read_csv(train_data_path)['POLYLINE']]

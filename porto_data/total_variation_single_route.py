@@ -30,7 +30,7 @@ _, process_data_path = source_data()
 
 graph = load_graph()
 
-run_indicator = 123
+run_indicator = 1230
 
 # Load taxi data
 # data_path = data.utils.choose_data()
@@ -55,7 +55,7 @@ time_interval = 15
 ffbsi_n_samps = int(1e3)
 fl_n_samps = np.array([50, 100, 200])
 lags = np.array([0, 3, 10])
-max_rejections = 0
+max_rejections = 50
 initial_truncation = None
 num_repeats = 1
 proposal_dict = {'proposal': 'optimal',
@@ -88,11 +88,11 @@ with open(save_dir + 'proposal_dict', 'w+') as f:
 
 # Setup map-matching model
 mm_model = bmm.ExponentialMapMatchingModel()
-mm_model.distance_params['zero_dist_prob_neg_exponent'] = -np.log(0.05) / 15
-mm_model.distance_params['a_speed'] = 1.
-mm_model.distance_params['b_speed'] = 0.1
-mm_model.deviation_beta = 0.05
-mm_model.gps_sd = 6.
+# mm_model.distance_params['zero_dist_prob_neg_exponent'] = -np.log(0.05) / 15
+# mm_model.distance_params['a_speed'] = 1.
+# mm_model.distance_params['b_speed'] = 0.1
+# mm_model.deviation_beta = 0.05
+# mm_model.gps_sd = 6.
 
 # Run FFBSi
 ffbsi_route = bmm.offline_map_match(graph,

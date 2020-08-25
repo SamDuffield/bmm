@@ -38,11 +38,11 @@ def _likelihood_evaluate(route_cart_coords: np.ndarray,
 class MapMatchingModel:
 
     def __init__(self):
-        self.gps_sd = 5.67
+        self.gps_sd = 5.66
         self.gps_sd_bounds = (0, np.inf)
         self.likelihood_d_truncate = np.inf
 
-        self.deviation_beta = 0.017
+        self.deviation_beta = 0.056
         self.deviation_beta_bounds = (0, np.inf)
 
         self.max_speed = 50
@@ -75,15 +75,23 @@ class MapMatchingModel:
         """
         raise AttributeError("Distance prior gradient not implemented")
 
-    def prior_bound(self, time_interval):
+    def pos_distance_prior_bound(self, time_interval: float) -> float:
         """
-        Extracts bound on the prior/transition density
+        Extracts bound on the distance component of the prior/transition density given the distance is > 0
         :param time_interval: seconds, time between observations
         :return: bound on distance prior density
         """
         raise AttributeError("Prior bound not implemented")
 
-    def d_max(self, time_interval):
+    def distance_prior_bound(self, time_interval: float) -> float:
+        """
+        Extracts bound on the distance component of the prior/transition density
+        :param time_interval: seconds, time between observations
+        :return: bound on distance prior density
+        """
+        raise AttributeError("Prior bound not implemented")
+
+    def d_max(self, time_interval: float) -> float:
         """
         Initiates default value of the maximum distance possibly travelled in the time interval.
         Assumes a maximum possible speed.
@@ -131,9 +139,10 @@ class MapMatchingModel:
 class ExponentialMapMatchingModel(MapMatchingModel):
 
     def __init__(self,
-                 zero_dist_prob_neg_exponent: float = 0.123,
-                 lambda_speed: float = 0.06,
-                 deviation_beta: float = 0.017):
+                 zero_dist_prob_neg_exponent: float = 0.133,
+                 lambda_speed: float = 0.081,
+                 deviation_beta: float = 0.056,
+                 gps_sd: float = 5.66):
         super().__init__()
         self.min_zero_dist_prob = 0.01
         self.max_zero_dist_prob = 0.5
@@ -143,6 +152,7 @@ class ExponentialMapMatchingModel(MapMatchingModel):
                                                                                    -np.log(self.min_zero_dist_prob)/15),
                                                    'lambda_speed': (1e-20, np.inf)})
         self.deviation_beta = deviation_beta
+        self.gps_sd = gps_sd
 
     def zero_dist_prob(self,
                        time_interval: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
@@ -227,8 +237,8 @@ class ExponentialMapMatchingModel(MapMatchingModel):
 
         return np.squeeze(out_arr)
 
-    def prior_bound(self,
-                    time_interval: float) -> float:
+    def distance_prior_bound(self,
+                             time_interval: float) -> float:
         """
         Extracts bound on the prior/transition density
         :param time_interval: seconds, time between observations
@@ -240,128 +250,34 @@ class ExponentialMapMatchingModel(MapMatchingModel):
                              (1 - zero_dist_prob) * self.distance_params['lambda_speed'] / time_interval)
         return distance_bound
 
-
-class GammaMapMatchingModel(MapMatchingModel):
-
-    def __init__(self):
-        super().__init__()
-        self.distance_params = OrderedDict({'zero_dist_prob_neg_exponent': 0.123,
-                                            'a_speed': 1.,
-                                            'b_speed': 0.06})
-        self.distance_params_bounds = OrderedDict({'zero_dist_prob_neg_exponent': (1e-20, np.inf),
-                                                   'a_speed': (1e-20, np.inf),
-                                                   'b_speed': (1e-20, np.inf)})
-        self.deviation_beta = 0.017
-        self.min_zero_dist_prob = 0.01
-        self.max_zero_dist_prob = 0.9
-
-    def zero_dist_prob(self,
-                       time_interval: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
+    def pos_distance_prior_bound(self, time_interval: float) -> float:
         """
-        Probability of travelling a distance of exactly zero
-        :param time_interval: time between last observation and newly received observation
-        :return: probability of travelling zero metres in time_interval
-        """
-        prob = np.exp(- self.distance_params['zero_dist_prob_neg_exponent'] * time_interval)
-        prob = np.where(prob < self.min_zero_dist_prob, self.min_zero_dist_prob, prob)
-        prob = np.where(prob > self.max_zero_dist_prob, self.max_zero_dist_prob, prob)
-        return prob
-
-    def distance_prior_evaluate(self,
-                                distance: Union[float, np.ndarray],
-                                time_interval: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
-        """
-        Evaluate distance prior/transition density
-        Vectorised to handle multiple evaluations at once
-        :param distance: metres
-            array if multiple evaluations at once
-        :param time_interval: seconds, time between observations
-        :return: distance prior density evaluation(s)
-        """
-        zero_dist_prob = self.zero_dist_prob(time_interval)
-
-        distance = np.atleast_1d(distance)
-
-        out_arr = np.ones_like(distance) * zero_dist_prob
-
-        non_zero_inds = distance > 1e-5
-
-        if np.sum(non_zero_inds) > 0:
-            if np.any(np.atleast_1d(distance[non_zero_inds]) < 0):
-                raise ValueError("Gamma pdf takes only positive values")
-
-            time_int_check = time_interval[non_zero_inds] if isinstance(time_interval, np.ndarray) else time_interval
-            zero_dist_prob_check = zero_dist_prob[non_zero_inds] if isinstance(time_interval, np.ndarray) \
-                else zero_dist_prob
-
-            speeds = distance[non_zero_inds] / time_int_check
-            out_arr[non_zero_inds] = self.distance_params['b_speed'] ** self.distance_params['a_speed'] \
-                                     / gamma(self.distance_params['a_speed']) \
-                                     * speeds ** (self.distance_params['a_speed'] - 1) \
-                                     * np.exp(-self.distance_params['b_speed'] * speeds) \
-                                     * (1 - zero_dist_prob_check) / time_int_check
-
-        return np.squeeze(out_arr)
-
-    def distance_prior_gradient(self,
-                                distance: Union[float, np.ndarray],
-                                time_interval: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
-        """
-        Evaluate gradient of distance prior/transition density in distance_params
-        Gradient at distances >0 only
-        Vectorised to handle multiple evaluations at once
-        :param distance: metres
-            array if multiple evaluations at once
-        :param time_interval: seconds, time between observations
-        :return: distance prior gradient evaluation(s)
-        """
-
-        distance = np.atleast_1d(distance)
-
-        out_arr = np.zeros((3, len(distance)))
-
-        non_zero_inds = distance > 1e-5
-
-        if np.sum(non_zero_inds) > 0:
-            if np.any(np.atleast_1d(distance[non_zero_inds]) < 0):
-                raise ValueError("Gamma pdf takes only positive values")
-
-            time_int_check = time_interval[non_zero_inds] if isinstance(time_interval, np.ndarray) else time_interval
-
-            pdf_evals = self.distance_prior_evaluate(distance, time_interval)
-            out_arr[0] = - time_interval * (distance < 1e-5) \
-                         + time_interval * (distance > 1e-5) * self.zero_dist_prob(time_interval) \
-                         / (1 - self.zero_dist_prob(time_interval))
-
-            out_arr[1, non_zero_inds] = (np.log(self.distance_params['b_speed'])
-                                         - digamma(self.distance_params['a_speed'])
-                                         + np.log(distance[non_zero_inds] / time_int_check))
-
-            out_arr[2, non_zero_inds] = (self.distance_params['a_speed'] / self.distance_params['b_speed']
-                                         - distance[non_zero_inds] / time_int_check)
-
-            out_arr[:] *= pdf_evals
-
-        return np.squeeze(out_arr)
-
-    def prior_bound(self,
-                    time_interval: float) -> float:
-        """
-        Extracts bound on the prior/transition density
+        Extracts bound on the distance component of the prior/transition density given the distance is > 0
         :param time_interval: seconds, time between observations
         :return: bound on distance prior density
         """
         zero_dist_prob = self.zero_dist_prob(time_interval)
+        return(1 - zero_dist_prob) * self.distance_params['lambda_speed'] / time_interval
 
-        if self.distance_params['a_speed'] < 1:
-            raise ValueError("Distance prior not bounded")
+    # def prior_rejection_sample(self,
+    #                            distance: float,
+    #                            time_interval: float,
+    #                            distance_prior_eval: float,
+    #                            deviation_prior_eval: float):
+    #     p_0 = self.zero_dist_prob(15)
+    #     pos_dist_prior_bound = self.distance_params['lambda_speed'] / time_interval
+    #     alpha = 1 - p_0
+    #     rho_2 = np.max([p_0 / (1-p_0), pos_dist_prior_bound])
+    #     a_0 = p_0 / (alpha * rho_2)
+    #
+    #     if distance < 1e-5:
+    #         if a_0 == 1.0:
+    #             return True
+    #         else:
+    #             return np.random.uniform() < a_0
+    #
+    #     a_larger_zero = distance_prior_eval * deviation_prior_eval / p_0
+    #     return np.random.uniform() < a_larger_zero
 
-        gamma_mode = (self.distance_params['a_speed'] - 1) / self.distance_params['b_speed']
 
-        distance_bound = max(self.distance_params['b_speed'] ** self.distance_params['a_speed'] \
-                             / gamma(self.distance_params['a_speed']) \
-                             * gamma_mode ** (self.distance_params['a_speed'] - 1) \
-                             * np.exp(-self.distance_params['b_speed'] * gamma_mode) * (1 - zero_dist_prob)
-                             / time_interval,
-                             zero_dist_prob)
-        return distance_bound
+
