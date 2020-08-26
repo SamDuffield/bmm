@@ -249,9 +249,6 @@ def backward_simulate(graph: MultiDiGraph,
         if store_norm_quants:
             sampled_inds = np.zeros(n_samps, dtype=int)
 
-        store_filter_particles = [a.copy() if a is not None else None for a in filter_particles[i]]
-        store_prior_norm = filter_particles[i].prior_norm.copy()
-
         resort_to_full = False
         for j in range(n_samps):
             fixed_particle = out_particles[j]
@@ -358,8 +355,6 @@ def backward_simulate(graph: MultiDiGraph,
 
         if store_norm_quants:
             norm_quants[i] = filter_particles[i].prior_norm[sampled_inds]
-            if np.any(norm_quants[i] == 0):
-                raise
 
         none_inds = np.array([p is None or None in p for p in out_particles])
         good_inds = ~none_inds
@@ -385,7 +380,5 @@ def backward_simulate(graph: MultiDiGraph,
 
     if store_norm_quants:
         out_particles.dev_norm_quants = norm_quants
-        if np.any(norm_quants == 0):
-            raise
 
     return out_particles

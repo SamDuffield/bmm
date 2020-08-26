@@ -521,20 +521,6 @@ def offline_map_match(graph: MultiDiGraph,
 
         filter_particles[i].prior_norm = temp_prior_norm
 
-        for ind in range(n_samps):
-            if filter_particles[i][ind] is not None:
-                pn = proposal_func(graph,
-                                   filter_particles[i][ind],
-                                   None,
-                                   time_interval_arr[i],
-                                   mm_model,
-                                   full_smoothing=False,
-                                   store_norm_quants=False,
-                                   only_norm_const=True,
-                                   **kwargs)
-                if temp_prior_norm[ind][0] != pn:
-                    raise
-
         if not resample:
             temp_weights *= live_weights
         temp_weights /= np.sum(temp_weights)
@@ -543,21 +529,6 @@ def offline_map_match(graph: MultiDiGraph,
         ess_pf[i + 1] = 1 / np.sum(temp_weights ** 2)
 
         print(str(filter_particles[i + 1].latest_observation_time) + " PF ESS: " + str(ess_pf[i + 1]))
-
-    for t_ind in range(num_obs - 1):
-        for ind in range(n_samps):
-            if filter_particles[t_ind][ind] is not None and filter_particles[t_ind].prior_norm[ind, 0] == 0:
-                pn = proposal_func(graph,
-                                   filter_particles[t_ind][ind],
-                                   None,
-                                   time_interval_arr[i],
-                                   mm_model,
-                                   full_smoothing=False,
-                                   store_norm_quants=False,
-                                   only_norm_const=True,
-                                   **kwargs)
-                if pn != 0:
-                    raise
 
     # Backward simulation
     out_particles = backward_simulate(graph,
