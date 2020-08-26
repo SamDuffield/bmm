@@ -46,34 +46,36 @@ n_samps = 100
 
 polyline_truncation = None
 
-max_rejects = 0
+max_rejects = 50
 
-num_inter_cut_off = 5
+num_inter_cut_off = 10
+
+lag = 3
 
 # Run offline map-matching
+particles = _offline_map_match_fl(graph, poly_single[:polyline_truncation], n_samps, timestamps=15,
+                                  lag=lag,
+                                  d_refine=1, num_inter_cut_off=num_inter_cut_off,
+                                  max_rejections=max_rejects,
+                                  update='PF')
+
 # particles = _offline_map_match_fl(graph, poly_single[:polyline_truncation], n_samps, timestamps=15,
-#                                   lag=3,
+#                                   lag=lag,
 #                                   d_refine=1,
 #                                   max_rejections=max_rejects,
-#                                   update='PF')
-
-particles = _offline_map_match_fl(graph, poly_single[:polyline_truncation], n_samps, timestamps=15,
-                                  lag=3,
-                                  d_refine=1,
-                                  max_rejections=max_rejects,
-                                  update='BSi',
-                                  num_inter_cut_off=num_inter_cut_off)
+#                                   update='BSi',
+#                                   num_inter_cut_off=num_inter_cut_off)
 
 # particles = offline_map_match(graph, poly_single[:polyline_truncation], n_samps, timestamps=15,
-#                               d_refine=1,
+#                               d_refine=1, num_inter_cut_off=num_inter_cut_off,
 #                               max_rejections=max_rejects,
-#                               ess_threshold=1.0)
+#                               ess_threshold=0.8)
 
 print(particles.time)
 print(particles.time / len(poly_single))
 
 # Plot
-plot(graph, particles, poly_single)
-plt.show()
+# plot(graph, particles, poly_single)
+# plt.show()
 
 

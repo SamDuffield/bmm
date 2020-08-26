@@ -30,7 +30,7 @@ _, process_data_path = source_data()
 
 graph = load_graph()
 
-run_indicator = 1230
+run_indicator = 1231
 
 # Load taxi data
 # data_path = data.utils.choose_data()

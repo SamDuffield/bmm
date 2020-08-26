@@ -265,9 +265,9 @@ class ExponentialMapMatchingModel(MapMatchingModel):
     #                            distance_prior_eval: float,
     #                            deviation_prior_eval: float):
     #     p_0 = self.zero_dist_prob(15)
-    #     pos_dist_prior_bound = self.distance_params['lambda_speed'] / time_interval
+    #     dist_prior_bound = self.distance_params['lambda_speed'] / time_interval
     #     alpha = 1 - p_0
-    #     rho_2 = np.max([p_0 / (1-p_0), pos_dist_prior_bound])
+    #     rho_2 = np.max([p_0 / (1-p_0), dist_prior_bound])
     #     a_0 = p_0 / (alpha * rho_2)
     #
     #     if distance < 1e-5:
