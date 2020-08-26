@@ -605,6 +605,6 @@ def propose_particles(proposal_func: Callable,
                                            only_norm_const=True,
                                            **kwargs)
         else:
-            prior_norms[k] = np.zeros(len(mm_model.distance_params) + 2)
+            prior_norms[k] = np.zeros(len(mm_model.distance_params) + 2) if store_norm_quants else 0
 
     return out_particles, weights, prior_norms
