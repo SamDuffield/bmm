@@ -520,6 +520,7 @@ def offline_map_match(graph: MultiDiGraph,
                                                                                    **kwargs)
 
         filter_particles[i].prior_norm = temp_prior_norm
+
         if not resample:
             temp_weights *= live_weights
         temp_weights /= np.sum(temp_weights)
@@ -596,14 +597,14 @@ def propose_particles(proposal_func: Callable,
         if particles[k] is not None:
             prior_norms[k] = proposal_func(graph,
                                            particles[k],
-                                           new_observation,
+                                           None,
                                            time_interval,
                                            mm_model,
-                                           full_smoothing=full_smoothing,
+                                           full_smoothing=False,
                                            store_norm_quants=store_norm_quants,
                                            only_norm_const=True,
                                            **kwargs)
         else:
-            prior_norms[k] = np.zeros_like(prior_norms[resample_inds[0]])
+            prior_norms[k] = np.zeros(len(mm_model.distance_params) + 2)
 
     return out_particles, weights, prior_norms

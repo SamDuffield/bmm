@@ -242,6 +242,7 @@ def backward_simulate(graph: MultiDiGraph,
 
             good_inds = np.logical_and(adjusted_weights != 0, prior_norm != 0)
             adjusted_weights[good_inds] /= prior_norm[good_inds]
+            adjusted_weights[~good_inds] = 0
             adjusted_weights /= adjusted_weights.sum()
             store_out_parts = out_particles.copy()
 
@@ -311,6 +312,8 @@ def backward_simulate(graph: MultiDiGraph,
                     out_particles[j] = back_output
 
         if resort_to_full:
+            if store_norm_quants:
+                sampled_inds = np.zeros(n_samps, dtype=int)
             for j in range(n_samps):
                 fixed_particle = store_out_parts[j]
                 first_edge_fixed = fixed_particle[0]
@@ -361,7 +364,7 @@ def backward_simulate(graph: MultiDiGraph,
             for i_none, j_none in enumerate(np.where(none_inds)[0]):
                 out_particles[j_none] = out_particles[none_inds_res_indices[i_none]].copy()
                 if store_norm_quants:
-                    norm_quants[i:, j_none] = norm_quants[i:, none_inds_res_indices[i_none]]
+                    norm_quants[:, j_none] = norm_quants[:, none_inds_res_indices[i_none]]
             if store_ess_back:
                 out_particles.ess_back[i, none_inds] = n_samps
 
