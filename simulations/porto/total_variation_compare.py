@@ -28,7 +28,8 @@ num_repeats = 50
 max_speed = 35
 proposal_dict = {'proposal': 'optimal',
                  'num_inter_cut_off': 10,
-                 'resample_fails': False}
+                 'resample_fails': False,
+                 'd_max_fail_multiplier': 2.}
 
 setup_dict = {'seed': seed,
               'ffbsi_n_samps': ffbsi_n_samps,
@@ -39,7 +40,8 @@ setup_dict = {'seed': seed,
               'num_repeats': num_repeats,
               'num_inter_cut_off': proposal_dict['num_inter_cut_off'],
               'max_speed': max_speed,
-              'resample_fails': proposal_dict['resample_fails']}
+              'resample_fails': proposal_dict['resample_fails'],
+              'd_max_fail_multiplier': proposal_dict['d_max_fail_multiplier']}
 
 print(setup_dict)
 
