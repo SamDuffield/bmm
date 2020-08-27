@@ -91,5 +91,5 @@ params_track_single = bmm.offline_em(cam_graph, tune_model, timestamps, observat
                                      n_iter=n_iter,
                                      max_rejections=20,
                                      initial_d_truncate=50, num_inter_cut_off=num_inter_cut_off,
-                                     gradient_stepsize_scale=1e-5, gradient_stepsize_neg_exp=0.5)
+                                     gradient_stepsize_scale=1e-4, gradient_stepsize_neg_exp=0.5)
 

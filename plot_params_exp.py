@@ -135,6 +135,12 @@ params = {'distance_params': {'zero_dist_prob_neg_exponent': np.array([0.1264746
        5.61544634, 5.65364329, 5.64879017, 5.63524806, 5.61983586,
        5.61842316, 5.60333201, 5.62951668])}
 
+# params = {'distance_params': {'zero_dist_prob_neg_exponent': np.array([0.12647467, 0.13088212, 0.13279992, 0.13390679, 0.13456281,
+#        0.13512336, 0.13537987, 0.13555644]), 'lambda_speed': np.array([0.1       , 0.08717512, 0.08156501, 0.07838927, 0.07639268,
+#        0.07483419, 0.07382301, 0.07326296])}, 'deviation_beta': np.array([0.1       , 0.07717875, 0.0679464 , 0.06290352, 0.06059878,
+#        0.05588483, 0.05298225, 0.05192503]), 'gps_sd': np.array([7.        , 8.00964862, 8.33435096, 8.60661921, 8.61330619,
+#        8.67651734, 8.69065263, 8.67738201])}
+
 # Simulated data
 # sim = True
 # params = pickle.load(open('/Users/samddd/Main/bayesian-map-matching/simulations/cambridge/tuned_sim_params.pickle', 'rb'))

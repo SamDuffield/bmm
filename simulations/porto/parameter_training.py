@@ -39,7 +39,6 @@ polylines = [bmm.long_lat_to_utm(poly, graph) for poly in polylines_ll]
 
 # Initiate model
 mm_model = bmm.ExponentialMapMatchingModel()
-# mm_model.zero_dist_prob_neg_exponent = -np.log(0.2) / timestamps
 mm_model.distance_params['zero_dist_prob_neg_exponent'] = -np.log(0.15) / timestamps
 mm_model.distance_params['lambda_speed'] = 1 / 10
 mm_model.deviation_beta = 0.1
