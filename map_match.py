@@ -12,9 +12,9 @@ import matplotlib.pyplot as plt
 from bmm.src.data.utils import source_data, read_data
 from bmm.src.tools.graph import load_graph
 
-from bmm import offline_map_match, _offline_map_match_fl, plot
+from bmm import offline_map_match, _offline_map_match_fl, plot, ExponentialMapMatchingModel
 
-np.random.seed(1)
+np.random.seed(0)
 
 # Source data paths
 _, process_data_path = source_data()
@@ -46,27 +46,35 @@ n_samps = 100
 
 polyline_truncation = None
 
-max_rejects = 50
+max_rejects = 20
 
 num_inter_cut_off = 10
 
-lag = 3
+lag = 12
+
+mm_model = ExponentialMapMatchingModel()
+mm_model.max_speed = 35
+
+resample_fails = False
 
 # Run offline map-matching
 particles = _offline_map_match_fl(graph, poly_single[:polyline_truncation], n_samps, timestamps=15,
-                                  lag=lag,
+                                  lag=lag, mm_model=mm_model,
                                   d_refine=1, num_inter_cut_off=num_inter_cut_off,
                                   max_rejections=max_rejects,
-                                  update='PF')
+                                  update='PF',
+                                  resample_fails=resample_fails)
 
 # particles = _offline_map_match_fl(graph, poly_single[:polyline_truncation], n_samps, timestamps=15,
-#                                   lag=lag,
+#                                   lag=lag, mm_model=mm_model,
 #                                   d_refine=1,
 #                                   max_rejections=max_rejects,
 #                                   update='BSi',
-#                                   num_inter_cut_off=num_inter_cut_off)
+#                                   num_inter_cut_off=num_inter_cut_off,
+#                                   resample_fails=resample_fails)
 
 # particles = offline_map_match(graph, poly_single[:polyline_truncation], n_samps, timestamps=15,
+#                               mm_model=mm_model,
 #                               d_refine=1, num_inter_cut_off=num_inter_cut_off,
 #                               max_rejections=max_rejects,
 #                               ess_threshold=0.8)
@@ -75,7 +83,7 @@ print(particles.time)
 print(particles.time / len(poly_single))
 
 # Plot
-# plot(graph, particles, poly_single)
-# plt.show()
+plot(graph, particles, poly_single)
+plt.show()
 
 

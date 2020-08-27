@@ -20,7 +20,7 @@ def full_backward_sample(fixed_particle: np.ndarray,
                          first_edge_fixed: np.ndarray,
                          first_edge_fixed_length: float,
                          filter_particles: MMParticles,
-                         filter_weights: Union[list, np.ndarray],
+                         adjusted_weights: Union[list, np.ndarray],
                          time_interval: float,
                          next_time_index: int,
                          mm_model: MapMatchingModel,
@@ -34,7 +34,7 @@ def full_backward_sample(fixed_particle: np.ndarray,
     :param first_edge_fixed: first row of fixed particle
     :param first_edge_fixed_length: metres
     :param filter_particles: proposal particles to be sampled
-    :param filter_weights: weights for filter_particles
+    :param adjusted_weights: non-interacting weights for filter_particles
     :param time_interval: time between observations at backwards sampling time
     :param next_time_index: index of second observation time in fixed_particle
     :param mm_model: MapMatchingModel
@@ -44,9 +44,6 @@ def full_backward_sample(fixed_particle: np.ndarray,
     """
     n = filter_particles.n
 
-    norm_consts = filter_particles.prior_norm[:, 0] if filter_particles.prior_norm.ndim == 2\
-        else filter_particles.prior_norm
-
     smoothing_distances = np.empty(n)
     smoothing_distances[:] = np.nan
 
@@ -54,7 +51,7 @@ def full_backward_sample(fixed_particle: np.ndarray,
     new_prev_cart_coords = np.empty((n, 2))
 
     for k in range(n):
-        if filter_weights[k] == 0 or norm_consts[k] == 0:
+        if adjusted_weights[k] == 0:
             continue
 
         filter_particle = filter_particles[k]
@@ -84,13 +81,12 @@ def full_backward_sample(fixed_particle: np.ndarray,
             else:
                 return None
 
-    smoothing_weights = filter_weights[possible_inds] \
+    smoothing_weights = adjusted_weights[possible_inds] \
                         * mm_model.distance_prior_evaluate(smoothing_distances[possible_inds],
                                                            time_interval) \
                         * mm_model.deviation_prior_evaluate(new_prev_cart_coords[possible_inds],
                                                             fixed_particle[None, next_time_index, 5:7],
-                                                            smoothing_distances[possible_inds]) \
-                        / norm_consts[possible_inds]
+                                                            smoothing_distances[possible_inds])
 
     smoothing_weights /= smoothing_weights.sum()
 
@@ -233,18 +229,17 @@ def backward_simulate(graph: MultiDiGraph,
         if not full_sampling:
             pos_prior_bound = mm_model.pos_distance_prior_bound(time_interval_arr[i])
             prior_bound = mm_model.distance_prior_bound(time_interval_arr[i])
-
-            adjusted_weights = filter_weights[i].copy()
-            if filter_particles[i].prior_norm.ndim == 2:
-                prior_norm = filter_particles[i].prior_norm[:, 0]
-            else:
-                prior_norm = filter_particles[i].prior_norm
-
-            good_inds = np.logical_and(adjusted_weights != 0, prior_norm != 0)
-            adjusted_weights[good_inds] /= prior_norm[good_inds]
-            adjusted_weights[~good_inds] = 0
-            adjusted_weights /= adjusted_weights.sum()
             store_out_parts = out_particles.copy()
+
+        if filter_particles[i].prior_norm.ndim == 2:
+            prior_norm = filter_particles[i].prior_norm[:, 0]
+        else:
+            prior_norm = filter_particles[i].prior_norm
+        adjusted_weights = filter_weights[i].copy()
+        good_inds = np.logical_and(adjusted_weights != 0, prior_norm != 0)
+        adjusted_weights[good_inds] /= prior_norm[good_inds]
+        adjusted_weights[~good_inds] = 0
+        adjusted_weights /= adjusted_weights.sum()
 
         if store_norm_quants:
             sampled_inds = np.zeros(n_samps, dtype=int)
@@ -262,7 +257,7 @@ def backward_simulate(graph: MultiDiGraph,
                                                    first_edge_fixed,
                                                    first_edge_fixed_length,
                                                    filter_particles[i],
-                                                   filter_weights[i],
+                                                   adjusted_weights,
                                                    time_interval_arr[i],
                                                    fixed_next_time_index,
                                                    mm_model,
@@ -295,7 +290,7 @@ def backward_simulate(graph: MultiDiGraph,
                                                        first_edge_fixed,
                                                        first_edge_fixed_length,
                                                        filter_particles[i],
-                                                       filter_weights[i],
+                                                       adjusted_weights,
                                                        time_interval_arr[i],
                                                        fixed_next_time_index,
                                                        mm_model,
@@ -341,7 +336,7 @@ def backward_simulate(graph: MultiDiGraph,
                                                        first_edge_fixed,
                                                        first_edge_fixed_length,
                                                        filter_particles[i],
-                                                       filter_weights[i],
+                                                       adjusted_weights,
                                                        time_interval_arr[i],
                                                        fixed_next_time_index,
                                                        mm_model,

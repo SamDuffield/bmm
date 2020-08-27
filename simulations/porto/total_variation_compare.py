@@ -7,8 +7,6 @@ repo_path = os.path.dirname(os.path.dirname(sim_dat_path))
 sys.path.append(sim_dat_path)
 sys.path.append(repo_path)
 
-sys.path.append('/Users/samddd/Main/bayesian-map-matching/simulations/porto/')
-
 import numpy as np
 import osmnx as ox
 import pandas as pd
@@ -22,13 +20,15 @@ np.random.seed(seed)
 
 timestamps = 15
 ffbsi_n_samps = int(1e3)
-fl_n_samps = np.array([50, 100, 200])
-lags = np.array([0, 3, 10])
-max_rejections = 50
+fl_n_samps = np.array([50, 100, 150, 200])
+lags = np.array([0, 3, 12])
+max_rejections = 20
 initial_truncation = None
-num_repeats = 1
+num_repeats = 50
+max_speed = 35
 proposal_dict = {'proposal': 'optimal',
-                 'num_inter_cut_off': 10}
+                 'num_inter_cut_off': 10,
+                 'resample_fails': False}
 
 setup_dict = {'seed': seed,
               'ffbsi_n_samps': ffbsi_n_samps,
@@ -37,24 +37,24 @@ setup_dict = {'seed': seed,
               'max_rejections': max_rejections,
               'initial_truncation': initial_truncation,
               'num_repeats': num_repeats,
-              'num_inter_cut_off': proposal_dict['num_inter_cut_off']}
+              'num_inter_cut_off': proposal_dict['num_inter_cut_off'],
+              'max_speed': max_speed,
+              'resample_fails': proposal_dict['resample_fails']}
 
 print(setup_dict)
 
-graph_path = os.getcwd() + '/portotaxi_graph_portugal-140101.osm._simple.graphml'
-graph_path = '/Users/samddd/Main/bayesian-map-matching/simulations/porto/portotaxi_graph_portugal-140101.osm._simple.graphml'
+porto_sim_dir = os.getcwd()
+graph_path = porto_sim_dir + '/portotaxi_graph_portugal-140101.osm._simple.graphml'
 graph = ox.load_graphml(graph_path)
 
-test_route_data_path = os.getcwd() + '/test_route.csv'
-test_route_data_path = '/Users/samddd/Main/bayesian-map-matching/simulations/porto/test_route.csv'
+test_route_data_path = porto_sim_dir + '/test_route.csv'
 
 # Load long-lat polylines
 polyline_ll = np.array(json.loads(pd.read_csv(test_route_data_path)['POLYLINE'][0]))
 # Convert to utm
 polyline = bmm.long_lat_to_utm(polyline_ll, graph)
 
-save_dir = os.getcwd() + '/tv_output/'
-save_dir = '/Users/samddd/Main/bayesian-map-matching/simulations/porto/tv_output/'
+save_dir = porto_sim_dir + '/tv_output/'
 
 # Create save_dir if not found
 if not os.path.exists(save_dir):
@@ -66,6 +66,7 @@ with open(save_dir + 'setup_dict', 'w+') as f:
 
 # Setup map-matching model
 mm_model = bmm.ExponentialMapMatchingModel()
+mm_model.max_speed = max_speed
 
 # Run FFBSi
 ffbsi_route = bmm.offline_map_match(graph,
@@ -151,6 +152,7 @@ fl_pf_times = np.empty((setup_dict['num_repeats'], len(setup_dict['fl_n_samps'])
 fl_bsi_times = np.empty_like(fl_pf_times)
 
 inc_alpha = True
+round_alpha = None
 
 # Calculate TV distances from FFBSi for each observations time
 for i in range(setup_dict['num_repeats']):
@@ -161,7 +163,8 @@ for i in range(setup_dict['num_repeats']):
                 fl_pf_tvs[i, j, k] = utils.each_edge_route_total_variation(ffbsi_route.particles,
                                                                            fl_pf_routes[i, j, k].particles,
                                                                            observation_times,
-                                                                           include_alpha=inc_alpha)
+                                                                           include_alpha=inc_alpha,
+                                                                           round_alpha=round_alpha)
                 fl_pf_times[i, j, k] = fl_pf_routes[i, j, k].time
             else:
                 fl_pf_tvs[i, j, k] = 1.
@@ -170,14 +173,15 @@ for i in range(setup_dict['num_repeats']):
                 fl_bsi_tvs[i, j, k] = utils.each_edge_route_total_variation(ffbsi_route.particles,
                                                                             fl_bsi_routes[i, j, k].particles,
                                                                             observation_times,
-                                                                            include_alpha=inc_alpha)
+                                                                            include_alpha=inc_alpha,
+                                                                            round_alpha=round_alpha)
                 fl_bsi_times[i, j, k] = fl_bsi_routes[i, j, k].time
             else:
                 fl_bsi_tvs[i, j, k] = 1.
                 fl_bsi_times[i, j, k] = 0.
 
-np.save(save_dir + 'fl_pf_tv', fl_pf_tvs)
-np.save(save_dir + 'fl_bsi_tv', fl_bsi_tvs)
+np.save(save_dir + f'fl_pf_tv_alpha{inc_alpha*1}_round{round_alpha}', fl_pf_tvs)
+np.save(save_dir + f'fl_bsi_tv_alpha{inc_alpha*1}_round{round_alpha}', fl_bsi_tvs)
 np.save(save_dir + 'fl_pf_times', fl_pf_times)
 np.save(save_dir + 'fl_bsi_times', fl_bsi_times)
 #
@@ -191,13 +195,11 @@ utils.plot_metric_over_time(setup_dict,
                             np.sum(fl_pf_times, axis=0) / np.sum(fl_pf_times > 0, axis=0),
                             np.mean(fl_bsi_tvs, axis=0),
                             np.sum(fl_bsi_times, axis=0) / np.sum(fl_bsi_times > 0, axis=0),
-                            save_dir=save_dir + 'each_tv_compare.png', )
+                            save_dir=save_dir + f'each_tv_compare_alpha{inc_alpha*1}_round{round_alpha}')
 
 fl_pf_all_tvs = np.empty(
     (setup_dict['num_repeats'], len(setup_dict['fl_n_samps']), len(setup_dict['lags'])))
 fl_bsi_all_tvs = np.empty_like(fl_pf_all_tvs)
-
-inc_alpha = True
 
 # Calculate TV distances from FFBSi for overall series of edges
 for i in range(setup_dict['num_repeats']):
@@ -218,15 +220,18 @@ for i in range(setup_dict['num_repeats']):
 np.save(save_dir + 'fl_pf_all_tv', fl_pf_all_tvs)
 np.save(save_dir + 'fl_bsi_all_tv', fl_bsi_all_tvs)
 
-utils.plot_conv_metric(np.mean(fl_pf_all_tvs, axis=0),
-                       fl_n_samps, lags,
-                       np.min(fl_pf_all_tvs, axis=0),
-                       np.max(fl_pf_all_tvs, axis=0),
-                       save_dir=save_dir + 'fl_pf_all_tv_conv')
+# fl_pf_all_tvs = np.load(save_dir + 'fl_pf_all_tv.npy', allow_pickle=True)
+# fl_bsi_all_tvs = np.load(save_dir + 'fl_bsi_all_tv.npy', allow_pickle=True)
 
-utils.plot_conv_metric(np.mean(fl_bsi_all_tvs, axis=0),
+utils.plot_conv_metric(np.median(fl_pf_all_tvs, axis=0),
                        fl_n_samps, lags,
-                       np.min(fl_bsi_all_tvs, axis=0),
-                       np.max(fl_bsi_all_tvs, axis=0),
-                       save_dir=save_dir + 'fl_bsi_all_tv_conv',
+                       np.quantile(fl_pf_all_tvs, 0.25, axis=0),
+                       np.quantile(fl_pf_all_tvs, 0.75, axis=0),
+                       save_dir=save_dir + 'fl_pf_all_tv_conv_quantiles')
+
+utils.plot_conv_metric(np.median(fl_bsi_all_tvs, axis=0),
+                       fl_n_samps, lags,
+                       np.quantile(fl_bsi_all_tvs, 0.25, axis=0),
+                       np.quantile(fl_bsi_all_tvs, 0.75, axis=0),
+                       save_dir=save_dir + 'fl_bsi_all_tv_conv_quantiles',
                        leg=True)

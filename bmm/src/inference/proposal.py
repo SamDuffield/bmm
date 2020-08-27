@@ -131,7 +131,7 @@ def get_possible_routes(graph: MultiDiGraph,
         for new_edge in intersection_edges:
             # If not u-turn or loop continue route search on new edge
             if (not (new_edge[1] == start_edge_and_position[1] and new_edge[2] == start_edge_and_position[3])) \
-                    and (not (new_edge == in_route[:, 1:4]).all(1).any()):
+                    and not (new_edge == in_route[:, 1:4]).all(1).any():
                 add_edge = np.array([[0, *new_edge, 0, 0, 0, start_edge_and_position[-1]]])
                 new_route = np.append(in_route,
                                       add_edge,
@@ -211,11 +211,14 @@ def optimal_proposal(graph: MultiDiGraph,
                      mm_model: MapMatchingModel,
                      full_smoothing: bool = True,
                      d_refine: float = 1.,
+                     d_max: float = None,
+                     d_max_fail_multiplier: float = 2.,
                      num_inter_cut_off: int = None,
                      only_norm_const: bool = False,
-                     store_norm_quants: bool = False) -> Tuple[Union[None, np.ndarray],
-                                                               float,
-                                                               Union[float, np.ndarray]]:
+                     store_norm_quants: bool = False,
+                     resample_fails: bool = True) -> Union[Tuple[Union[None, np.ndarray],
+                                                                 float,
+                                                                 Union[float, np.ndarray]], float]:
     """
     Samples a single particle from the (distance discretised) optimal proposal.
     :param graph: encodes road network, simplified and projected to UTM
@@ -226,10 +229,15 @@ def optimal_proposal(graph: MultiDiGraph,
     :param full_smoothing: if True returns full trajectory
         otherwise returns only x_t-1 to x_t
     :param d_refine: metres, resolution of distance discretisation
+    :param d_max: optional override of d_max = mm_model.d_max(time_interval)
+    :param d_max_fail_multiplier: extension of d_max in case all probs are 0
     :param num_inter_cut_off: maximum number of intersections to cross in the time interval
     :param only_norm_const: if true only return prior normalising constant (don't sample)
     :param store_norm_quants: whether to additionally return quantities needed for gradient EM step
         assuming deviation prior is used
+    :param resample_fails: whether to return None (and induce later resampling of whole trajectory)
+        if proposal fails to find route with positive probability
+        if False assume distance=0
     :return: (particle, unnormalised weight, prior_norm) or (particle, unnormalised weight, dev_norm_quants)
     """
     if particle is None:
@@ -238,7 +246,8 @@ def optimal_proposal(graph: MultiDiGraph,
     if num_inter_cut_off is None:
         num_inter_cut_off = max(int(time_interval / 1.5), 10)
 
-    d_max = mm_model.d_max(time_interval)
+    if d_max is None:
+        d_max = mm_model.d_max(time_interval)
 
     # Extract all possible routes from previous position
     start_position = particle[-1:].copy()
@@ -273,7 +282,19 @@ def optimal_proposal(graph: MultiDiGraph,
     discretised_routes = np.concatenate(discretised_routes_list)
 
     if len(discretised_routes) == 0 or (len(discretised_routes) == 1 and discretised_routes[0][-1] == 0):
-        return 0. if only_norm_const else (None, 0., 0.)
+        if only_norm_const:
+            return 0
+        if resample_fails:
+            return None, 0., 0.
+        else:
+            sampled_dis_route = discretised_routes[0]
+
+            # Append sampled route to old particle
+            sampled_route = possible_routes[0]
+
+            proposal_out = process_proposal_output(particle, sampled_route, sampled_dis_route, time_interval,
+                                                   full_smoothing)
+            return proposal_out, 0., 0.
 
     # Distance prior evals
     distances = discretised_routes[:, -1]
@@ -318,7 +339,30 @@ def optimal_proposal(graph: MultiDiGraph,
     prop_weight = sample_probs.sum()
 
     if prop_weight < 1e-200:
-        proposal_out = None
+        if (not d_max > mm_model.d_max(time_interval)) and np.abs(d_max - np.max(distances)) < d_refine + 1e-5:
+            return optimal_proposal(graph,
+                                    particle,
+                                    new_observation,
+                                    time_interval,
+                                    mm_model,
+                                    full_smoothing,
+                                    d_refine,
+                                    d_max=d_max * d_max_fail_multiplier,
+                                    num_inter_cut_off=num_inter_cut_off,
+                                    only_norm_const=only_norm_const,
+                                    store_norm_quants=store_norm_quants,
+                                    resample_fails=resample_fails)
+        if resample_fails:
+            proposal_out = None
+        else:
+            sampled_dis_route_index = np.where(discretised_routes[:, -1] == 0)[0][0]
+            sampled_dis_route = discretised_routes[sampled_dis_route_index]
+
+            # Append sampled route to old particle
+            sampled_route = possible_routes[discretised_routes_indices[sampled_dis_route_index]]
+
+            proposal_out = process_proposal_output(particle, sampled_route, sampled_dis_route, time_interval,
+                                                   full_smoothing)
         prop_weight = 0.
     else:
         # Sample an edge and distance

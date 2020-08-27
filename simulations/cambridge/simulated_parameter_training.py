@@ -28,7 +28,6 @@ cam_graph = load_graph(graph_path)
 timestamps = 15
 
 gen_model = bmm.ExponentialMapMatchingModel()
-gen_model.max_speed = 45
 gen_model.distance_params['zero_dist_prob_neg_exponent'] = -np.log(0.10) / timestamps # 0.1997154849035994
 gen_model.distance_params['lambda_speed'] = 1/20
 gen_model.deviation_beta = 0.05
