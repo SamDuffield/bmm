@@ -13,13 +13,14 @@ def clear_cache():
 
 
 def total_variation_edges(edges_one,
-                          edges_two):
+                          edges_two,
+                          round_alpha=None):
     n1 = len(edges_one)
     n2 = len(edges_two)
 
-    # if edges_one.shape[-1] == 4:
-    #     edges_one[:, -1] = np.round(edges_one[:, -1], 2)
-    #     edges_two[:, -1] = np.round(edges_two[:, -1], 2)
+    if edges_one.shape[-1] == 4 and round_alpha is not None:
+        edges_one[:, -1] = np.round(edges_one[:, -1], round_alpha)
+        edges_two[:, -1] = np.round(edges_two[:, -1], round_alpha)
 
     all_edges = np.concatenate([edges_one, edges_two])
     all_edges = np.unique(all_edges, axis=0)
@@ -45,7 +46,8 @@ def append_zeros(list_arr, max_len):
 def each_edge_route_total_variation(particles_one,
                                     particles_two,
                                     observation_times,
-                                    include_alpha=False):
+                                    include_alpha=False,
+                                    round_alpha=None):
     m = observation_times.size
     tv_each_time = np.zeros(m)
 
@@ -56,7 +58,7 @@ def each_edge_route_total_variation(particles_one,
             p1_first_edges = np.array([p[:1, 1:(4 + alpha_extend)] for p in particles_one])
             p2_first_edges = np.array([p[:1, 1:(4 + alpha_extend)] for p in particles_two])
 
-            tv_each_time[i] = total_variation_edges(p1_first_edges, p2_first_edges)
+            tv_each_time[i] = total_variation_edges(p1_first_edges, p2_first_edges, round_alpha)
         else:
             prev_time = observation_times[i - 1]
             current_time = observation_times[i]
@@ -96,7 +98,42 @@ def each_edge_route_total_variation(particles_one,
                                                          (3 + alpha_extend))),
                                      axis=1)
 
-            tv_each_time[i] = total_variation_edges(p1_edges, p2_edges)
+            tv_each_time[i] = total_variation_edges(p1_edges, p2_edges, round_alpha)
+
+    return tv_each_time
+
+
+def each_obs_edge_route_total_variation(particles_one,
+                                        particles_two,
+                                        observation_times,
+                                        include_alpha=False,
+                                        round_alpha=None):
+    m = observation_times.size
+    tv_each_time = np.zeros(m)
+
+    alpha_extend = include_alpha * 1
+
+    for i in range(m):
+        if i == 0:
+            p1_first_edges = np.array([p[:1, 1:(4 + alpha_extend)] for p in particles_one])
+            p2_first_edges = np.array([p[:1, 1:(4 + alpha_extend)] for p in particles_two])
+
+            tv_each_time[i] = total_variation_edges(p1_first_edges, p2_first_edges, round_alpha)
+        else:
+            prev_time = observation_times[i - 1]
+            current_time = observation_times[i]
+
+            p1_edges = np.zeros((len(particles_one), (3 + alpha_extend)))
+            for j, p1 in enumerate(particles_one):
+                curr_ind = np.where(p1[:, 0] == current_time)[0][0]
+                p1_edges[j] = p1[curr_ind, 1:(4 + alpha_extend)].copy()
+
+            p2_edges = np.zeros((len(particles_two), (3 + alpha_extend)))
+            for j, p2 in enumerate(particles_two):
+                curr_ind = np.where(p2[:, 0] == current_time)[0][0]
+                p2_edges[j] = p2[curr_ind, 1:(4 + alpha_extend)].copy()
+
+            tv_each_time[i] = total_variation_edges(p1_edges, p2_edges, round_alpha)
 
     return tv_each_time
 
@@ -204,7 +241,7 @@ def plot_metric_over_time(setup_dict, fl_pf_metric, fl_pf_time, fl_bsi_metric, f
     return fig, axes
 
 
-def plot_conv_metric(tv_mat, n_samps, lags, mins=None, maxs=None,  leg=False, save_dir=None):
+def plot_conv_metric(tv_mat, n_samps, lags, mins=None, maxs=None, leg=False, save_dir=None):
     fig, ax = plt.subplots()
     for i in range(tv_mat.shape[1]):
         line, = ax.plot(n_samps, tv_mat[:, i], label=f'Lag: {lags[i]}', zorder=2)

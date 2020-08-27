@@ -453,14 +453,14 @@ def gradient_em_step(mm_model: MapMatchingModel,
 #     start = tm()
 #
 #     filter_particles = [None] * num_obs
-#     filter_weights = np.zeros((num_obs, n_samps))
+#     adjusted_weights = np.zeros((num_obs, n_samps))
 #
 #     # Initiate filter_particles
 #     filter_particles[0] = initiate_particles(graph, polyline[0], n_samps, mm_model=mm_model,
 #                                              d_refine=d_refine, d_truncate=initial_d_truncate,
 #                                              ess_all=ess_all)
-#     filter_weights[0] = 1 / n_samps
-#     live_weights = filter_weights[0].copy()
+#     adjusted_weights[0] = 1 / n_samps
+#     live_weights = adjusted_weights[0].copy()
 #
 #     ess_pf = np.zeros(num_obs)
 #     ess_pf[0] = n_samps
@@ -514,7 +514,7 @@ def gradient_em_step(mm_model: MapMatchingModel,
 #
 #         temp_weights *= live_weights
 #         temp_weights /= np.sum(temp_weights)
-#         filter_weights[i + 1] = temp_weights.copy()
+#         adjusted_weights[i + 1] = temp_weights.copy()
 #         live_weights = temp_weights.copy()
 #         ess_pf[i + 1] = 1 / np.sum(temp_weights ** 2)
 #
@@ -522,7 +522,7 @@ def gradient_em_step(mm_model: MapMatchingModel,
 #
 #     # Backward simulation
 #     out_particles = backward_simulate(graph,
-#                                       filter_particles, filter_weights,
+#                                       filter_particles, adjusted_weights,
 #                                       time_interval_arr,
 #                                       mm_model,
 #                                       max_rejections,

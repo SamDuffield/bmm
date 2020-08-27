@@ -38,14 +38,14 @@ def _likelihood_evaluate(route_cart_coords: np.ndarray,
 class MapMatchingModel:
 
     def __init__(self):
-        self.gps_sd = 5.66
+        self.gps_sd = None
         self.gps_sd_bounds = (0, np.inf)
         self.likelihood_d_truncate = np.inf
 
-        self.deviation_beta = 0.056
+        self.deviation_beta = None
         self.deviation_beta_bounds = (0, np.inf)
 
-        self.max_speed = 50
+        self.max_speed = 35
         self.distance_params = OrderedDict()
         self.distance_params_bounds = OrderedDict()
 
@@ -139,10 +139,10 @@ class MapMatchingModel:
 class ExponentialMapMatchingModel(MapMatchingModel):
 
     def __init__(self,
-                 zero_dist_prob_neg_exponent: float = 0.133,
-                 lambda_speed: float = 0.081,
-                 deviation_beta: float = 0.056,
-                 gps_sd: float = 5.66):
+                 zero_dist_prob_neg_exponent: float = 0.135,
+                 lambda_speed: float = 0.078,
+                 deviation_beta: float = 0.053,
+                 gps_sd: float = 5.60):
         super().__init__()
         self.min_zero_dist_prob = 0.01
         self.max_zero_dist_prob = 0.5
