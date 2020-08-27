@@ -194,7 +194,7 @@ def update_particles_flbs(graph: MultiDiGraph,
                           mm_model: MapMatchingModel,
                           proposal_func: Callable,
                           lag: int = 3,
-                          max_rejections: int = 50,
+                          max_rejections: int = 20,
                           ess_threshold: float = 1.,
                           **kwargs) -> MMParticles:
     """
@@ -314,7 +314,7 @@ def update_particles(graph: MultiDiGraph,
                      proposal: str = 'optimal',
                      update: str = 'PF',
                      lag: int = 3,
-                     max_rejections: int = 50,
+                     max_rejections: int = 20,
                      **kwargs) -> MMParticles:
     """
     Updates particle approximation in receipt of new observation
@@ -374,7 +374,7 @@ def _offline_map_match_fl(graph: MultiDiGraph,
                           lag: int = 3,
                           d_refine: int = 1,
                           initial_d_truncate: float = None,
-                          max_rejections: int = 50,
+                          max_rejections: int = 20,
                           **kwargs) -> MMParticles:
     """
     Runs offline map-matching but uses online fixed-lag techniques.
@@ -448,7 +448,7 @@ def offline_map_match(graph: MultiDiGraph,
                       proposal: str = 'optimal',
                       d_refine: int = 1,
                       initial_d_truncate: float = None,
-                      max_rejections: int = 50,
+                      max_rejections: int = 20,
                       ess_threshold: float = 1,
                       store_norm_quants: bool = False,
                       **kwargs) -> MMParticles:
