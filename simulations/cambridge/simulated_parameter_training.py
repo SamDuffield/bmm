@@ -91,7 +91,7 @@ tune_model.gps_sd = 7.
 params_track_single = bmm.offline_em(cam_graph, tune_model, timestamps, observations,
                                      save_path=os.getcwd() + '/tuned_sim_params.pickle',
                                      n_iter=n_iter,
-                                     max_rejections=20,
+                                     max_rejections=20, d_max_fail_multiplier=2,
                                      initial_d_truncate=50, num_inter_cut_off=num_inter_cut_off,
                                      gradient_stepsize_scale=1e-5, gradient_stepsize_neg_exp=0.5)
 

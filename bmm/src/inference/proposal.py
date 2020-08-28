@@ -339,10 +339,10 @@ def optimal_proposal(graph: MultiDiGraph,
     prop_weight = sample_probs.sum()
 
     if prop_weight < 1e-200 \
-            or np.any(sample_probs[np.where(distances[likelihood_evals > 0] > d_max*0.75)[0]] > 1e-3):
-        if (not d_max > mm_model.d_max(time_interval)) \
-                and np.abs(d_max - np.max(distances)) < d_refine + 1e-5 \
-                and d_max_fail_multiplier > 1:
+            or (np.sum(sample_probs[np.where(distances[likelihood_evals > 0] > d_max * 0.75)[0]]) > 1e-3
+                and (not d_max > mm_model.d_max(time_interval))):
+        if np.abs(d_max - np.max(distances)) < d_refine + 1e-5 \
+                and d_max_fail_multiplier > 1 and (not d_max > mm_model.d_max(time_interval)):
             return optimal_proposal(graph,
                                     particle,
                                     new_observation,
