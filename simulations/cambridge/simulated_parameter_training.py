@@ -38,7 +38,7 @@ num_inter_cut_off = None
 num_pos_routes_cap = 500
 
 # Generate simulated routes
-num_routes = 2
+num_routes = 20
 min_route_length = 40
 max_route_length = 50
 sample_d_refine = 1

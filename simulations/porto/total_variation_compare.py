@@ -7,6 +7,10 @@ repo_path = os.path.dirname(os.path.dirname(sim_dat_path))
 sys.path.append(sim_dat_path)
 sys.path.append(repo_path)
 
+# porto_sim_dir = '/Users/samddd/Main/bayesian-map-matching/simulations/porto'
+# sys.path.append(porto_sim_dir)
+# save_dir = '/Users/samddd/Desktop/tv_output/'
+
 import numpy as np
 import osmnx as ox
 import pandas as pd
@@ -21,7 +25,7 @@ np.random.seed(seed)
 timestamps = 15
 ffbsi_n_samps = int(1e3)
 fl_n_samps = np.array([50, 100, 150, 200])
-lags = np.array([0, 3, 12])
+lags = np.array([0, 3, 10])
 max_rejections = 20
 initial_truncation = None
 num_repeats = 50
@@ -182,13 +186,13 @@ for i in range(setup_dict['num_repeats']):
                 fl_bsi_tvs[i, j, k] = 1.
                 fl_bsi_times[i, j, k] = 0.
 
-np.save(save_dir + f'fl_pf_tv_alpha{inc_alpha*1}_round{round_alpha}', fl_pf_tvs)
-np.save(save_dir + f'fl_bsi_tv_alpha{inc_alpha*1}_round{round_alpha}', fl_bsi_tvs)
+np.save(save_dir + f'fl_pf_tv_alpha{inc_alpha * 1}_round{round_alpha}', fl_pf_tvs)
+np.save(save_dir + f'fl_bsi_tv_alpha{inc_alpha * 1}_round{round_alpha}', fl_bsi_tvs)
 np.save(save_dir + 'fl_pf_times', fl_pf_times)
 np.save(save_dir + 'fl_bsi_times', fl_bsi_times)
 #
-# fl_pf_tvs = np.load(save_dir + 'fl_pf_tv.npy', allow_pickle=True)
-# fl_bsi_tvs = np.load(save_dir + 'fl_bsi_tv.npy', allow_pickle=True)
+# fl_pf_tvs = np.load(save_dir + f'fl_pf_tv_alpha{inc_alpha*1}_round{round_alpha}.npy', allow_pickle=True)
+# fl_bsi_tvs = np.load(save_dir + f'fl_bsi_tv_alpha{inc_alpha*1}_round{round_alpha}.npy', allow_pickle=True)
 # fl_pf_times = np.load(save_dir + 'fl_pf_times.npy', allow_pickle=True)
 # fl_bsi_times = np.load(save_dir + 'fl_bsi_times.npy', allow_pickle=True)
 
@@ -197,7 +201,47 @@ utils.plot_metric_over_time(setup_dict,
                             np.sum(fl_pf_times, axis=0) / np.sum(fl_pf_times > 0, axis=0),
                             np.mean(fl_bsi_tvs, axis=0),
                             np.sum(fl_bsi_times, axis=0) / np.sum(fl_bsi_times > 0, axis=0),
-                            save_dir=save_dir + f'each_tv_compare_alpha{inc_alpha*1}_round{round_alpha}')
+                            save_dir=save_dir + f'each_tv_compare_alpha{inc_alpha * 1}_round{round_alpha}')
+
+speeds = True
+bins = 1.5
+interval = 45
+num_ints = int(observation_times[-1] / interval)
+
+fl_pf_dist_tvs = np.empty(
+    (setup_dict['num_repeats'], len(setup_dict['fl_n_samps']), len(setup_dict['lags']), num_ints))
+fl_bsi_dist_tvs = np.empty_like(fl_pf_dist_tvs)
+# Calculate TV distance distances from FFBSi for each observations time
+for i in range(setup_dict['num_repeats']):
+    for j, n in enumerate(setup_dict['fl_n_samps']):
+        for k, lag in enumerate(setup_dict['lags']):
+            print(i, j, k)
+            if fl_pf_routes[i, j, k] is not None:
+                fl_pf_dist_tvs[i, j, k] = utils.interval_tv_dists(ffbsi_route,
+                                                                  fl_pf_routes[i, j, k],
+                                                                  interval=interval,
+                                                                  speeds=speeds,
+                                                                  bins=bins)
+            else:
+                fl_pf_dist_tvs[i, j, k] = 1.
+            if fl_bsi_routes[i, j, k] is not None:
+                fl_bsi_dist_tvs[i, j, k] = utils.interval_tv_dists(ffbsi_route,
+                                                                   fl_bsi_routes[i, j, k],
+                                                                   interval=interval,
+                                                                   speeds=speeds,
+                                                                   bins=bins)
+            else:
+                fl_bsi_dist_tvs[i, j, k] = 1.
+
+np.save(save_dir + f'fl_pf_tv_dist_speeds{speeds}_bins{bins}', fl_pf_dist_tvs)
+np.save(save_dir + f'fl_bsi_tv_dist_speeds{speeds}_bins{bins}', fl_bsi_dist_tvs)
+
+utils.plot_metric_over_time(setup_dict,
+                            np.mean(fl_pf_dist_tvs, axis=0),
+                            np.sum(fl_pf_times, axis=0) / np.sum(fl_pf_times > 0, axis=0),
+                            np.mean(fl_bsi_dist_tvs, axis=0),
+                            np.sum(fl_bsi_times, axis=0) / np.sum(fl_bsi_times > 0, axis=0),
+                            save_dir=save_dir + f'each_tv_compare_dist_speeds{speeds}_bins{bins}')
 
 fl_pf_all_tvs = np.empty(
     (setup_dict['num_repeats'], len(setup_dict['fl_n_samps']), len(setup_dict['lags'])))

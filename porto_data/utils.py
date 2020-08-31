@@ -19,9 +19,9 @@ def total_variation_edges(edges_one,
     n1 = len(edges_one)
     n2 = len(edges_two)
 
-    # if edges_one.shape[-1] == 4:
-    #     edges_one[:, -1] = np.round(edges_one[:, -1], 2)
-    #     edges_two[:, -1] = np.round(edges_two[:, -1], 2)
+    # if dists_one.shape[-1] == 4:
+    #     dists_one[:, -1] = np.round(dists_one[:, -1], 2)
+    #     dists_two[:, -1] = np.round(dists_two[:, -1], 2)
 
     all_edges = np.concatenate([edges_one, edges_two])
     all_edges = np.unique(all_edges, axis=0)

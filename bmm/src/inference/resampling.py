@@ -143,7 +143,7 @@ def full_fixed_lag_stitch(j: int,
                                                                          new_cart_coords_trimmed,
                                                                          new_stitching_distances_trimmed)
 
-    res_weights[possible_inds] = adjusted_weights_trimmed\
+    res_weights[possible_inds] = adjusted_weights_trimmed \
                                  * stitched_distance_prior_evals_trimmed \
                                  * stitched_deviation_prior_trimmed
 
@@ -333,9 +333,8 @@ def fixed_lag_stitch_post_split(graph: MultiDiGraph,
         if full_fixed_lag_resample:
             # Full resampling
             out_particles[j], ess_stitch_track[j] = full_fixed_lag_stitch(j, fixed_particle,
-
                                                                           last_edge_fixed, last_edge_fixed_length,
-                                                                         new_particles,
+                                                                          new_particles,
                                                                           adjusted_weights,
                                                                           min_resample_time, stitch_time_interval,
                                                                           min_resample_time_indices,
@@ -350,7 +349,8 @@ def fixed_lag_stitch_post_split(graph: MultiDiGraph,
                                                           min_resample_time_indices,
                                                           pos_prior_bound,
                                                           mm_model,
-                                                          max_rejections)
+                                                          max_rejections,
+                                                          break_on_zero=True)
             if out_particles[j] is None:
                 # Rejection sampling reached max_rejections -> try full resampling
                 out_particles[j] = full_fixed_lag_stitch(j, fixed_particle, last_edge_fixed, last_edge_fixed_length,
