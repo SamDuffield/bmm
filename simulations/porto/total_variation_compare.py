@@ -6,7 +6,7 @@ sim_dat_path = os.getcwd()
 repo_path = os.path.dirname(os.path.dirname(sim_dat_path))
 sys.path.append(sim_dat_path)
 sys.path.append(repo_path)
-
+#
 # porto_sim_dir = '/Users/samddd/Main/bayesian-map-matching/simulations/porto'
 # sys.path.append(porto_sim_dir)
 # save_dir = '/Users/samddd/Desktop/tv_output/'
@@ -26,9 +26,9 @@ timestamps = 15
 ffbsi_n_samps = int(1e3)
 fl_n_samps = np.array([50, 100, 150, 200])
 lags = np.array([0, 3, 10])
-max_rejections = 20
+max_rejections = 30
 initial_truncation = None
-num_repeats = 50
+num_repeats = 20
 max_speed = 35
 proposal_dict = {'proposal': 'optimal',
                  'num_inter_cut_off': 10,
@@ -95,20 +95,20 @@ for i in range(num_repeats):
     for j, n in enumerate(fl_n_samps):
         for k, lag in enumerate(lags):
             print(i, j, k)
-            try:
-                fl_pf_routes[i, j, k] = bmm._offline_map_match_fl(graph,
-                                                                  polyline,
-                                                                  n,
-                                                                  timestamps=timestamps,
-                                                                  mm_model=mm_model,
-                                                                  lag=lag,
-                                                                  update='PF',
-                                                                  max_rejections=max_rejections,
-                                                                  initial_d_truncate=initial_truncation,
-                                                                  **proposal_dict)
-                print(f'FL PF {i} {j} {k}: {fl_pf_routes[i, j, k].time}')
-            except:
-                n_pf_failures += 1
+            # try:
+            fl_pf_routes[i, j, k] = bmm._offline_map_match_fl(graph,
+                                                              polyline,
+                                                              n,
+                                                              timestamps=timestamps,
+                                                              mm_model=mm_model,
+                                                              lag=lag,
+                                                              update='PF',
+                                                              max_rejections=max_rejections,
+                                                              initial_d_truncate=initial_truncation,
+                                                              **proposal_dict)
+            print(f'FL PF {i} {j} {k}: {fl_pf_routes[i, j, k].time}')
+            # except:
+            #     n_pf_failures += 1
             print(f'FL PF failures: {n_pf_failures}')
             utils.clear_cache()
 
@@ -116,20 +116,20 @@ for i in range(num_repeats):
                 fl_bsi_routes[i, j, k] = fl_pf_routes[i, j, k].copy()
                 print(f'FL BSi {i} {j} {k}:', fl_bsi_routes[i, j, k].time)
             else:
-                try:
-                    fl_bsi_routes[i, j, k] = bmm._offline_map_match_fl(graph,
-                                                                       polyline,
-                                                                       n,
-                                                                       timestamps=timestamps,
-                                                                       mm_model=mm_model,
-                                                                       lag=lag,
-                                                                       update='BSi',
-                                                                       max_rejections=max_rejections,
-                                                                       initial_d_truncate=initial_truncation,
-                                                                       **proposal_dict)
-                    print(f'FL BSi {i} {j} {k}:', fl_bsi_routes[i, j, k].time)
-                except:
-                    n_bsi_failures += 1
+                # try:
+                fl_bsi_routes[i, j, k] = bmm._offline_map_match_fl(graph,
+                                                                   polyline,
+                                                                   n,
+                                                                   timestamps=timestamps,
+                                                                   mm_model=mm_model,
+                                                                   lag=lag,
+                                                                   update='BSi',
+                                                                   max_rejections=max_rejections,
+                                                                   initial_d_truncate=initial_truncation,
+                                                                   **proposal_dict)
+                print(f'FL BSi {i} {j} {k}:', fl_bsi_routes[i, j, k].time)
+                # except:
+                #     n_bsi_failures += 1
                 print(f'FL BSi failures: {n_bsi_failures}')
 
                 utils.clear_cache()
@@ -203,9 +203,9 @@ utils.plot_metric_over_time(setup_dict,
                             np.sum(fl_bsi_times, axis=0) / np.sum(fl_bsi_times > 0, axis=0),
                             save_dir=save_dir + f'each_tv_compare_alpha{inc_alpha * 1}_round{round_alpha}')
 
-speeds = True
-bins = 1.5
-interval = 45
+speeds = False
+bins = 5
+interval = 15
 num_ints = int(observation_times[-1] / interval)
 
 fl_pf_dist_tvs = np.empty(

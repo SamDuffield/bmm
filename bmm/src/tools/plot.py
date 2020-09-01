@@ -52,6 +52,8 @@ def plot(graph, particles=None, polyline=None, particles_alpha=None, label_start
         ylim = [None, None]
 
         for i, particle in enumerate(particles):
+            if particle is None:
+                continue
 
             if len(particle) > 1:
                 int_path = interpolate_path(graph, particle, t_column=True)

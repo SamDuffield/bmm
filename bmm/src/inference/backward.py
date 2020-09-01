@@ -59,12 +59,15 @@ def full_backward_sample(fixed_particle: np.ndarray,
         # Check first fixed edge and last filter edge coincide
         if np.array_equal(first_edge_fixed[1:4], filter_particle[-1, 1:4]):
             # Check that fixed edge overtakes filter edge. i.e. distance isn't negative
-            if np.array_equal(fixed_particle[next_time_index, 1:4], filter_particle[-1, 1:4]) and \
+            if np.array_equal(filter_particle[-1, 1:4], fixed_particle[next_time_index, 1:4]) and \
                     filter_particle[-1, 4] > fixed_particle[next_time_index, 4]:
                 continue
 
-            distances_j_to_k[k] = (first_edge_fixed[4] - filter_particle[-1, 4]) * first_edge_fixed_length
+            distances_j_to_k[k] = np.round((first_edge_fixed[4] - filter_particle[-1, 4]) * first_edge_fixed_length, 5)
             smoothing_distances[k] = fixed_particle[next_time_index, -1] + distances_j_to_k[k]
+
+            if smoothing_distances[k] < 0:
+                raise ValueError('Negative smoothing distance')
 
             new_prev_cart_coords[k] = filter_particle[-1, 5:7]
 
@@ -150,7 +153,7 @@ def rejection_backward_sample(fixed_particle: np.ndarray,
                 filter_particle[-1, 4] > fixed_particle[next_time_index, 4]:
             continue
 
-        distance_j_to_k = (first_edge_fixed[4] - filter_particle[-1, 4]) * first_edge_fixed_length
+        distance_j_to_k = np.round((first_edge_fixed[4] - filter_particle[-1, 4]) * first_edge_fixed_length, 5)
 
         smoothing_distance = fixed_particle[next_time_index, -1] + distance_j_to_k
 
@@ -246,7 +249,7 @@ def backward_simulate(graph: MultiDiGraph,
 
         resort_to_full = False
         for j in range(n_samps):
-            fixed_particle = out_particles[j]
+            fixed_particle = out_particles[j].copy()
             first_edge_fixed = fixed_particle[0]
             first_edge_fixed_geom = get_geometry(graph, first_edge_fixed[1:4])
             first_edge_fixed_length = first_edge_fixed_geom.length

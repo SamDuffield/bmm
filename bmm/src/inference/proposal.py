@@ -212,7 +212,7 @@ def optimal_proposal(graph: MultiDiGraph,
                      full_smoothing: bool = True,
                      d_refine: float = 1.,
                      d_max: float = None,
-                     d_max_fail_multiplier: float = 1.,
+                     d_max_fail_multiplier: float = 1.5,
                      d_max_threshold: tuple = (0.9, 0.1),
                      num_inter_cut_off: int = None,
                      only_norm_const: bool = False,
@@ -341,12 +341,14 @@ def optimal_proposal(graph: MultiDiGraph,
     # p(y_m | x_m-1^j)
     prop_weight = sample_probs.sum()
 
-    if prop_weight < 1e-200 \
+    model_d_max = mm_model.d_max(time_interval)
+
+    if prop_weight < 1e-100 \
             or (np.sum(sample_probs[np.where(distances[likelihood_evals > 0]
-                                             > d_max * d_max_threshold[0])[0]])/prop_weight > d_max_threshold[1]
-                and (not d_max > mm_model.d_max(time_interval))):
+                                             > (d_max * d_max_threshold[0]))[0]])/prop_weight > d_max_threshold[1]\
+                and (not d_max > model_d_max)):
         if (d_max - np.max(distances)) < d_refine + 1e-5 \
-                and d_max_fail_multiplier > 1 and (not d_max > mm_model.d_max(time_interval)):
+                and d_max_fail_multiplier > 1 and (not d_max > model_d_max):
             return optimal_proposal(graph,
                                     particle,
                                     new_observation,

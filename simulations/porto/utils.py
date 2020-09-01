@@ -13,6 +13,7 @@ def clear_cache():
         if isinstance(a, functools._lru_cache_wrapper):
             a.cache_clear()
 
+
 #
 # def total_variation_dists(dists_one,
 #                           dists_two,
@@ -130,23 +131,25 @@ def interval_tv_dists(particles_one,
         start_time = observation_times[(i - 1) * obs_per_int]
         end_time = observation_times[i * obs_per_int]
 
-        p1_dists = -np.ones(particles_one.n)*2
+        p1_dists = -np.ones(particles_one.n) * 2
         for j in range(particles_one.n):
             obs_rows = particles_one_obs_rows[j]
             if end_time in obs_rows[:, 0]:
-                p1_dists[j] = np.sum(obs_rows[np.logical_and(obs_rows[:, 0] >= start_time, obs_rows[:, 0] <= end_time), -1])
+                p1_dists[j] = np.sum(
+                    obs_rows[np.logical_and(obs_rows[:, 0] >= start_time, obs_rows[:, 0] <= end_time), -1])
 
-        p2_dists = -np.ones(particles_two.n)*3
+        p2_dists = -np.ones(particles_two.n) * 3
         for k in range(particles_two.n):
             obs_rows = particles_two_obs_rows[k]
             if end_time in obs_rows:
-                p2_dists[k] = np.sum(obs_rows[np.logical_and(obs_rows[:, 0] >= start_time, obs_rows[:, 0] <= end_time), -1])
+                p2_dists[k] = np.sum(
+                    obs_rows[np.logical_and(obs_rows[:, 0] >= start_time, obs_rows[:, 0] <= end_time), -1])
 
         if speeds:
             p1_dists /= interval
             p2_dists /= interval
 
-        tv_each_time[i-1] = total_variation_dists(p1_dists, p2_dists, bins)
+        tv_each_time[i - 1] = total_variation_dists(p1_dists, p2_dists, bins)
 
     return tv_each_time
 
@@ -179,7 +182,7 @@ def each_edge_route_total_variation(particles_one,
                                     particles_two,
                                     observation_times,
                                     include_alpha=False,
-                                    bins=None):
+                                    round_alpha=None):
     m = observation_times.size
     tv_each_time = np.zeros(m)
 

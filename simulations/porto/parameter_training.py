@@ -46,7 +46,7 @@ mm_model.gps_sd = 7.
 
 params_track = bmm.offline_em(graph, mm_model, timestamps, polylines,
                               save_path=os.getcwd() + '/tuned_params.pickle',
-                              n_iter=n_iter, max_rejections=20,
+                              n_iter=n_iter, max_rejections=30,
                               n_ffbsi=n_particles, initial_d_truncate=50,
                               gradient_stepsize_scale=1e-5, gradient_stepsize_neg_exp=0.5,
-                              num_inter_cut_off=10, ess_threshold=0.8)
+                              num_inter_cut_off=10, ess_threshold=1.)

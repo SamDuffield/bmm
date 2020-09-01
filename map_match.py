@@ -46,24 +46,24 @@ n_samps = 100
 
 polyline_truncation = None
 
-max_rejects = 20
+max_rejects = 30
 
-num_inter_cut_off = 10
+num_inter_cut_off = None
 
 lag = 3
 
 mm_model = ExponentialMapMatchingModel()
-mm_model.max_speed = 35
+# mm_model.max_speed = 35
 
 resample_fails = False
 
 # Run offline map-matching
-# particles = _offline_map_match_fl(graph, poly_single[:polyline_truncation], n_samps, timestamps=15,
-#                                   lag=lag, mm_model=mm_model,
-#                                   d_refine=1, num_inter_cut_off=num_inter_cut_off,
-#                                   max_rejections=max_rejects,
-#                                   update='PF',
-#                                   resample_fails=resample_fails)
+particles = _offline_map_match_fl(graph, poly_single[:polyline_truncation], n_samps, timestamps=15,
+                                  lag=lag, mm_model=mm_model,
+                                  d_refine=1, num_inter_cut_off=num_inter_cut_off,
+                                  max_rejections=max_rejects,
+                                  update='PF',
+                                  resample_fails=resample_fails)
 
 particles = _offline_map_match_fl(graph, poly_single[:polyline_truncation], n_samps, timestamps=15,
                                   lag=lag, mm_model=mm_model,
@@ -73,17 +73,17 @@ particles = _offline_map_match_fl(graph, poly_single[:polyline_truncation], n_sa
                                   num_inter_cut_off=num_inter_cut_off,
                                   resample_fails=resample_fails)
 
-# particles = offline_map_match(graph, poly_single[:polyline_truncation], n_samps, timestamps=15,
-#                               mm_model=mm_model,
-#                               d_refine=1, num_inter_cut_off=num_inter_cut_off,
-#                               max_rejections=max_rejects,
-#                               ess_threshold=0.8)
+particles = offline_map_match(graph, poly_single[:polyline_truncation], n_samps, timestamps=15,
+                              mm_model=mm_model,
+                              d_refine=1, num_inter_cut_off=num_inter_cut_off,
+                              max_rejections=max_rejects,
+                              ess_threshold=0.8)
 
 print(particles.time)
 print(particles.time / len(poly_single))
 
 # Plot
-plot(graph, particles, poly_single)
-plt.show()
+# plot(graph, particles, poly_single)
+# plt.show()
 
 

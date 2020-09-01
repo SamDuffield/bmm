@@ -58,26 +58,22 @@ def multinomial(particles: Union[list, np.ndarray, MMParticles],
     return out_particles
 
 
-def full_fixed_lag_stitch(j: int,
-                          fixed_particle: np.ndarray,
+def full_fixed_lag_stitch(fixed_particle: np.ndarray,
                           last_edge_fixed: np.ndarray,
                           last_edge_fixed_length: float,
                           new_particles: MMParticles,
                           adjusted_weights: np.ndarray,
-                          min_resample_time: float,
                           stitch_time_interval: float,
                           min_resample_time_indices: Union[list, np.ndarray],
                           mm_model: MapMatchingModel,
                           return_ess_stitch: bool = False) -> Union[np.ndarray, Tuple[np.ndarray, float]]:
     """
     Evaluate full interacting weights, normalise and sample (stitch) for a single fixed particle
-    :param j: index of fixed particle
     :param fixed_particle: trajectory prior to stitching time
     :param last_edge_fixed: row of last fixed particle
     :param last_edge_fixed_length: length of last fixed edge (so don't have to call get_geometry)
     :param new_particles: particles proposed to stitching
     :param adjusted_weights: non-interacting weights for new_particles
-    :param min_resample_time: first observation time after stitching
     :param stitch_time_interval: time between stitching observations
     :param min_resample_time_indices: indices for row of min_resample_time in new_particles
     :param mm_model: MapMatchingModel
@@ -108,7 +104,7 @@ def full_fixed_lag_stitch(j: int,
         if np.array_equal(last_edge_fixed[1:4], new_particle[0, 1:4]):
             # Check that new edge overtakes fixed edge. i.e. distance isn't negative
             if np.array_equal(last_edge_fixed[1:4], new_particle[1, 1:4]) and \
-                    new_particle[1, 4] < last_edge_fixed[4]:
+                    new_particle[1, 4] < (last_edge_fixed[4] - 1e-6):
                 continue
 
             new_cart_coords[k] = new_particle[min_resample_time_indices[k], 5:7]
@@ -117,11 +113,11 @@ def full_fixed_lag_stitch(j: int,
             first_distance_j_to_k = (new_particle[1, 4] - last_edge_fixed[4]) * last_edge_fixed_length
             first_distance_k = new_particle[1, -1]
 
-            change_dist = first_distance_j_to_k - first_distance_k
+            change_dist = np.round(first_distance_j_to_k - first_distance_k, 5)
 
-            new_particle[:min_resample_time_indices[j], -1] += change_dist
+            new_particle[1:(min_resample_time_indices[k] + 1), -1] += change_dist
 
-            new_stitching_distances[k] = new_particle[new_particle[:, 0] <= min_resample_time][-1, -1]
+            new_stitching_distances[k] = new_particle[min_resample_time_indices[k], -1]
 
             # Store adjusted particle
             newer_particles_adjusted[k] = new_particle[1:]
@@ -173,13 +169,11 @@ def full_fixed_lag_stitch(j: int,
         return out_particle
 
 
-def rejection_fixed_lag_stitch(j: int,
-                               fixed_particle: np.ndarray,
+def rejection_fixed_lag_stitch(fixed_particle: np.ndarray,
                                last_edge_fixed: np.ndarray,
                                last_edge_fixed_length: float,
                                new_particles: MMParticles,
                                adjusted_weights: np.ndarray,
-                               min_resample_time: float,
                                stitch_time_interval: float,
                                min_resample_time_indices: Union[list, np.ndarray],
                                dist_prior_bound: float,
@@ -188,13 +182,11 @@ def rejection_fixed_lag_stitch(j: int,
                                break_on_zero: bool = False) -> Union[np.ndarray, None, int]:
     """
     Attempt up to max_rejections of rejection sampling to stitch a single fixed particle
-    :param j: index of fixed particle
     :param fixed_particle: trajectory prior to stitching time
     :param last_edge_fixed: row of last fixed particle
     :param last_edge_fixed_length: length of last fixed edge (so don't have to call get_geometry)
     :param new_particles: particles proposed to stitching
     :param adjusted_weights: non-interacting stitching weights
-    :param min_resample_time: first observation time after stitching
     :param stitch_time_interval: time between stitching observations
     :param min_resample_time_indices: indices for row of min_resample_time in new_particles
     :param dist_prior_bound: bound on distance transition density (given positive if break_on_zero)
@@ -205,7 +197,7 @@ def rejection_fixed_lag_stitch(j: int,
     """
     n = len(new_particles)
 
-    for k in range(max_rejections):
+    for reject_ind in range(max_rejections):
         new_index = np.random.choice(n, 1, p=adjusted_weights)[0]
         new_particle = new_particles[new_index].copy()
 
@@ -221,11 +213,11 @@ def rejection_fixed_lag_stitch(j: int,
         first_distance_j_to_k = (new_particle[1, 4] - last_edge_fixed[4]) * last_edge_fixed_length
         first_distance_k = new_particle[1, -1]
 
-        change_dist = first_distance_j_to_k - first_distance_k
+        change_dist = np.round(first_distance_j_to_k - first_distance_k, 5)
 
-        new_particle[:min_resample_time_indices[j], -1] += change_dist
+        new_particle[1:(min_resample_time_indices[new_index] + 1), -1] += change_dist
 
-        new_stitching_distance = new_particle[new_particle[:, 0] <= min_resample_time][-1, -1]
+        new_stitching_distance = new_particle[min_resample_time_indices[new_index], -1]
 
         if break_on_zero and new_stitching_distance < 1e-5:
             return 0
@@ -240,7 +232,6 @@ def rejection_fixed_lag_stitch(j: int,
         accept_prob = new_stitching_distance_prior * new_stitching_deviation_prior / dist_prior_bound
         if accept_prob > (1 - 1e-5) or np.random.uniform() < accept_prob:
             out_particle = np.append(fixed_particle, new_particle[1:], axis=0)
-
             return out_particle
     return None
 
@@ -307,7 +298,7 @@ def fixed_lag_stitch_post_split(graph: MultiDiGraph,
         prior_bound = mm_model.distance_prior_bound(stitch_time_interval)
         store_out_parts = fixed_particles.copy()
 
-    adjusted_weights = new_weights
+    adjusted_weights = new_weights.copy()
     adjusted_weights[original_prior_evals > 1e-5] /= original_prior_evals[original_prior_evals > 1e-5]
     adjusted_weights[original_prior_evals < 1e-5] = 0
     adjusted_weights /= np.sum(adjusted_weights)
@@ -332,20 +323,20 @@ def fixed_lag_stitch_post_split(graph: MultiDiGraph,
 
         if full_fixed_lag_resample:
             # Full resampling
-            out_particles[j], ess_stitch_track[j] = full_fixed_lag_stitch(j, fixed_particle,
+            out_particles[j], ess_stitch_track[j] = full_fixed_lag_stitch(fixed_particle,
                                                                           last_edge_fixed, last_edge_fixed_length,
                                                                           new_particles,
                                                                           adjusted_weights,
-                                                                          min_resample_time, stitch_time_interval,
+                                                                          stitch_time_interval,
                                                                           min_resample_time_indices,
                                                                           mm_model,
                                                                           True)
 
         else:
             # Rejection sampling
-            out_particles[j] = rejection_fixed_lag_stitch(j, fixed_particle, last_edge_fixed, last_edge_fixed_length,
+            out_particles[j] = rejection_fixed_lag_stitch(fixed_particle, last_edge_fixed, last_edge_fixed_length,
                                                           new_particles, adjusted_weights,
-                                                          min_resample_time, stitch_time_interval,
+                                                          stitch_time_interval,
                                                           min_resample_time_indices,
                                                           pos_prior_bound,
                                                           mm_model,
@@ -353,10 +344,10 @@ def fixed_lag_stitch_post_split(graph: MultiDiGraph,
                                                           break_on_zero=True)
             if out_particles[j] is None:
                 # Rejection sampling reached max_rejections -> try full resampling
-                out_particles[j] = full_fixed_lag_stitch(j, fixed_particle, last_edge_fixed, last_edge_fixed_length,
+                out_particles[j] = full_fixed_lag_stitch(fixed_particle, last_edge_fixed, last_edge_fixed_length,
                                                          new_particles,
                                                          adjusted_weights,
-                                                         min_resample_time, stitch_time_interval,
+                                                         stitch_time_interval,
                                                          min_resample_time_indices,
                                                          mm_model,
                                                          False)
@@ -382,19 +373,19 @@ def fixed_lag_stitch_post_split(graph: MultiDiGraph,
             last_edge_fixed_length = last_edge_fixed_geom.length
 
             # Rejection sampling with full bound
-            out_particles[j] = rejection_fixed_lag_stitch(j, fixed_particle, last_edge_fixed, last_edge_fixed_length,
+            out_particles[j] = rejection_fixed_lag_stitch(fixed_particle, last_edge_fixed, last_edge_fixed_length,
                                                           new_particles, adjusted_weights,
-                                                          min_resample_time, stitch_time_interval,
+                                                          stitch_time_interval,
                                                           min_resample_time_indices,
                                                           prior_bound,
                                                           mm_model,
                                                           max_rejections)
             if out_particles[j] is None:
                 # Rejection sampling reached max_rejections -> try full resampling
-                out_particles[j] = full_fixed_lag_stitch(j, fixed_particle, last_edge_fixed, last_edge_fixed_length,
+                out_particles[j] = full_fixed_lag_stitch(fixed_particle, last_edge_fixed, last_edge_fixed_length,
                                                          new_particles,
                                                          adjusted_weights,
-                                                         min_resample_time, stitch_time_interval,
+                                                         stitch_time_interval,
                                                          min_resample_time_indices,
                                                          mm_model,
                                                          False)
