@@ -531,9 +531,6 @@ def offline_map_match(graph: MultiDiGraph,
         live_weights = temp_weights.copy()
         ess_pf[i + 1] = 1 / np.sum(temp_weights ** 2)
 
-        if ess_pf[i + 1] < 0.25*n_samps:
-            raise
-
         print(str(filter_particles[i + 1].latest_observation_time) + " PF ESS: " + str(ess_pf[i + 1]))
 
     # Backward simulation
