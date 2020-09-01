@@ -213,6 +213,7 @@ def optimal_proposal(graph: MultiDiGraph,
                      d_refine: float = 1.,
                      d_max: float = None,
                      d_max_fail_multiplier: float = 1.,
+                     d_max_threshold: tuple = (0.9, 0.1),
                      num_inter_cut_off: int = None,
                      only_norm_const: bool = False,
                      store_norm_quants: bool = False,
@@ -231,6 +232,8 @@ def optimal_proposal(graph: MultiDiGraph,
     :param d_refine: metres, resolution of distance discretisation
     :param d_max: optional override of d_max = mm_model.d_max(time_interval)
     :param d_max_fail_multiplier: extension of d_max in case all probs are 0
+    :param d_max_threshold: tuple defining when to extend d_max
+        extend if total sample prob of distances > d_max * d_max_threshold[0] larger than d_max_threshold[1]
     :param num_inter_cut_off: maximum number of intersections to cross in the time interval
     :param only_norm_const: if true only return prior normalising constant (don't sample)
     :param store_norm_quants: whether to additionally return quantities needed for gradient EM step
@@ -339,9 +342,10 @@ def optimal_proposal(graph: MultiDiGraph,
     prop_weight = sample_probs.sum()
 
     if prop_weight < 1e-200 \
-            or (np.sum(sample_probs[np.where(distances[likelihood_evals > 0] > d_max * 0.75)[0]]) > 1e-3
+            or (np.sum(sample_probs[np.where(distances[likelihood_evals > 0]
+                                             > d_max * d_max_threshold[0])[0]])/prop_weight > d_max_threshold[1]
                 and (not d_max > mm_model.d_max(time_interval))):
-        if np.abs(d_max - np.max(distances)) < d_refine + 1e-5 \
+        if (d_max - np.max(distances)) < d_refine + 1e-5 \
                 and d_max_fail_multiplier > 1 and (not d_max > mm_model.d_max(time_interval)):
             return optimal_proposal(graph,
                                     particle,

@@ -64,7 +64,7 @@ def offline_em(graph: MultiDiGraph,
         mm_model.deviation_beta = 0
 
     time_interval_arrs_full = [get_time_interval_array(timestamps_single, len(polyline))
-                          for timestamps_single, polyline in zip(timestamps, polylines)]
+                               for timestamps_single, polyline in zip(timestamps, polylines)]
 
     for k in range(n_iter):
         # Run FFBSi over all given polylines with latest hyperparameters
@@ -220,6 +220,7 @@ def optimise_hyperparameters(mm_model: MapMatchingModel,
     mm_model.gps_sd = min(max(np.sqrt(sq_obs_dists.mean() / 2),
                               mm_model.gps_sd_bounds[0]),
                           mm_model.gps_sd_bounds[1])
+
 
 def gradient_em_step(mm_model: MapMatchingModel,
                      map_matchings: list,
