@@ -406,7 +406,7 @@ def gradient_em_step(mm_model: MapMatchingModel,
 #
 
 #
-# def offline_map_match_dev_quants(graph: MultiDiGraph,
+# def offline_map_match_dev_quants(cam_graph: MultiDiGraph,
 #                                  polyline: np.ndarray,
 #                                  n_samps: int,
 #                                  timestamps: Union[float, np.ndarray],
@@ -422,7 +422,7 @@ def gradient_em_step(mm_model: MapMatchingModel,
 #     of trajectories.
 #     Additionally stores prior/transition density normalising quantities for each filter particle
 #     Forward-filtering backward-simulation implementation - no fixed-lag approximation needed for offline inference.
-#     :param graph: encodes road network, simplified and projected to UTM
+#     :param cam_graph: encodes road network, simplified and projected to UTM
 #     :param polyline: series of cartesian coordinates in UTM
 #     :param n_samps: int
 #         number of particles
@@ -457,7 +457,7 @@ def gradient_em_step(mm_model: MapMatchingModel,
 #     adjusted_weights = np.zeros((num_obs, n_samps))
 #
 #     # Initiate filter_particles
-#     filter_particles[0] = initiate_particles(graph, polyline[0], n_samps, mm_model=mm_model,
+#     filter_particles[0] = initiate_particles(cam_graph, polyline[0], n_samps, mm_model=mm_model,
 #                                              d_refine=d_refine, d_truncate=initial_d_truncate,
 #                                              ess_all=ess_all)
 #     adjusted_weights[0] = 1 / n_samps
@@ -493,7 +493,7 @@ def gradient_em_step(mm_model: MapMatchingModel,
 #         temp_weights = np.zeros(n_samps)
 #         filter_particles[i + 1] = live_particles.copy()
 #         for j in range(n_samps):
-#             prop_output = proposal_func(graph, live_particles[j], polyline[i + 1],
+#             prop_output = proposal_func(cam_graph, live_particles[j], polyline[i + 1],
 #                                         time_interval_arr[i],
 #                                         mm_model,
 #                                         full_smoothing=False,
@@ -504,7 +504,7 @@ def gradient_em_step(mm_model: MapMatchingModel,
 #
 #         for k in not_prop_inds:
 #             if filter_particles[i][k] is not None:
-#                 prop_output = proposal_func(graph, filter_particles[i][k].copy(), polyline[i + 1],
+#                 prop_output = proposal_func(cam_graph, filter_particles[i][k].copy(), polyline[i + 1],
 #                                             time_interval_arr[i],
 #                                             mm_model,
 #                                             full_smoothing=False,
@@ -522,7 +522,7 @@ def gradient_em_step(mm_model: MapMatchingModel,
 #         print(str(filter_particles[i + 1].latest_observation_time) + " PF ESS: " + str(ess_pf[i + 1]))
 #
 #     # Backward simulation
-#     out_particles = backward_simulate(graph,
+#     out_particles = backward_simulate(cam_graph,
 #                                       filter_particles, adjusted_weights,
 #                                       time_interval_arr,
 #                                       mm_model,
@@ -536,7 +536,7 @@ def gradient_em_step(mm_model: MapMatchingModel,
 
 
 
-#def optim_plus_devs(graph: MultiDiGraph,
+#def optim_plus_devs(cam_graph: MultiDiGraph,
 #                     mm_model: MapMatchingModel,
 #                     map_matchings: list,
 #                     time_interval_arrs: list,
@@ -546,7 +546,7 @@ def gradient_em_step(mm_model: MapMatchingModel,
 #     """
 #     For given map-matching results, take gradient step on prior hyperparameters (but fully optimise gps_sd)
 #     Updates mm_model hyperparameters in place
-#     :param graph: encodes road network, simplified and projected to UTM
+#     :param cam_graph: encodes road network, simplified and projected to UTM
 #     :param mm_model: MapMatchingModel
 #     :param map_matchings: list of MMParticles objects
 #     :param time_interval_arrs: time interval arrays for each route
@@ -594,7 +594,7 @@ def gradient_em_step(mm_model: MapMatchingModel,
 #
 #             for time_ind in range(m):
 #                 for part_ind in range(n):
-#                     norm_consts_mm[time_ind, part_ind] = optimal_proposal(graph,
+#                     norm_consts_mm[time_ind, part_ind] = optimal_proposal(cam_graph,
 #                                                                           obs_row_particles[part_ind][time_ind][None],
 #                                                                           None,
 #                                                                           time_interval_arrs[mm_ind][time_ind],
@@ -655,7 +655,7 @@ def gradient_em_step(mm_model: MapMatchingModel,
 
 
 
-# def gradient_em_step(graph: MultiDiGraph,
+# def gradient_em_step(cam_graph: MultiDiGraph,
 #                      mm_model: MapMatchingModel,
 #                      map_matchings: list,
 #                      time_interval_arrs: list,
@@ -665,7 +665,7 @@ def gradient_em_step(mm_model: MapMatchingModel,
 #     """
 #     For given map-matching results, take gradient step on prior hyperparameters (but fully optimise gps_sd)
 #     Updates mm_model hyperparameters in place
-#     :param graph: encodes road network, simplified and projected to UTM
+#     :param cam_graph: encodes road network, simplified and projected to UTM
 #     :param mm_model: MapMatchingModel
 #     :param map_matchings: list of MMParticles objects
 #     :param time_interval_arrs: time interval arrays for each route
@@ -705,7 +705,7 @@ def gradient_em_step(mm_model: MapMatchingModel,
 #
 #         for time_ind in range(m):
 #             for part_ind in range(n):
-#                 norm_quants_mm[time_ind, part_ind] = optimal_proposal(graph,
+#                 norm_quants_mm[time_ind, part_ind] = optimal_proposal(cam_graph,
 #                                                                       obs_row_particles[part_ind][time_ind][None],
 #                                                                       None,
 #                                                                       time_interval_arrs[mm_ind][time_ind],

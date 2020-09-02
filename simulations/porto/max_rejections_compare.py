@@ -20,22 +20,20 @@ seed = 0
 np.random.seed(seed)
 
 timestamps = 15
-n_samps = 200
+n_samps = np.array([50, 100, 150, 200])
 lag = 3
-max_rejections = np.array([0, 10, 20, 30, 40, 50])
+max_rejections = np.array([0, 20, 40, 60, 80, 100])
 initial_truncation = None
-num_repeats = 1
+num_repeats = 20
 max_speed = 35
 proposal_dict = {'proposal': 'optimal',
                  'num_inter_cut_off': 10,
                  'resample_fails': False,
                  'd_max_fail_multiplier': 2.}
-update = 'BSi'
 
 setup_dict = {'seed': seed,
-              'n_samps': n_samps,
+              'n_samps': n_samps.tolist(),
               'lag': lag,
-              'update': update,
               'max_rejections': max_rejections.tolist(),
               'initial_truncation': initial_truncation,
               'num_repeats': num_repeats,
@@ -71,48 +69,89 @@ with open(save_dir + 'setup_dict', 'w+') as f:
 mm_model = bmm.ExponentialMapMatchingModel()
 mm_model.max_speed = max_speed
 
-# Run FFBSi
-fl_routes = np.empty((num_repeats, len(max_rejections)), dtype=object)
-fl_times = np.zeros((num_repeats, len(max_rejections)))
+fl_pf_routes = np.empty((num_repeats, len(n_samps), len(max_rejections)), dtype=object)
+fl_bsi_routes = np.empty((num_repeats, len(n_samps), len(max_rejections)), dtype=object)
+fl_pf_times = np.zeros((num_repeats, len(n_samps), len(max_rejections)))
+fl_bsi_times = np.zeros((num_repeats, len(n_samps), len(max_rejections)))
 
-n_failures = 0
+n_pf_failures = 0
+n_bsi_failures = 0
 
 for i in range(num_repeats):
-    for j, max_reject_int in enumerate(max_rejections):
-        print(i, j)
-        try:
-            fl_routes[i, j] = bmm._offline_map_match_fl(graph,
-                                                        polyline,
-                                                        n_samps,
-                                                        timestamps=timestamps,
-                                                        mm_model=mm_model,
-                                                        lag=lag,
-                                                        update=update,
-                                                        max_rejections=max_reject_int,
-                                                        initial_d_truncate=initial_truncation,
-                                                        **proposal_dict)
-            fl_times[i, j] = fl_routes[i, j].time
-            print(f'FL PF {i} {j}: {fl_routes[i, j].time}')
-        except:
-            n_failures += 1
-        print(f'FL PF failures: {n_failures}')
-        utils.clear_cache()
+    for j, n in enumerate(n_samps):
+        for k, max_reject_int in enumerate(max_rejections):
+            print(i, j, k)
+            try:
+                fl_pf_routes[i, j, k] = bmm._offline_map_match_fl(graph,
+                                                                  polyline,
+                                                                  n,
+                                                                  timestamps=timestamps,
+                                                                  mm_model=mm_model,
+                                                                  lag=lag,
+                                                                  update='PF',
+                                                                  max_rejections=max_reject_int,
+                                                                  initial_d_truncate=initial_truncation,
+                                                                  **proposal_dict)
+                fl_pf_times[i, j, k] = fl_pf_routes[i, j, k].time
+                print(f'FL PF {i} {j} {k}: {fl_pf_routes[i, j, k].time}')
+            except:
+                n_pf_failures += 1
+            print(f'FL PF failures: {n_pf_failures}')
+            utils.clear_cache()
 
-print(f'FL PF failures: {n_failures}')
+            try:
+                fl_bsi_routes[i, j, k] = bmm._offline_map_match_fl(graph,
+                                                                   polyline,
+                                                                   n,
+                                                                   timestamps=timestamps,
+                                                                   mm_model=mm_model,
+                                                                   lag=lag,
+                                                                   update='BSi',
+                                                                   max_rejections=max_reject_int,
+                                                                   initial_d_truncate=initial_truncation,
+                                                                   **proposal_dict)
+                fl_bsi_times[i, j, k] = fl_bsi_routes[i, j, k].time
+                print(f'FL BSi {i} {j} {k}: {fl_bsi_routes[i, j, k].time}')
+            except:
+                n_bsi_failures += 1
+            print(f'FL BSi failures: {n_bsi_failures}')
+            utils.clear_cache()
 
-np.save(save_dir + 'fl_routes', fl_routes)
-np.save(save_dir + 'fl_times', fl_times)
+print(f'FL PF failures: {n_pf_failures}')
+print(f'FL BSi failures: {n_bsi_failures}')
+
+np.save(save_dir + 'fl_pf_routes', fl_pf_routes)
+np.save(save_dir + 'fl_pf_times', fl_pf_times)
+np.save(save_dir + 'fl_bsi_routes', fl_bsi_routes)
+np.save(save_dir + 'fl_bsi_times', fl_bsi_times)
 
 #
-# fl_routes = np.load(save_dir + 'fl_routes.npy', allow_pickle=True)
-# fl_times = np.load(save_dir + 'fl_times.npy', allow_pickle=True)
+# fl_pf_routes = np.load(save_dir + 'fl_pf_routes.npy', allow_pickle=True)
+# fl_pf_times = np.load(save_dir + 'fl_pf_times.npy')
+# fl_bsi_routes = np.load(save_dir + 'fl_bsi_routes.npy', allow_pickle=True)
+# fl_bsi_times = np.load(save_dir + 'fl_bsi_times.npy')
 # with open(save_dir + 'setup_dict') as f:
 #     setup_dict = json.load(f)
 
 
 n_obs = len(polyline)
-fl_times_per_obs = fl_times/n_obs
+fl_pf_times_per_obs = fl_pf_times / n_obs
+fl_bsi_times_per_obs = fl_bsi_times / n_obs
 
-plt.plot(max_rejections, np.mean(fl_times_per_obs, axis=0))
-plt.savefig(save_dir + 'max_reject_compare', dpi=400)
+
+def comp_plot(n_samps,
+              max_rejects,
+              times):
+    fig, ax = plt.subplots()
+    for i, n in enumerate(n_samps):
+        ax.plot(max_rejects, times[i], color='orange', label=str(n))
+    plt.tight_layout()
+    return fig, ax
+
+
+pf_fig, pf_ax = comp_plot(n_samps, max_rejections, np.mean(fl_pf_times_per_obs, axis=0))
+plt.savefig(save_dir + 'pf_mr_compare', dpi=400)
+
+bsi_fig, bsi_ax = comp_plot(n_samps, max_rejections, np.mean(fl_bsi_times_per_obs, axis=0))
+plt.savefig(save_dir + 'bsi_mr_compare', dpi=400)
 

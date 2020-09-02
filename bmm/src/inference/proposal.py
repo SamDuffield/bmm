@@ -23,7 +23,7 @@ def get_out_edges(graph: MultiDiGraph,
     """
     Extracts out edges from a given node
     :param graph: encodes road network, simplified and projected to UTM
-    :param node: graph index to a single node
+    :param node: cam_graph index to a single node
     :return: array with columns u, v, k with u = node
     """
     return np.atleast_2d([[u, v, k] for u, v, k in graph.out_edges(node, keys=True)])
@@ -68,7 +68,7 @@ def get_possible_routes(graph: MultiDiGraph,
                         all_routes: bool = False,
                         num_inter_cut_off: int = np.inf) -> list:
     """
-    Given a route so far and maximum distance to travel, calculate and return all possible routes on graph.
+    Given a route so far and maximum distance to travel, calculate and return all possible routes on cam_graph.
     :param graph: encodes road network, simplified and projected to UTM
     :param in_route: shape = (_, 9)
         columns: t, u, v, k, alpha, x, y, n_inter, d
@@ -255,7 +255,7 @@ def optimal_proposal(graph: MultiDiGraph,
     # Extract all possible routes from previous position
     start_position = particle[-1:].copy()
     start_position[0, -1] = 0
-    # possible_routes = get_possible_routes(graph, start_position, d_max, all_routes=True,
+    # possible_routes = get_possible_routes(cam_graph, start_position, d_max, all_routes=True,
     #                                       num_inter_cut_off=num_inter_cut_off)
     possible_routes = get_all_possible_routes_overshoot(graph, start_position, d_max,
                                                         num_inter_cut_off=num_inter_cut_off)

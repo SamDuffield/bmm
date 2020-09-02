@@ -1,6 +1,6 @@
 ########################################################################################################################
 # Module: map_match.py
-# Description: Script that loads graph and polyline before running map-matching algorithm.
+# Description: Script that loads cam_graph and polyline before running map-matching algorithm.
 #
 # Web: https://github.com/SamDuffield/bmm
 ########################################################################################################################
@@ -19,7 +19,7 @@ np.random.seed(0)
 # Source data paths
 _, process_data_path = source_data()
 
-# Load networkx graph
+# Load networkx cam_graph
 graph = load_graph()
 
 # Load taxi data
@@ -83,7 +83,7 @@ print(particles.time)
 print(particles.time / len(poly_single))
 
 # Plot
-# plot(graph, particles, poly_single)
+# plot(cam_graph, particles, poly_single)
 # plt.show()
 
 

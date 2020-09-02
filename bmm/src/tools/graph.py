@@ -1,5 +1,5 @@
 ################################################################################
-# Module: graph.py
+# Module: cam_graph.py
 # Description: Download/prune, project, simplify
 #              and save road network using OSMNx.
 # Web: https://github.com/SamDuffield/bayesian-traffic
@@ -18,7 +18,7 @@ import tkinter.filedialog
 
 def download_full_graph():
     """
-    Returns a graph of road network in the form of a networkx multidigraph, based off latest OSM data.
+    Returns a cam_graph of road network in the form of a networkx multidigraph, based off latest OSM data.
     :return: networkx object
     """
 
@@ -45,8 +45,8 @@ def load_road_types():
 
 def prune_non_highways(graph):
     """
-    Removes all edges from graph that aren't for highways (cars) and subsequent isolated nodes.
-    :param graph: Full graph with variety of edges
+    Removes all edges from cam_graph that aren't for highways (cars) and subsequent isolated nodes.
+    :param graph: Full cam_graph with variety of edges
     :return: Graph with only highway type edges
     """
     pruned_graph = graph.copy()
@@ -78,7 +78,7 @@ def prune_non_highways(graph):
 
 def extract_full_graph_from_osm(osm_path, osm_data_name="external"):
     """
-    Extracts graph from a pre-downloaded OSM file (either xml or pbf format).
+    Extracts cam_graph from a pre-downloaded OSM file (either xml or pbf format).
     Typically useful if using older data and thus latest OSM map might be too up to date.
     You can download old OSM files from http://download.geofabrik.de/
     e.g. http://download.geofabrik.de/europe/portugal.html -> raw directory index - > *.osm.pbf
@@ -87,7 +87,7 @@ def extract_full_graph_from_osm(osm_path, osm_data_name="external"):
         Mac OS: brew install interline-io/planetutils/osmctools
     :param osm_path: path of OSM pbf or xml file
     :param osm_data_name: name of data (i.e. location and data)
-    :return: networkx graph, pruned but not simplified or projected
+    :return: networkx cam_graph, pruned but not simplified or projected
     """
 
     # Source data paths
@@ -124,9 +124,9 @@ def extract_full_graph_from_osm(osm_path, osm_data_name="external"):
 
 def remove_unconnected_islands(graph):
     """
-    Removes road islands not connected to the main graph.
+    Removes road islands not connected to the main cam_graph.
     :param graph: networkx object
-    :return: trimmmed graph, networkx object
+    :return: trimmmed cam_graph, networkx object
     """
 
     # Find largest island
@@ -140,7 +140,7 @@ def remove_unconnected_islands(graph):
 
 def save_graph(graph, path):
     """
-    Saves graph as an OSM (XML) file
+    Saves cam_graph as an OSM (XML) file
     :param graph: networkx object
     :param path: location to save
     """
@@ -149,9 +149,9 @@ def save_graph(graph, path):
 
 def load_graph(path=None):
     """
-    Loads saved graph
-    :param path: location of graph
-    :return: loaded graph
+    Loads saved cam_graph
+    :param path: location of cam_graph
+    :return: loaded cam_graph
     """
     if path is None:
         # path = os.environ.get('GRAPH_PATH')
@@ -165,7 +165,7 @@ def load_graph(path=None):
 
 def get_bbox_from_graph(graph):
     """
-    Extract bounding box (extreme coordinates of nodes) from graph
+    Extract bounding box (extreme coordinates of nodes) from cam_graph
     :param graph: networkx object
     :return: [north, south, east, west]
     """
@@ -194,7 +194,7 @@ if __name__ == "__main__":
     # Directory to save graphs
     graph_dir = process_data_path + '/graphs/'
 
-    # Create graph folder in process_data_path if it doesn't already exist
+    # Create cam_graph folder in process_data_path if it doesn't already exist
     if not os.path.exists(process_data_path + '/graphs/'):
         os.mkdir(process_data_path + '/graphs/')
 
@@ -204,7 +204,7 @@ if __name__ == "__main__":
     root = tkinter.Tk()
     osm_data = tkinter.messagebox.askquestion("OSM data",
                                               "Do you have OSM data already downloaded (xml or pbf) to construct a "
-                                              "graph from? (otherwise we'll just download the latest graph)")
+                                              "cam_graph from? (otherwise we'll just download the latest cam_graph)")
     if osm_data == 'yes':
         # Get data location
         root.update()
@@ -215,7 +215,7 @@ if __name__ == "__main__":
         # Get name of data
         data_name = os.path.basename(osm_data_path)[:-3]
 
-        # Extract full graph (many nodes, each edge a straight line)
+        # Extract full cam_graph (many nodes, each edge a straight line)
         full_graph = extract_full_graph_from_osm(osm_data_path, data_name)
 
         # Remove islands
@@ -223,18 +223,18 @@ if __name__ == "__main__":
 
     else:
         root.destroy()
-        # Download full graph (many nodes, each edge a straight line)
+        # Download full cam_graph (many nodes, each edge a straight line)
         full_graph = download_full_graph()
 
-    # Save full graph
+    # Save full cam_graph
     graph_base_name = bmm.src.data.utils.project_title + '_graph_' + full_graph.name
     save_graph(full_graph, graph_dir + graph_base_name + 'LL_full.graphml')
 
-    # Project graph to UTM and save
+    # Project cam_graph to UTM and save
     project_graph = ox.project_graph(full_graph)
     save_graph(project_graph, graph_dir + graph_base_name + '_full.graphml')
 
-    # Simplify graph (fewer nodes, edges incorporate non-straight geometry) and save
+    # Simplify cam_graph (fewer nodes, edges incorporate non-straight geometry) and save
     simplified_graph = ox.simplify_graph(project_graph)
     save_graph(simplified_graph, graph_dir + graph_base_name + '_simple.graphml')
 
@@ -244,10 +244,10 @@ if __name__ == "__main__":
     source_file.write(graph_dir + graph_base_name + '_simple.graphml')
     source_file.close()
 
-    # # Plot simplified projected graph
+    # # Plot simplified projected cam_graph
     # fig, ax = plot_graph(simplified_graph)
     # plt.show(block=True)
 
-    # Load simplified projected graph with
-    # from tools.graph import load_graph
-    # graph = load_graph()
+    # Load simplified projected cam_graph with
+    # from tools.cam_graph import load_graph
+    # cam_graph = load_graph()

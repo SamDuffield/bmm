@@ -25,7 +25,7 @@ def download_cambridge_graph(save_path):
     write_gpickle(simplified_graph, save_path)
 
 
-# Load graph of Cambridge
+# Load cam_graph of Cambridge
 def load_graph(path):
     graph = read_gpickle(path)
     return graph
@@ -42,7 +42,7 @@ def clear_cache():
         wrapper.cache_clear()
 
 
-# Function to sample a random point on the graph
+# Function to sample a random point on the cam_graph
 def random_positions(graph, n=1):
     edges_arr = np.array(graph.edges)
     n_edges = len(edges_arr)

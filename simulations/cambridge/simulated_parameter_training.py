@@ -16,31 +16,31 @@ import bmm
 
 np.random.seed(0)
 
-# Load graph
+# Load cam_graph
 graph_path = os.getcwd() + '/cambridge_projected_simple.graphml'
 
 if not os.path.exists(graph_path):
     download_cambridge_graph(graph_path)
 
-# Load networkx graph
+# Load networkx cam_graph
 cam_graph = load_graph(graph_path)
 
 timestamps = 15
 
 gen_model = bmm.ExponentialMapMatchingModel()
 gen_model.distance_params['zero_dist_prob_neg_exponent'] = -np.log(0.10) / timestamps
-gen_model.distance_params['lambda_speed'] = 1/15
+gen_model.distance_params['lambda_speed'] = 1/20
 gen_model.deviation_beta = 0.05
 gen_model.gps_sd = 3.0
-gen_model.max_speed = 60
+# gen_model.max_speed = 50
 
 num_inter_cut_off = None
 num_pos_routes_cap = 500
 
 # Generate simulated routes
 num_routes = 20
-min_route_length = 20
-max_route_length = 50
+min_route_length = 50
+max_route_length = 70
 sample_d_refine = 1
 n_iter = 200
 
@@ -80,10 +80,17 @@ tune_model.deviation_beta = 0.1
 tune_model.gps_sd = 7.
 # tune_model.max_speed = 50
 
+# tune_model = bmm.ExponentialMapMatchingModel()
+# tune_model.distance_params['zero_dist_prob_neg_exponent'] = gen_model.distance_params['zero_dist_prob_neg_exponent']
+# tune_model.distance_params['lambda_speed'] = gen_model.distance_params['lambda_speed']
+# tune_model.deviation_beta = gen_model.deviation_beta
+# tune_model.gps_sd = gen_model.gps_sd
+# tune_model.max_speed = gen_model.max_speed
+
 params_track_single = bmm.offline_em(cam_graph, tune_model, timestamps, observations,
                                      save_path=os.getcwd() + '/tuned_sim_params.pickle',
                                      n_iter=n_iter,
-                                     max_rejections=30, d_max_fail_multiplier=3,
+                                     max_rejections=30, d_max_fail_multiplier=1.5,
                                      initial_d_truncate=50, num_inter_cut_off=num_inter_cut_off,
                                      ess_threshold=1.,
                                      gradient_stepsize_scale=1e-5, gradient_stepsize_neg_exp=0.5)

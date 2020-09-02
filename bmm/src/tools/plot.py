@@ -1,6 +1,6 @@
 ########################################################################################################################
 # Module: plot.py
-# Description: Plot graph, inferred route and/or polyline.
+# Description: Plot cam_graph, inferred route and/or polyline.
 #
 # Web: https://github.com/SamDuffield/bmm
 ########################################################################################################################
@@ -18,7 +18,7 @@ def plot(graph, particles=None, polyline=None, particles_alpha=None, label_start
     :param graph: NetworkX MultiDiGraph
         UTM projection
         encodes road network
-        generating using OSMnx, see tools.graph.py
+        generating using OSMnx, see tools.cam_graph.py
     :param particles: MMParticles object (from inference.particles)
         particle approximation
     :param polyline: list-like, each element length 2

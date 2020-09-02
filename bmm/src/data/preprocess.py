@@ -163,7 +163,7 @@ def longlat_polys_to_utm(polylines, to_crs=None):
     """
     Takes a list of long-lat polylines and returns a pd.Series of UTM polylines
     :param polylines: pd.Series of [long, lat] elements
-    :param to_crs: if crs already known (i.e. from projected OSMNx graph), not essential
+    :param to_crs: if crs already known (i.e. from projected OSMNx cam_graph), not essential
     :return: pd.Series of [x,y] elements where x and y are metres from fixed UTM location
     """
     # Elongate polylines df, so that each row is a coordinate rather than a polyline

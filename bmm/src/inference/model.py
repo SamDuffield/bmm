@@ -139,10 +139,10 @@ class MapMatchingModel:
 class ExponentialMapMatchingModel(MapMatchingModel):
 
     def __init__(self,
-                 zero_dist_prob_neg_exponent: float = 0.135,
-                 lambda_speed: float = 0.078,
-                 deviation_beta: float = 0.053,
-                 gps_sd: float = 5.60):
+                 zero_dist_prob_neg_exponent: float = 0.133,
+                 lambda_speed: float = 0.069,
+                 deviation_beta: float = 0.052,
+                 gps_sd: float = 5.25):
         super().__init__()
         self.min_zero_dist_prob = 0.01
         self.max_zero_dist_prob = 0.5
