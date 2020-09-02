@@ -40,9 +40,12 @@ raw_data = read_data(data_path)
 # polyline_indices = np.array([0, 1655,  3300,  4951,  6601,  8250,  9900, 11550,
 #                              13200, 14850, 16502., 18152, 19801, 21450, 23101, 24750,
 #                              26400, 28050, 29700, 31350])
+# polyline_indices = np.array([0, 1655,  3300,  4952,  6601,  8250,  9900, 11550,
+#                              13200, 14851, 16502., 18152, 19801, 21450, 23101, 24750,
+#                              26401, 28050, 29700, 31350])
 polyline_indices = np.array([0, 1655,  3300,  4952,  6601,  8250,  9900, 11550,
                              13200, 14851, 16502., 18152, 19801, 21450, 23101, 24750,
-                             26400, 28050, 29700, 31350])
+                             26404, 28050, 29700, 31350])
 
 polylines = [np.asarray(raw_data['POLYLINE_UTM'][single_index]) for single_index in polyline_indices]
 lens = [len(po) for po in polylines]

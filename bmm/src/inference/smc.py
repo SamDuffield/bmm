@@ -524,8 +524,6 @@ def offline_map_match(graph: MultiDiGraph,
         if not resample:
             temp_weights *= live_weights
 
-        if np.sum(temp_weights) == 0:
-            raise
         temp_weights /= np.sum(temp_weights)
         filter_weights[i + 1] = temp_weights.copy()
         live_weights = temp_weights.copy()
@@ -542,6 +540,7 @@ def offline_map_match(graph: MultiDiGraph,
                                       max_rejections,
                                       verbose=True,
                                       store_norm_quants=store_norm_quants)
+    out_particles.ess_pf = ess_pf
 
     end = tm()
     out_particles.time = end - start
