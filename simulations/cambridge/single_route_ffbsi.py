@@ -1,4 +1,3 @@
-import os
 import json
 
 import numpy as np
@@ -86,7 +85,7 @@ observations_ll = [[0.12188, 52.198387],
 observations = bmm.long_lat_to_utm(observations_ll, cam_graph)
 
 fig, ax = bmm.plot(cam_graph, polyline=observations)
-fig.savefig(save_dir + 'observations', dpi=400)
+fig.savefig(save_dir + 'observations', dpi=400, bbox_inches='tight')
 
 ffbsi_route = bmm.offline_map_match(cam_graph, observations, n_samps, time_interval, mm_model,
                                     max_rejections=max_rejections, num_inter_cut_off=num_inter_cut_off, d_max=700)
@@ -97,12 +96,12 @@ np.save(save_dir + 'ffbsi_route', ffbsi_route_arr)
 
 # ffbsi_route = np.load(save_dir + 'ffbsi_route.npy', allow_pickle=True)[0]
 fig2, ax2 = bmm.plot(cam_graph, ffbsi_route, observations)
-fig2.savefig(save_dir + 'ffbsi', dpi=400)
+fig2.savefig(save_dir + 'ffbsi', dpi=400, bbox_inches='tight')
 
 
 def dist_hist(particle_distances, viterbi_distances=None):
     fig, axes = plt.subplots(len(particle_distances), sharex=True)
-    axes[-1].set_xlabel('m')
+    axes[-1].set_xlabel('Metres')
     # axes[0].xlim = (0, 165)
     for i, d in enumerate(particle_distances):
         axes[i].hist(d, bins=40, color='purple', alpha=0.5, zorder=0, density=True)
@@ -119,7 +118,7 @@ optim_route = np.load(save_dir + 'optim_route.npy', allow_pickle=True)
 optim_dists = bmm.observation_time_rows(optim_route)[1:, -1]
 
 fig_optim, ax_optim = bmm.plot(cam_graph, optim_route, observations)
-fig_optim.savefig(save_dir + 'optim', dpi=400)
+fig_optim.savefig(save_dir + 'optim', dpi=400, bbox_inches='tight')
 
 fig_hists, axes_hists = dist_hist(ffbsi_dists.T, optim_dists)
 fig_hists.savefig(save_dir + 'ffbsi_hists', dpi=400)

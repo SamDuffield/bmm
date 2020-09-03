@@ -2,9 +2,9 @@ import os
 import json
 import sys
 
-sim_dat_path = os.getcwd()
-repo_path = os.path.dirname(os.path.dirname(sim_dat_path))
-sys.path.append(sim_dat_path)
+porto_sim_dir = os.getcwd()
+repo_path = os.path.dirname(os.path.dirname(porto_sim_dir))
+sys.path.append(porto_sim_dir)
 sys.path.append(repo_path)
 
 import numpy as np
@@ -22,9 +22,10 @@ np.random.seed(seed)
 timestamps = 15
 n_samps = np.array([50, 100, 150, 200])
 lag = 3
-max_rejections = np.array([0, 20, 40, 60, 80, 100])
+mr_max = 20
+max_rejections = np.arange(0, mr_max + 1, step=int(mr_max/5))
 initial_truncation = None
-num_repeats = 20
+num_repeats = 1
 max_speed = 35
 proposal_dict = {'proposal': 'optimal',
                  'num_inter_cut_off': 10,
@@ -139,19 +140,30 @@ fl_pf_times_per_obs = fl_pf_times / n_obs
 fl_bsi_times_per_obs = fl_bsi_times / n_obs
 
 
+line_styles = ['-', '--', ':', '-.']
+
+
 def comp_plot(n_samps,
               max_rejects,
-              times):
+              times,
+              leg=False,
+              **kwargs):
     fig, ax = plt.subplots()
     for i, n in enumerate(n_samps):
-        ax.plot(max_rejects, times[i], color='orange', label=str(n))
-    plt.tight_layout()
+        ax.plot(max_rejects, times[i], label=str(n), linestyle=line_styles[i], **kwargs)
+        # ax.plot(max_rejects, times[i], label=str(n))
+    ax.set_xlabel('Maximum rejections')
+    ax.set_ylabel('Average time per observation, s')
+    if leg:
+        ax.legend(loc='upper right', title='N')
+    fig.tight_layout()
     return fig, ax
 
 
-pf_fig, pf_ax = comp_plot(n_samps, max_rejections, np.mean(fl_pf_times_per_obs, axis=0))
+pf_fig, pf_ax = comp_plot(n_samps, max_rejections, np.mean(fl_pf_times_per_obs, axis=0), color='red', leg=True)
 plt.savefig(save_dir + 'pf_mr_compare', dpi=400)
 
-bsi_fig, bsi_ax = comp_plot(n_samps, max_rejections, np.mean(fl_bsi_times_per_obs, axis=0))
+bsi_fig, bsi_ax = comp_plot(n_samps, max_rejections, np.mean(fl_bsi_times_per_obs, axis=0), color='blue', leg=True)
+pf_ax.set_ylim(bsi_ax.get_ylim())
 plt.savefig(save_dir + 'bsi_mr_compare', dpi=400)
 

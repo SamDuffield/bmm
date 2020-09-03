@@ -353,13 +353,14 @@ def all_edges_total_variation(particles_one,
 #     return tv_each_time
 
 
-def plot_metric_over_time(setup_dict, fl_pf_metric, fl_pf_time, fl_bsi_metric, fl_bsi_time, save_dir=None,
-                          ffbsi_metric=None, ffbsi_time=None):
+def plot_metric_over_time(setup_dict, fl_pf_metric, fl_bsi_metric, fl_pf_time=None, fl_bsi_time=None, save_dir=None,
+                          ffbsi_metric=None, ffbsi_time=None, t_linspace=None, x_lab='t', x_ticks=None):
     lags = setup_dict['lags']
 
     m = fl_pf_metric.shape[-1]
 
-    t_linspace = np.arange(m)
+    if t_linspace is None:
+        t_linspace = np.arange(m)
 
     if ffbsi_metric is not None:
         if ffbsi_metric.ndim == 1:
@@ -386,35 +387,40 @@ def plot_metric_over_time(setup_dict, fl_pf_metric, fl_pf_time, fl_bsi_metric, f
             lines[len(lags)], = axes[j, 0].plot(t_linspace, ffbsi_metric[j], label='FFBSi')
             axes[j, 1].plot(t_linspace, ffbsi_metric[j], label='FFBSi')
 
-    for j, n in enumerate(setup_dict['fl_n_samps']):
-        for k, lag in enumerate(lags):
-            axes[j, 0].text(left_start, up_start - k * shift, "{:.1f}".format(fl_pf_time[j, k]),
-                            color=lines[k].get_color(),
-                            fontsize=fontsize, transform=axes[j, 0].transAxes)
-            axes[j, 1].text(left_start, up_start - k * shift, "{:.1f}".format(fl_bsi_time[j, k]),
-                            color=lines[k].get_color(),
-                            fontsize=fontsize, transform=axes[j, 1].transAxes)
-
-        if ffbsi_metric is not None:
-            axes[j, 0].text(left_start, up_start - len(lags) * shift, "{:.1f}".format(ffbsi_time[j]),
-                            color=lines[len(lags)].get_color(),
-                            fontsize=fontsize, transform=axes[j, 0].transAxes)
-            axes[j, 1].text(left_start, up_start - len(lags) * shift, "{:.1f}".format(ffbsi_time[j]),
-                            color=lines[len(lags)].get_color(),
-                            fontsize=fontsize, transform=axes[j, 1].transAxes)
-
-        axes[j, 0].text(left_start, up_start + shift, "Runtime (s)",
-                        fontsize=title_runtime, transform=axes[j, 0].transAxes)
-
-        axes[j, 1].text(left_start, up_start + shift, "Runtime (s)",
-                        fontsize=title_runtime, transform=axes[j, 1].transAxes)
-
         axes[j, 0].set_ylabel(f'N={n}')
         # axes[j, 0].set_yticks([0, 0.5, 1])
         # axes[j, 1].set_yticks([0, 0.5, 1])
 
-    axes[-1, 0].set_xlabel('t')
-    axes[-1, 1].set_xlabel('t')
+    if fl_pf_time is not None:
+        for j, n in enumerate(setup_dict['fl_n_samps']):
+            for k, lag in enumerate(lags):
+                axes[j, 0].text(left_start, up_start - k * shift, "{:.1f}".format(fl_pf_time[j, k]),
+                                color=lines[k].get_color(),
+                                fontsize=fontsize, transform=axes[j, 0].transAxes)
+                axes[j, 1].text(left_start, up_start - k * shift, "{:.1f}".format(fl_bsi_time[j, k]),
+                                color=lines[k].get_color(),
+                                fontsize=fontsize, transform=axes[j, 1].transAxes)
+
+            if ffbsi_metric is not None:
+                axes[j, 0].text(left_start, up_start - len(lags) * shift, "{:.1f}".format(ffbsi_time[j]),
+                                color=lines[len(lags)].get_color(),
+                                fontsize=fontsize, transform=axes[j, 0].transAxes)
+                axes[j, 1].text(left_start, up_start - len(lags) * shift, "{:.1f}".format(ffbsi_time[j]),
+                                color=lines[len(lags)].get_color(),
+                                fontsize=fontsize, transform=axes[j, 1].transAxes)
+
+            axes[j, 0].text(left_start, up_start + shift, "Runtime (s)",
+                            fontsize=title_runtime, transform=axes[j, 0].transAxes)
+
+            axes[j, 1].text(left_start, up_start + shift, "Runtime (s)",
+                            fontsize=title_runtime, transform=axes[j, 1].transAxes)
+
+    axes[-1, 0].set_xlabel(x_lab)
+    axes[-1, 1].set_xlabel(x_lab)
+
+    if x_ticks is not None:
+        axes[-1, 0].set_xticks(x_ticks)
+        axes[-1, 1].set_xticks(x_ticks)
 
     axes[0, 0].set_title('FL Particle Filter')
     axes[0, 1].set_title('FL Backward Simulation')

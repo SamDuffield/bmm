@@ -140,9 +140,9 @@ class ExponentialMapMatchingModel(MapMatchingModel):
 
     def __init__(self,
                  zero_dist_prob_neg_exponent: float = 0.133,
-                 lambda_speed: float = 0.069,
+                 lambda_speed: float = 0.068,
                  deviation_beta: float = 0.052,
-                 gps_sd: float = 5.25):
+                 gps_sd: float = 5.23):
         super().__init__()
         self.min_zero_dist_prob = 0.01
         self.max_zero_dist_prob = 0.5
@@ -225,8 +225,8 @@ class ExponentialMapMatchingModel(MapMatchingModel):
 
         time_int_check = time_interval[non_zero_inds] if isinstance(time_interval, np.ndarray) else time_interval
 
-        out_arr[0] = (- time_interval * ~non_zero_inds \
-                      + non_zero_inds \
+        out_arr[0] = (- time_interval * ~non_zero_inds
+                      + non_zero_inds
                       * self.distance_params['lambda_speed'] * np.exp(-self.distance_params['lambda_speed'] * speeds)) \
                      * self.zero_dist_prob(time_interval)
 

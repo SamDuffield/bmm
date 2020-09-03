@@ -198,14 +198,14 @@ np.save(save_dir + 'fl_bsi_times', fl_bsi_times)
 
 utils.plot_metric_over_time(setup_dict,
                             np.mean(fl_pf_tvs, axis=0),
-                            np.sum(fl_pf_times, axis=0) / np.sum(fl_pf_times > 0, axis=0),
                             np.mean(fl_bsi_tvs, axis=0),
+                            np.sum(fl_pf_times, axis=0) / np.sum(fl_pf_times > 0, axis=0),
                             np.sum(fl_bsi_times, axis=0) / np.sum(fl_bsi_times > 0, axis=0),
                             save_dir=save_dir + f'each_tv_compare_alpha{inc_alpha * 1}_round{round_alpha}')
 
 speeds = False
 bins = 5
-interval = 15
+interval = 60
 num_ints = int(observation_times[-1] / interval)
 
 fl_pf_dist_tvs = np.empty(
@@ -233,15 +233,18 @@ for i in range(setup_dict['num_repeats']):
             else:
                 fl_bsi_dist_tvs[i, j, k] = 1.
 
-np.save(save_dir + f'fl_pf_tv_dist_speeds{speeds}_bins{bins}', fl_pf_dist_tvs)
-np.save(save_dir + f'fl_bsi_tv_dist_speeds{speeds}_bins{bins}', fl_bsi_dist_tvs)
+np.save(save_dir + f'fl_pf_tv_dist_speeds{speeds}_bins{bins}_interval{interval}', fl_pf_dist_tvs)
+np.save(save_dir + f'fl_bsi_tv_dist_speeds{speeds}_bins{bins}_interval{interval}', fl_bsi_dist_tvs)
 
 utils.plot_metric_over_time(setup_dict,
                             np.mean(fl_pf_dist_tvs, axis=0),
-                            np.sum(fl_pf_times, axis=0) / np.sum(fl_pf_times > 0, axis=0),
                             np.mean(fl_bsi_dist_tvs, axis=0),
+                            np.sum(fl_pf_times, axis=0) / np.sum(fl_pf_times > 0, axis=0),
                             np.sum(fl_bsi_times, axis=0) / np.sum(fl_bsi_times > 0, axis=0),
-                            save_dir=save_dir + f'each_tv_compare_dist_speeds{speeds}_bins{bins}')
+                            save_dir=save_dir + f'each_tv_compare_dist_speeds{speeds}_bins{bins}_interval{interval}',
+                            t_linspace=np.arange(1, num_ints + 1),
+                            x_lab='Minute',
+                            x_ticks=np.arange(num_ints + 1, step=int(num_ints/8)))
 
 fl_pf_all_tvs = np.empty(
     (setup_dict['num_repeats'], len(setup_dict['fl_n_samps']), len(setup_dict['lags'])))
@@ -281,3 +284,4 @@ utils.plot_conv_metric(np.median(fl_bsi_all_tvs, axis=0),
                        np.quantile(fl_bsi_all_tvs, 0.75, axis=0),
                        save_dir=save_dir + 'fl_bsi_all_tv_conv_quantiles',
                        leg=True)
+

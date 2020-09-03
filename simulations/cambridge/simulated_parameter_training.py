@@ -29,18 +29,18 @@ timestamps = 15
 
 gen_model = bmm.ExponentialMapMatchingModel()
 gen_model.distance_params['zero_dist_prob_neg_exponent'] = -np.log(0.10) / timestamps
-gen_model.distance_params['lambda_speed'] = 1/20
+gen_model.distance_params['lambda_speed'] = 1/12
 gen_model.deviation_beta = 0.05
 gen_model.gps_sd = 3.0
-# gen_model.max_speed = 50
+gen_model.max_speed = 50
 
 num_inter_cut_off = None
 num_pos_routes_cap = 500
 
 # Generate simulated routes
 num_routes = 20
-min_route_length = 50
-max_route_length = 70
+min_route_length = 40
+max_route_length = 50
 sample_d_refine = 1
 n_iter = 200
 
@@ -78,14 +78,7 @@ tune_model.distance_params['zero_dist_prob_neg_exponent'] = -np.log(0.15) / time
 tune_model.distance_params['lambda_speed'] = 1/10
 tune_model.deviation_beta = 0.1
 tune_model.gps_sd = 7.
-# tune_model.max_speed = 50
-
-# tune_model = bmm.ExponentialMapMatchingModel()
-# tune_model.distance_params['zero_dist_prob_neg_exponent'] = gen_model.distance_params['zero_dist_prob_neg_exponent']
-# tune_model.distance_params['lambda_speed'] = gen_model.distance_params['lambda_speed']
-# tune_model.deviation_beta = gen_model.deviation_beta
-# tune_model.gps_sd = gen_model.gps_sd
-# tune_model.max_speed = gen_model.max_speed
+tune_model.max_speed = 50
 
 params_track_single = bmm.offline_em(cam_graph, tune_model, timestamps, observations,
                                      save_path=os.getcwd() + '/tuned_sim_params.pickle',
