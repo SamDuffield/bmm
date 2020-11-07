@@ -27,7 +27,7 @@ from bmm.src.inference.particles import MMParticles
 
 from bmm.src.inference.parameters import offline_em
 
-# try:
-#   del src
-# except NameError:
-#   pass
+try:
+  del src
+except NameError:
+  pass

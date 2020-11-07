@@ -12,7 +12,8 @@ from matplotlib import pyplot as plt
 from bmm.src.tools.edges import interpolate_path, cartesianise_path, observation_time_rows
 
 
-def plot(graph, particles=None, polyline=None, particles_alpha=None, label_start_end=True, **kwargs):
+def plot(graph, particles=None, polyline=None, particles_alpha=None, label_start_end=True,
+         bgcolor='white', node_color='grey', node_size=0, edge_color='lightgrey', edge_linewidth=3, **kwargs):
     """
     Plots particle approximation of trajectory
     :param graph: NetworkX MultiDiGraph
@@ -29,10 +30,24 @@ def plot(graph, particles=None, polyline=None, particles_alpha=None, label_start
         opacity of routes
     :param label_start_end: bool
         whether to label the start and end points of the route
+    :param bgcolor: str
+        background colour
+    :param node_color: str
+        node (intersections) colour
+    :param node_size: float
+        size of nodes (intersections)
+    :param edge_color: str
+        colour of edges (roads)
+    :param edge_linewidth: float
+        width of edges (roads
+    :param kwargs:
+        additional parameters to ox.plot_graph
     :return: fig, ax
     """
-    fig, ax = ox.plot_graph(graph, show=False, close=False, edge_color='lightgrey',
-                            node_size=0, edge_linewidth=3, **kwargs)
+    fig, ax = ox.plot_graph(graph, show=False, close=False,
+                            bgcolor=bgcolor, node_color=node_color, node_size=node_size,
+                            edge_color=edge_color, edge_linewidth=edge_linewidth,
+                            **kwargs)
     ax.set_aspect("equal")
 
     start_end_points = None

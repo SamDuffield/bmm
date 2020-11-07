@@ -12,7 +12,7 @@ from typing import Callable, Union, Tuple
 import numpy as np
 from networkx.classes import MultiDiGraph
 
-import bmm.src.tools.edges
+from bmm.src.tools import edges
 from bmm.src.inference.particles import MMParticles
 from bmm.src.inference.proposal import optimal_proposal
 from bmm.src.inference.resampling import fixed_lag_stitching, multinomial, fixed_lag_stitch_post_split
@@ -64,7 +64,7 @@ def initiate_particles(graph: MultiDiGraph,
                        d_refine: float = 1,
                        d_truncate: float = None,
                        ess_all: bool = True,
-                       filter_store: bool = False) -> MMParticles:
+                       filter_store: bool = True) -> MMParticles:
     """
     Initiate start of a trajectory by sampling points around the first observation.
     Note that coordinate system of inputs must be the same, typically a UTM projection (not longtitude-latitude!).
@@ -88,9 +88,9 @@ def initiate_particles(graph: MultiDiGraph,
     start = tm()
 
     # Discretize edges within truncation
-    dis_points, dists_to_first_obs = bmm.src.tools.edges.get_truncated_discrete_edges(graph, first_observation,
-                                                                                      d_refine,
-                                                                                      d_truncate, True)
+    dis_points, dists_to_first_obs = edges.get_truncated_discrete_edges(graph, first_observation,
+                                                                        d_refine,
+                                                                        d_truncate, True)
 
     if dis_points.size == 0:
         raise ValueError("No edges found near initial observation: try increasing the initial_truncation")

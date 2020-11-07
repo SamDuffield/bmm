@@ -1,1 +1,0 @@
-["living_street", "motorway", "motorway_link", "primary", "primary_link", "residential", "road", "secondary", "secondary_link", "service", "tertiary", "tertiary_link", "track", "trunk", "trunk_link", "unclassified"]

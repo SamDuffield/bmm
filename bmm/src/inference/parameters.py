@@ -1,6 +1,6 @@
 ########################################################################################################################
 # Module: inference/parameters.py
-# Description: Expectation maximisation to infer maximal likelihood hyperparameters.
+# Description: Expectation maximisation to infer maximum likelihood hyperparameters.
 #
 # Web: https://github.com/SamDuffield/bmm
 ########################################################################################################################

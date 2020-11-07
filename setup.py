@@ -10,7 +10,7 @@ with open('README.md') as f:
 METADATA = dict(
     name="bmm",
     version='0.1',
-    url='http://github.com/SamDuffield/bayesian-map-matching',
+    url='http://github.com/SamDuffield/bmm',
     author='Sam Duffield',
     install_requires=['numpy',
                       'matplotlib',
