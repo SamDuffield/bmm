@@ -1,10 +1,28 @@
 import functools
 import gc
+import json
 
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
 
 import bmm
+
+
+def read_data(path, chunksize=None):
+    """
+    Read vehicle trajectory data from csv, automatically converting polylines stored as JSON
+    :param path: location of csv
+    :param chunksize: size of chunks to iterate through, None loads full file at once
+    :return: generator iterating over (chunks of) data from csv
+    """
+    data_reader = pd.read_csv(path, chunksize=10)
+    data_columns = data_reader.get_chunk().columns
+    polyline_converters = {col_name: json.loads for col_name in data_columns
+                           if 'POLYLINE' in col_name}
+
+    return pd.read_csv(path, converters=polyline_converters, chunksize=chunksize)
+
 
 
 def clear_cache():

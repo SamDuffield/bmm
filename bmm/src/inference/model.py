@@ -10,8 +10,6 @@ from collections import OrderedDict
 
 import numpy as np
 from numba import njit
-from scipy.special import gammainc, digamma, gamma
-
 
 @njit
 def _likelihood_evaluate(route_cart_coords: np.ndarray,
@@ -205,7 +203,6 @@ class ExponentialMapMatchingModel(MapMatchingModel):
                                 time_interval: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
         """
         Evaluate gradient of distance prior/transition density in distance_params
-        Gradient at distances >0 only
         Vectorised to handle multiple evaluations at once
         :param distance: metres
             array if multiple evaluations at once
@@ -257,27 +254,4 @@ class ExponentialMapMatchingModel(MapMatchingModel):
         :return: bound on distance prior density
         """
         zero_dist_prob = self.zero_dist_prob(time_interval)
-        return(1 - zero_dist_prob) * self.distance_params['lambda_speed'] / time_interval
-
-    # def prior_rejection_sample(self,
-    #                            distance: float,
-    #                            time_interval: float,
-    #                            distance_prior_eval: float,
-    #                            deviation_prior_eval: float):
-    #     p_0 = self.zero_dist_prob(15)
-    #     dist_prior_bound = self.distance_params['lambda_speed'] / time_interval
-    #     alpha = 1 - p_0
-    #     rho_2 = np.max([p_0 / (1-p_0), dist_prior_bound])
-    #     a_0 = p_0 / (alpha * rho_2)
-    #
-    #     if distance < 1e-5:
-    #         if a_0 == 1.0:
-    #             return True
-    #         else:
-    #             return np.random.uniform() < a_0
-    #
-    #     a_larger_zero = distance_prior_eval * deviation_prior_eval / p_0
-    #     return np.random.uniform() < a_larger_zero
-
-
-
+        return (1 - zero_dist_prob) * self.distance_params['lambda_speed'] / time_interval

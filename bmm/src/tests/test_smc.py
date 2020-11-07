@@ -8,9 +8,7 @@
 import unittest
 import os
 
-from bmm.src.tools.graph import load_graph
 from bmm.src.tools.edges import graph_edges_gdf
-from bmm.src.data.utils import read_data
 from bmm.src.inference import smc, proposal
 
 

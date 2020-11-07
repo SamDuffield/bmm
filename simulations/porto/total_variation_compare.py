@@ -1,15 +1,5 @@
 import os
 import json
-import sys
-
-sim_dat_path = os.getcwd()
-repo_path = os.path.dirname(os.path.dirname(sim_dat_path))
-sys.path.append(sim_dat_path)
-sys.path.append(repo_path)
-#
-# porto_sim_dir = '/Users/samddd/Main/bayesian-map-matching/simulations/porto'
-# sys.path.append(porto_sim_dir)
-# save_dir = '/Users/samddd/Desktop/tv_output/'
 
 import numpy as np
 import osmnx as ox
@@ -17,7 +7,7 @@ import pandas as pd
 
 import bmm
 
-import utils
+from . import utils
 
 seed = 0
 np.random.seed(seed)

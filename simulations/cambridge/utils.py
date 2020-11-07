@@ -3,11 +3,9 @@ import gc
 
 import numpy as np
 import osmnx as ox
-from networkx import write_gpickle, read_gpickle, relabel_nodes
-import matplotlib.pyplot as plt
+from networkx import write_gpickle, read_gpickle
 
 import bmm
-from bmm.src.data.utils import source_data, read_data
 
 
 def download_cambridge_graph(save_path):

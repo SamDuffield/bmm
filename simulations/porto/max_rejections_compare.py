@@ -1,11 +1,5 @@
 import os
 import json
-import sys
-
-porto_sim_dir = os.getcwd()
-repo_path = os.path.dirname(os.path.dirname(porto_sim_dir))
-sys.path.append(porto_sim_dir)
-sys.path.append(repo_path)
 
 import numpy as np
 import osmnx as ox
@@ -14,7 +8,7 @@ import matplotlib.pyplot as plt
 
 import bmm
 
-import utils
+from . import utils
 
 seed = 0
 np.random.seed(seed)
@@ -23,7 +17,8 @@ timestamps = 15
 n_samps = np.array([50, 100, 150, 200])
 lag = 3
 mr_max = 20
-max_rejections = np.arange(0, mr_max + 1, step=int(mr_max/5))
+# max_rejections = np.arange(0, mr_max + 1, step=int(mr_max/5))
+max_rejections = np.array([0, 1, 2, 4, 8, 16, 32])
 initial_truncation = None
 num_repeats = 1
 max_speed = 35
@@ -149,11 +144,11 @@ def comp_plot(n_samps,
               leg=False,
               **kwargs):
     fig, ax = plt.subplots()
-    for i, n in enumerate(n_samps):
+    for i, n in reversed(list(enumerate(n_samps))):
         ax.plot(max_rejects, times[i], label=str(n), linestyle=line_styles[i], **kwargs)
         # ax.plot(max_rejects, times[i], label=str(n))
     ax.set_xlabel('Maximum rejections')
-    ax.set_ylabel('Average time per observation, s')
+    ax.set_ylabel('Runtime per observation, s')
     if leg:
         ax.legend(loc='upper right', title='N')
     fig.tight_layout()
@@ -161,9 +156,12 @@ def comp_plot(n_samps,
 
 
 pf_fig, pf_ax = comp_plot(n_samps, max_rejections, np.mean(fl_pf_times_per_obs, axis=0), color='red', leg=True)
-plt.savefig(save_dir + 'pf_mr_compare', dpi=400)
 
 bsi_fig, bsi_ax = comp_plot(n_samps, max_rejections, np.mean(fl_bsi_times_per_obs, axis=0), color='blue', leg=True)
 pf_ax.set_ylim(bsi_ax.get_ylim())
-plt.savefig(save_dir + 'bsi_mr_compare', dpi=400)
 
+pf_fig.savefig(save_dir + 'pf_mr_compare', dpi=400)
+bsi_fig.savefig(save_dir + 'bsi_mr_compare', dpi=400)
+
+# pf_ax.set_xticks(xt)
+# bsi_ax.set_xticks(xt)

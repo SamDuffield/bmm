@@ -4,14 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import os
-import sys
 
-sim_dat_path = os.getcwd()
-repo_path = os.path.dirname(os.path.dirname(sim_dat_path))
-sys.path.append(sim_dat_path)
-sys.path.append(repo_path)
-
-from utils import download_cambridge_graph, load_graph
+from .utils import download_cambridge_graph, load_graph
 
 import bmm
 
