@@ -21,7 +21,7 @@ from bmm.src.inference.model import MapMatchingModel, ExponentialMapMatchingMode
 
 updates = ('PF', 'BSi')
 
-proposals = ('optimal', 'aux_dist', 'dist_then_edge')
+proposals = ('optimal',)
 
 
 def get_proposal(proposal_str: str) -> Callable:
