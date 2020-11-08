@@ -40,7 +40,7 @@ setup_dict = {'seed': seed,
 print(setup_dict)
 
 porto_sim_dir = os.getcwd()
-graph_path = porto_sim_dir + '/portotaxi_graph_portugal-140101.osm._simple.graphml'
+graph_path = porto_sim_dir + '/testgraph_portotaxi_graph_portugal-140101.osm._simple.graphml'
 graph = ox.load_graphml(graph_path)
 
 test_route_data_path = porto_sim_dir + '/test_route.csv'

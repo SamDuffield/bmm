@@ -10,12 +10,12 @@ import unittest
 import numpy as np
 import numpy.testing as npt
 
-import bmm.src.inference.particles
+from bmm.src.inference import particles
 
 
 class TestMMParticles(unittest.TestCase):
     def setUp(self):
-        self.mmp = bmm.src.inference.particles.MMParticles(np.zeros((3, 4)))
+        self.mmp = particles.MMParticles(np.zeros((3, 6)))
 
 
 class TestInit(TestMMParticles):
@@ -32,21 +32,21 @@ class TestInit(TestMMParticles):
         self.assertEqual(self.mmp.m, 1)
 
     def test_initial_index(self):
-        npt.assert_array_equal(self.mmp[0], np.zeros((1, 7)))
+        npt.assert_array_equal(self.mmp[0], np.zeros((1, 8)))
 
     def test_initial_replace(self):
-        self.mmp[1] = np.array(np.ones((1, 7)))
-        npt.assert_array_equal(self.mmp[1], np.ones((1, 7)))
+        self.mmp[1] = np.array(np.ones((1, 8)))
+        npt.assert_array_equal(self.mmp[1], np.ones((1, 8)))
 
 
 class TestUpdate(TestMMParticles):
     def setUp(self):
         super().setUp()
         for i in range(self.mmp.n):
-            self.mmp.particles[i] = np.append(self.mmp.particles[i], [[4, 0, 0, 0, 0, 0, 0]], axis=0)
+            self.mmp.particles[i] = np.append(self.mmp.particles[i], [[4, 0, 0, 0, 0, 0, 0, 0]], axis=0)
 
     def test_update_particle_shape(self):
-        self.assertEqual(self.mmp[0].shape, (2, 7))
+        self.assertEqual(self.mmp[0].shape, (2, 8))
 
     def test_update_n(self):
         self.assertEqual(self.mmp.n, 3)
@@ -61,8 +61,8 @@ class TestUpdate(TestMMParticles):
         self.assertEqual(self.mmp.m, 2)
 
     def test_update_index(self):
-        npt.assert_array_equal(self.mmp[0], np.array([[0, 0, 0, 0, 0, 0, 0],
-                                                      [4, 0, 0, 0, 0, 0, 0]]))
+        npt.assert_array_equal(self.mmp[0], np.array([[0, 0, 0, 0, 0, 0, 0, 0],
+                                                      [4, 0, 0, 0, 0, 0, 0, 0]]))
 
 
 if __name__ == '__main__':

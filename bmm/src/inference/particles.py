@@ -19,7 +19,7 @@ class MMParticles:
 
     In particular contains the following object:
     self.particles: list, length = n_samps of arrays
-        each array with shape = (_, 9)
+        each array with shape = (_, 8)
         columns: t, u, v, k, alpha, x, y, n_inter, d
             t: seconds, observation time
             u: int, edge start node

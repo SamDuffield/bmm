@@ -22,7 +22,7 @@ n_iter = 200
 n_particles = 100
 
 sim_dir = os.getcwd()
-graph_path = sim_dir + '/portotaxi_graph_portugal-140101.osm._simple.graphml'
+graph_path = sim_dir + '/testgraph_portotaxi_graph_portugal-140101.osm._simple.graphml'
 graph = ox.load_graphml(graph_path)
 
 train_data_path = sim_dir + '/training_data.csv'

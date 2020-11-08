@@ -246,6 +246,9 @@ def optimal_proposal(graph: MultiDiGraph,
     if particle is None:
         return 0. if only_norm_const else (None, 0., 0.)
 
+    if isinstance(new_observation, list):
+        new_observation = np.array(new_observation)
+
     if num_inter_cut_off is None:
         num_inter_cut_off = max(int(time_interval / 1.5), 10)
 
