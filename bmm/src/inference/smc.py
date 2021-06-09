@@ -451,6 +451,7 @@ def offline_map_match(graph: MultiDiGraph,
                       max_rejections: int = 20,
                       ess_threshold: float = 1,
                       store_norm_quants: bool = False,
+                      store_filter_particles: bool = False,
                       **kwargs) -> MMParticles:
     """
     Runs offline map-matching. I.e. receives a full polyline and returns an equal probability collection
@@ -471,7 +472,8 @@ def offline_map_match(graph: MultiDiGraph,
     :param max_rejections: number of rejections to attempt before doing full fixed-lag stitching
         0 will do full fixed-lag stitching and track ess_stitch
     :param ess_threshold: in [0,1], particle filter resamples if ess < ess_threshold * n_samps
-    :param store_norm_quants: if True normalisation quanitities (including gradient evals) returned in out_particles
+    :param store_norm_quants: if True normalisation quantities (including gradient evals) returned in out_particles
+    :param store_filter_particles: if True filter particles returned in out_particles
     :param kwargs: optional parameters to pass to proposal
         i.e. d_max, d_refine or var
         as well as ess_threshold for backward simulation update
@@ -541,6 +543,9 @@ def offline_map_match(graph: MultiDiGraph,
                                       verbose=True,
                                       store_norm_quants=store_norm_quants)
     out_particles.ess_pf = ess_pf
+
+    if store_filter_particles:
+        out_particles.filter_particles = filter_particles.copy()
 
     end = tm()
     out_particles.time = end - start
