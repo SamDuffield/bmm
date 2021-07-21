@@ -18,51 +18,12 @@ def read_data(path, chunksize=None):
     return pd.read_csv(path, converters=polyline_converters, chunksize=chunksize)
 
 
-
 def clear_cache():
     gc.collect()
     for a in gc.get_objects():
         if isinstance(a, functools._lru_cache_wrapper):
             a.cache_clear()
 
-
-#
-# def total_variation_dists(dists_one,
-#                           dists_two,
-#                           bins=None):
-#     n1 = len(dists_one)
-#     n2 = len(dists_two)
-#
-#     all_dists = np.concatenate([dists_one, dists_two])
-#     all_dists = np.unique(all_dists)
-#
-#     if bins is None:
-#         tv = 0.
-#         for dist in all_dists:
-#             p_1 = np.sum(dists_one == dist) / n1
-#             p_2 = np.sum(dists_two == dist) / n2
-#             tv = tv + np.abs(p_1 - p_2)
-#     else:
-#         min_dist = np.min(dists_one)
-#         max_dist = np.max(dists_one)
-#         bin_int = (max_dist - min_dist) / bins
-#         tv = 0
-#         bin_linsp = np.arange(min_dist, max_dist, bin_int)
-#
-#         # Below min
-#         tv += np.sum(dists_two < min_dist) / n2
-#
-#         # Above max
-#         tv += np.sum(dists_two > max_dist) / n2
-#
-#         for i in range(len(bin_linsp)):
-#             int_min = bin_linsp[i]
-#             int_max = int_min + bin_int + 1e-5 if i == len(bin_linsp) - 1 else int_min + bin_int
-#             p_1 = np.sum((dists_one >= int_min) * (dists_one < int_max)) / n1
-#             p_2 = np.sum((dists_two >= int_min) * (dists_two < int_max)) / n2
-#             tv += np.abs(p_1 - p_2)
-#     return tv / 2
-#
 
 def total_variation_dists(dists_one,
                           dists_two,
@@ -319,52 +280,6 @@ def all_edges_total_variation(particles_one,
     return tv / 2
 
 
-# def total_variation_dists(dists_one,
-#                           dists_two,
-#                           round_dists=None):
-#     n1 = len(dists_one)
-#     n2 = len(dists_two)
-#
-#     if round_dists is not None:
-#         dists_one = np.round(dists_one, round_dists)
-#         dists_two = np.round(dists_two, round_dists)
-#
-#     all_dists = np.concatenate([dists_one, dists_two])
-#     all_dists = np.unique(all_dists)
-#
-#     tv = 0.
-#     for dist in all_dists:
-#         p_1 = np.sum(dists_one == dist) / n1
-#         p_2 = np.sum(dists_two == dist) / n2
-#         tv = tv + np.abs(p_1 - p_2)
-#     return tv / 2
-
-#
-# def each_distance_route_total_variation(particles_one,
-#                                         particles_two,
-#                                         observation_times,
-#                                         round_dists=None):
-#     m = observation_times.size
-#     tv_each_time = np.zeros(m)
-#
-#     for i in range(1, m):
-#         current_time = observation_times[i]
-#
-#         p1_dists = np.zeros(len(particles_one))
-#         for j, p1 in enumerate(particles_one):
-#             curr_ind = np.where(p1[:, 0] == current_time)[0][0]
-#             p1_dists[j] = p1[curr_ind, -1]
-#
-#         p2_dists = np.zeros(len(particles_two))
-#         for j, p2 in enumerate(particles_two):
-#             curr_ind = np.where(p2[:, 0] == current_time)[0][0]
-#             p2_dists[j] = p2[curr_ind, -1]
-#
-#         tv_each_time[i] = total_variation_dists(p1_dists, p2_dists, round_dists)
-#
-#     return tv_each_time
-
-
 def plot_metric_over_time(setup_dict, fl_pf_metric, fl_bsi_metric, fl_pf_time=None, fl_bsi_time=None, save_dir=None,
                           ffbsi_metric=None, ffbsi_time=None, t_linspace=None, x_lab='t', x_ticks=None):
     lags = setup_dict['lags']
@@ -445,6 +360,59 @@ def plot_metric_over_time(setup_dict, fl_pf_metric, fl_bsi_metric, fl_pf_time=No
         plt.savefig(save_dir, dpi=400)
 
     return fig, axes
+
+
+def plot_metric_over_time_thesis(setup_dict, fl_pf_metric, fl_bsi_metric, save_dir=None,
+                                 t_linspace=None, x_lab='t', x_ticks=None):
+    lags = setup_dict['lags']
+
+    m = fl_pf_metric.shape[-1]
+
+    if t_linspace is None:
+        t_linspace = np.arange(m)
+
+    lines = [None] * (len(lags) + 1)
+
+    fig_pf, axes_pf = plt.subplots(len(setup_dict['fl_n_samps']), sharex='all', sharey='all', figsize=(8, 6))
+    fig_bs, axes_bs = plt.subplots(len(setup_dict['fl_n_samps']), sharex='all', sharey='all', figsize=(8, 6))
+    for j, n in enumerate(setup_dict['fl_n_samps']):
+        for k, lag in enumerate(lags):
+            axes_pf[j].plot(t_linspace, fl_pf_metric[j, k], label=f'Lag: {lag}')
+            lines[k], = axes_bs[j].plot(t_linspace, fl_bsi_metric[j, k], label=f'Lag: {lag}')
+
+        axes_pf[j].set_ylabel(f'N={n}')
+        axes_bs[j].set_ylabel(f'N={n}')
+
+        axes_pf[j].set_ylim(0, 0.7)
+        axes_bs[j].set_ylim(0, 0.7)
+        # axes[j, 0].set_yticks([0, 0.5, 1])
+        # axes[j, 1].set_yticks([0, 0.5, 1])
+
+    axes_pf[-1].set_xlabel(x_lab)
+    axes_bs[-1].set_xlabel(x_lab)
+
+    if x_ticks is not None:
+        axes_pf[-1].set_xticks(x_ticks)
+        axes_bs[-1].set_xticks(x_ticks)
+
+    plt.legend(loc='upper right', bbox_to_anchor=(0.8, 0.99))
+
+    plt.tight_layout()
+
+    fig_pf.set_figwidth(5)
+    fig_pf.set_figheight(7)
+    fig_bs.set_figwidth(5)
+    fig_bs.set_figheight(7)
+
+    if save_dir is not None:
+        fig_pf.savefig(save_dir + '_pf', dpi=400)
+        fig_bs.savefig(save_dir + '_bs', dpi=400)
+
+    return (fig_pf, axes_pf), (fig_bs, axes_bs)
+
+
+
+
 
 
 def plot_conv_metric(tv_mat, n_samps, lags, mins=None, maxs=None, leg=False, save_dir=None):

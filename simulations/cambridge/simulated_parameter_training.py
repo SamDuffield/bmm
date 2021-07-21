@@ -20,7 +20,7 @@ timestamps = 15
 
 gen_model = bmm.ExponentialMapMatchingModel()
 gen_model.distance_params['zero_dist_prob_neg_exponent'] = -np.log(0.10) / timestamps
-gen_model.distance_params['lambda_speed'] = 1/12
+gen_model.distance_params['lambda_speed'] = 0.05
 gen_model.deviation_beta = 0.05
 gen_model.gps_sd = 3.0
 gen_model.max_speed = 50

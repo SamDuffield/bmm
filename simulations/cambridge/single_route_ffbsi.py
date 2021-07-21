@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 import os
 
-from .utils import download_cambridge_graph, load_graph
+from utils import download_cambridge_graph, load_graph
 
 import bmm
 
@@ -56,16 +56,6 @@ if not os.path.exists(graph_path):
     download_cambridge_graph(graph_path)
 
 cam_graph = load_graph(graph_path)
-
-# Add noise to generate observations
-# observations_ll = [[0.12188, 52.198387],
-#                    [0.125389, 52.197771],
-#                    [0.128354, 52.199379],
-#                    [0.130296, 52.201701],
-#                    [0.127742, 52.20407],
-#                    [0.126433, 52.205753],
-#                    [0.127536, 52.207831],
-#                    [0.126082, 52.212281]]
 
 observations_ll = [[0.12188, 52.198387],
                    [0.125389, 52.197771],

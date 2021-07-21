@@ -41,7 +41,7 @@ setup_dict = {'seed': seed,
 print(setup_dict)
 
 porto_sim_dir = os.getcwd()
-graph_path = porto_sim_dir + '/testgraph_portotaxi_graph_portugal-140101.osm._simple.graphml'
+graph_path = porto_sim_dir + '/portotaxi_graph_portugal-140101.osm._simple.graphml'
 graph = ox.load_graphml(graph_path)
 
 test_route_data_path = porto_sim_dir + '/test_route.csv'
@@ -147,10 +147,10 @@ def comp_plot(n_samps,
     for i, n in reversed(list(enumerate(n_samps))):
         ax.plot(max_rejects, times[i], label=str(n), linestyle=line_styles[i], **kwargs)
         # ax.plot(max_rejects, times[i], label=str(n))
-    ax.set_xlabel('Maximum rejections')
+    ax.set_xlabel(r'$R$')
     ax.set_ylabel('Runtime per observation, s')
     if leg:
-        ax.legend(loc='upper right', title='N')
+        ax.legend(loc='upper right', title=r'$N$')
     fig.tight_layout()
     return fig, ax
 

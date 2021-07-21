@@ -25,7 +25,7 @@ def edge_interpolate(geometry: LineString,
     :param alpha: in (0,1] proportion of edge travelled
     :return: cartesian coordinate
     """
-    return np.array(geometry.interpolate(alpha, normalized=True))
+    return np.array(geometry.interpolate(alpha, normalized=True).coords)[0]
 
 
 def get_geometry(graph: MultiDiGraph,
@@ -148,18 +148,22 @@ def discretise_edge_cached(graph: MultiDiGraph,
     out_mat[:, 3] = distances
 
     for i in range(n_distances):
-        out_mat[i, 1:3] = edge_geom.interpolate(distances[i])
+        out_mat[i, 1:3] = edge_geom.interpolate(distances[i]).coords[0]
 
     return out_mat
 
 
 def graph_edges_gdf(graph: MultiDiGraph) -> GeoDataFrame:
     """
-    Converts networkx cam_graph to geopandas data frame and then returns geopandas dataframe. (Fast!)
+    Converts networkx graph to geopandas data frame. (Fast!)
     :param graph: encodes road network, simplified and projected to UTM
     :return: gdf of edges with columns [u, v, k, geometry]
     """
     gdf = ox.graph_to_gdfs(graph, nodes=False, fill_edge_geometry=True)
+    gdf_index_gdf = gdf.index.to_frame()
+    for col in ["u", "v", "key"]:
+        if col in gdf_index_gdf.columns:
+            gdf[col] = gdf_index_gdf[col]
     edge_gdf = gdf[["u", "v", "key", "geometry"]]
     return edge_gdf
 
