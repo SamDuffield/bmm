@@ -1,4 +1,4 @@
-# bmm: bayesian-map-matching
+# bmm: Bayesian Map-Matching
 Map-matching using particle smoothing methods.
 
 ## Install
