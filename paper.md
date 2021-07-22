@@ -6,12 +6,14 @@ tags:
   - GPS
 authors:
   - name: Samuel Duffield
+    orcid: 0000-0002-8656-8734
     affiliation: 1
 affiliations:
  - name: University of Cambridge
    index: 1
 date: 21 July 2021
 bibliography: paper.bib
+   
 ---
 
 # Summary
@@ -27,9 +29,9 @@ continuous, plausible route.
 Map-matching is a vital task for almost all data driven inference with GPS data.
 Map-matching is often non-trivial, i.e. when the graph is dense, the observation noise is significant
 and/or the time between observations is large. In these cases there may be multiple routes
-that could have feasibly generated the observed polyline and returning a single trajectory may be suboptimal.
+that could have feasibly generated the observed polyline and returning a single trajectory is suboptimal.
 `bmm` adopts a state-space model approach as described in @Duffield2020
-and produces a particle approximation that duely represents probabilistic
+and produces a particle approximation that duly represents probabilistic
 uncertainty in both the route taken and the positions at observation times. Additionally, `bmm` offers
 support for both offline and online computation.
 
