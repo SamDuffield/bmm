@@ -21,22 +21,6 @@ from bmm.src.inference.model import MapMatchingModel, ExponentialMapMatchingMode
 
 updates = ('PF', 'BSi')
 
-proposals = ('optimal',)
-
-
-def get_proposal(proposal_str: str) -> Callable:
-    """
-    Converts string to proposal function
-    :param proposal_str: string indicating which proposal to use, see bmm.proposals for included proposals
-    :return: proposal function
-    """
-    if proposal_str == 'optimal':
-        proposal_func = optimal_proposal
-    else:
-        raise ValueError(f"Proposal {proposal_str} not recognised, see bmm.proposals for valid options")
-
-    return proposal_func
-
 
 def get_time_interval_array(timestamps: Union[float, np.ndarray],
                             num_obs: int) -> np.ndarray:
@@ -137,7 +121,7 @@ def update_particles_flpf(graph: MultiDiGraph,
     :param new_observation: cartesian coordinate in UTM
     :param time_interval: time between last observation and newly received observation
     :param mm_model: MapMatchingModel
-    :param proposal_func: function to propagate and weight particles
+    :param proposal_func: function to propagate and weight single particle
     :param lag: fixed lag for resampling/stitching
     :param max_rejections: number of rejections to attempt before doing full fixed-lag stitching
         0 will do full fixed-lag stitching and track ess_stitch
@@ -205,7 +189,7 @@ def update_particles_flbs(graph: MultiDiGraph,
     :param new_observation: cartesian coordinate in UTM
     :param time_interval: time between last observation and newly received observation
     :param mm_model: MapMatchingModel
-    :param proposal_func: function to propagate and weight particles
+    :param proposal_func: function to propagate and weight single particle
     :param lag: fixed lag for resampling/stitching
     :param max_rejections: number of rejections to attempt before doing full fixed-lag stitching
         0 will do full fixed-lag stitching and track ess_stitch
@@ -311,7 +295,7 @@ def update_particles(graph: MultiDiGraph,
                      new_observation: np.ndarray,
                      time_interval: float,
                      mm_model: MapMatchingModel = ExponentialMapMatchingModel(),
-                     proposal: str = 'optimal',
+                     proposal_func: Callable = optimal_proposal,
                      update: str = 'BSi',
                      lag: int = 3,
                      max_rejections: int = 20,
@@ -323,8 +307,7 @@ def update_particles(graph: MultiDiGraph,
     :param new_observation: cartesian coordinate in UTM
     :param time_interval: time between last observation and newly received observation
     :param mm_model: MapMatchingModel
-    :param proposal: either 'optimal' or 'aux_dist'
-        defaults to optimal (discretised) proposal
+    :param proposal_func: function to propagate and weight single particle
     :param update:
         'PF' for particle filter fixed-lag update
         'BSi' for backward simulation fixed-lag update
@@ -337,8 +320,6 @@ def update_particles(graph: MultiDiGraph,
         as well as ess_threshold for backward simulation update
     :return: MMParticles object
     """
-
-    proposal_func = get_proposal(proposal)
 
     if update == 'PF' or lag == 0:
         return update_particles_flpf(graph,
@@ -369,12 +350,13 @@ def _offline_map_match_fl(graph: MultiDiGraph,
                           n_samps: int,
                           timestamps: Union[float, np.ndarray],
                           mm_model: MapMatchingModel = ExponentialMapMatchingModel(),
-                          proposal: str = 'optimal',
+                          proposal_func: Callable = optimal_proposal,
                           update: str = 'BSi',
                           lag: int = 3,
                           d_refine: int = 1,
                           initial_d_truncate: float = None,
                           max_rejections: int = 20,
+                          verbose: bool = True,
                           **kwargs) -> MMParticles:
     """
     Runs offline map-matching but uses online fixed-lag techniques.
@@ -386,7 +368,7 @@ def _offline_map_match_fl(graph: MultiDiGraph,
     :param timestamps: seconds
         either float if all times between observations are the same, or a series of timestamps in seconds/UNIX timestamp
     :param mm_model: MapMatchingModel
-    :param proposal: either 'optimal' or 'aux_dist'
+    :param proposal_func: function to propagate and weight single particle
         defaults to optimal (discretised) proposal
     :param update:
         'PF' for particle filter fixed-lag update
@@ -398,12 +380,11 @@ def _offline_map_match_fl(graph: MultiDiGraph,
         defaults to 5 * mm_model.gps_sd
     :param max_rejections: number of rejections to attempt before doing full fixed-lag stitching
         0 will do full fixed-lag stitching and track ess_stitch
+    :param verbose: bool whether to print ESS at each iterate
     :param kwargs: optional parameters to pass to proposal
-        i.e. d_max, d_refine or var
-        as well as ess_threshold for backward simulation update
+        i.e. d_max or var as well as ess_threshold for backward simulation update
     :return: MMParticles object
     """
-    proposal_func = get_proposal(proposal)
 
     num_obs = len(polyline)
 
@@ -415,7 +396,8 @@ def _offline_map_match_fl(graph: MultiDiGraph,
                                    ess_all=ess_all,
                                    filter_store=update == 'BSi')
 
-    print(str(particles.latest_observation_time) + " PF ESS: " + str(np.mean(particles.ess_pf[-1])))
+    if verbose:
+        print(str(particles.latest_observation_time) + " PF ESS: " + str(np.mean(particles.ess_pf[-1])))
 
     if 'd_refine' in inspect.getfullargspec(proposal_func)[0]:
         kwargs['d_refine'] = d_refine
@@ -434,8 +416,8 @@ def _offline_map_match_fl(graph: MultiDiGraph,
         particles = update_func(graph, particles, polyline[1 + i], time_interval=time_interval_arr[i],
                                 mm_model=mm_model, proposal_func=proposal_func, lag=lag, max_rejections=max_rejections,
                                 **kwargs)
-
-        print(str(particles.latest_observation_time) + " PF ESS: " + str(np.mean(particles.ess_pf[-1])))
+        if verbose:
+            print(str(particles.latest_observation_time) + " PF ESS: " + str(np.mean(particles.ess_pf[-1])))
 
     return particles
 
@@ -445,13 +427,14 @@ def offline_map_match(graph: MultiDiGraph,
                       n_samps: int,
                       timestamps: Union[float, np.ndarray],
                       mm_model: MapMatchingModel = ExponentialMapMatchingModel(),
-                      proposal: str = 'optimal',
+                      proposal_func: Callable = optimal_proposal,
                       d_refine: int = 1,
                       initial_d_truncate: float = None,
                       max_rejections: int = 20,
                       ess_threshold: float = 1,
                       store_norm_quants: bool = False,
                       store_filter_particles: bool = False,
+                      verbose: bool = True,
                       **kwargs) -> MMParticles:
     """
     Runs offline map-matching. I.e. receives a full polyline and returns an equal probability collection
@@ -464,7 +447,7 @@ def offline_map_match(graph: MultiDiGraph,
     :param timestamps: seconds
         either float if all times between observations are the same, or a series of timestamps in seconds/UNIX timestamp
     :param mm_model: MapMatchingModel
-    :param proposal: either 'optimal' or 'aux_dist'
+    :param proposal_func: function to propagate and weight single particle
         defaults to optimal (discretised) proposal
     :param d_refine: metres, resolution of distance discretisation
     :param initial_d_truncate: distance beyond which to assume zero likelihood probability at time zero
@@ -474,13 +457,12 @@ def offline_map_match(graph: MultiDiGraph,
     :param ess_threshold: in [0,1], particle filter resamples if ess < ess_threshold * n_samps
     :param store_norm_quants: if True normalisation quantities (including gradient evals) returned in out_particles
     :param store_filter_particles: if True filter particles returned in out_particles
+    :param verbose: bool whether to print ESS at each iterate
     :param kwargs: optional parameters to pass to proposal
         i.e. d_max, d_refine or var
         as well as ess_threshold for backward simulation update
     :return: MMParticles object
     """
-    proposal_func = get_proposal(proposal)
-
     num_obs = len(polyline)
 
     ess_all = max_rejections == 0
@@ -500,7 +482,8 @@ def offline_map_match(graph: MultiDiGraph,
     ess_pf = np.zeros(num_obs)
     ess_pf[0] = n_samps
 
-    print("0 PF ESS: " + str(ess_pf[0]))
+    if verbose:
+        print("0 PF ESS: " + str(ess_pf[0]))
 
     if 'd_refine' in inspect.getfullargspec(proposal_func)[0]:
         kwargs['d_refine'] = d_refine
@@ -531,7 +514,8 @@ def offline_map_match(graph: MultiDiGraph,
         live_weights = temp_weights.copy()
         ess_pf[i + 1] = 1 / np.sum(temp_weights ** 2)
 
-        print(str(filter_particles[i + 1].latest_observation_time) + " PF ESS: " + str(ess_pf[i + 1]))
+        if verbose:
+            print(str(filter_particles[i + 1].latest_observation_time) + " PF ESS: " + str(ess_pf[i + 1]))
 
     # Backward simulation
     out_particles = backward_simulate(graph,
@@ -540,7 +524,7 @@ def offline_map_match(graph: MultiDiGraph,
                                       time_interval_arr,
                                       mm_model,
                                       max_rejections,
-                                      verbose=True,
+                                      verbose=verbose,
                                       store_norm_quants=store_norm_quants)
     out_particles.ess_pf = ess_pf
 
@@ -564,7 +548,7 @@ def propose_particles(proposal_func: Callable,
                       **kwargs) -> Tuple[MMParticles, np.ndarray, np.ndarray]:
     """
     Samples a single particle from the (distance discretised) optimal proposal.
-    :param proposal_func: function to proposal single particle
+    :param proposal_func: function to propagate and weight single particle
     :param resample_weights: weights for resampling, None for no resampling
     :param graph: encodes road network, simplified and projected to UTM
     :param particles: all particles at last observation time

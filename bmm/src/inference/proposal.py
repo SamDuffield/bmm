@@ -258,8 +258,6 @@ def optimal_proposal(graph: MultiDiGraph,
     # Extract all possible routes from previous position
     start_position = particle[-1:].copy()
     start_position[0, -1] = 0
-    # possible_routes = get_possible_routes(cam_graph, start_position, d_max, all_routes=True,
-    #                                       num_inter_cut_off=num_inter_cut_off)
     possible_routes = get_all_possible_routes_overshoot(graph, start_position, d_max,
                                                         num_inter_cut_off=num_inter_cut_off)
 

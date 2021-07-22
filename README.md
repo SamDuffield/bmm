@@ -7,6 +7,8 @@ pip install bmm
 ```
 
 ## Load graph and convert to UTM
+UTM (Universal Transverse Mercator) is a commonly used projection of spherical longtitude-latitude
+coordinates into square x-y coordinates.
 ```python
 import numpy as np
 import pandas as pd
@@ -24,6 +26,10 @@ graph = ox.project_graph(graph)
 data_path = 'simulations/porto/test_route.csv'
 polyline_longlat = json.loads(pd.read_csv(data_path)['POLYLINE'][0])
 polyline_utm = bmm.long_lat_to_utm(polyline_longlat, graph)
+```
+or generate fake data
+```python
+fake_route, fake_polyline_utm = bmm.sample_route(graph, timestamps=15, num_obs=25)
 ```
 
 ## Offline map-matching

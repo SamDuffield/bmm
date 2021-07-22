@@ -12,8 +12,11 @@ from matplotlib import pyplot as plt
 from bmm.src.tools.edges import interpolate_path, cartesianise_path, observation_time_rows
 
 
-def plot(graph, particles=None, polyline=None, particles_alpha=None, label_start_end=True,
-         bgcolor='white', node_color='grey', node_size=0, edge_color='lightgrey', edge_linewidth=3, **kwargs):
+def plot(graph, particles=None, polyline=None, label_start_end=True,
+         bgcolor='white', node_color='grey', node_size=0, edge_color='lightgrey', edge_linewidth=3,
+         particles_color='orange', particles_alpha=None,
+         polyline_color='red', polyline_s=100, polyline_linewidth=3,
+         **kwargs):
     """
     Plots particle approximation of trajectory
     :param graph: NetworkX MultiDiGraph
@@ -25,9 +28,6 @@ def plot(graph, particles=None, polyline=None, particles_alpha=None, label_start
     :param polyline: list-like, each element length 2
         UTM - metres
         series of GPS coordinate observations
-    :param particles_alpha: float in [0, 1]
-        plotting parameter
-        opacity of routes
     :param label_start_end: bool
         whether to label the start and end points of the route
     :param bgcolor: str
@@ -40,6 +40,17 @@ def plot(graph, particles=None, polyline=None, particles_alpha=None, label_start
         colour of edges (roads)
     :param edge_linewidth: float
         width of edges (roads
+    :param particles_color: str
+        colour of routes
+    :param particles_alpha: float in [0, 1]
+        plotting parameter
+        opacity of routes
+    :param polyline_color: str
+        colour of polyline crosses
+    :param polyline_s: str
+        size of polyline crosses
+    :param polyline_linewidth: str
+        linewidth of polyline crosses
     :param kwargs:
         additional parameters to ox.plot_graph
     :return: fig, ax
@@ -74,14 +85,14 @@ def plot(graph, particles=None, polyline=None, particles_alpha=None, label_start
                 int_path = interpolate_path(graph, particle, t_column=True)
 
                 cart_int_path = cartesianise_path(graph, int_path, t_column=True)
-                ax.plot(cart_int_path[:, 0], cart_int_path[:, 1], color='orange', linewidth=1.5,
+                ax.plot(cart_int_path[:, 0], cart_int_path[:, 1], color=particles_color, linewidth=1.5,
                         alpha=particles_alpha)
 
                 cart_path = cartesianise_path(graph, observation_time_rows(particle), t_column=True)
             else:
                 cart_path = cartesianise_path(graph, particle, t_column=True)
 
-            ax.scatter(cart_path[:, 0], cart_path[:, 1], color='orange', alpha=particles_alpha, zorder=2)
+            ax.scatter(cart_path[:, 0], cart_path[:, 1], color=particles_color, alpha=particles_alpha, zorder=2)
 
             start_end_points[0] += cart_path[0] / len(particles)
             start_end_points[1] += cart_path[-1] / len(particles)
@@ -100,7 +111,7 @@ def plot(graph, particles=None, polyline=None, particles_alpha=None, label_start
         poly_arr = np.array(polyline)
         ax.scatter(poly_arr[:, 0],
                    poly_arr[:, 1],
-                   marker='x', c='red', s=100, linewidth=3, zorder=10)
+                   marker='x', c=polyline_color, s=polyline_s, linewidth=polyline_linewidth, zorder=10)
 
         if particles is None:
             start_end_points = poly_arr[np.array([0, -1])]
@@ -132,4 +143,3 @@ def expand_lims(xlim, ylim, inflation):
     ylim[1] += y_range * inflation
 
     return xlim, ylim
-

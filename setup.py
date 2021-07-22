@@ -9,7 +9,7 @@ with open('README.md') as f:
 
 METADATA = dict(
     name="bmm",
-    version='0.2',
+    version='1.0',
     url='http://github.com/SamDuffield/bmm',
     author='Sam Duffield',
     install_requires=['numpy',

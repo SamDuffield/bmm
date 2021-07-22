@@ -20,7 +20,7 @@ class MMParticles:
     In particular contains the following object:
     self.particles: list, length = n_samps of arrays
         each array with shape = (_, 8)
-        columns: t, u, v, k, alpha, x, y, n_inter, d
+        columns: t, u, v, k, alpha, x, y, d
             t: seconds, observation time
             u: int, edge start node
             v: int, edge end node
@@ -54,7 +54,6 @@ class MMParticles:
             self.particles = [np.zeros((1, 8)) for _ in range(self.n)]
             for i in range(self.n):
                 self.particles[i][0, 1:7] = initial_positions[i]
-            self.time_intervals = np.array([])
             self.ess_pf = np.zeros(1)
             self.time = 0
 
