@@ -33,9 +33,6 @@ and produces a particle approximation that duely represents probabilistic
 uncertainty in both the route taken and the positions at observation times. Additionally, `bmm` offers
 support for both offline and online computation.
 
-# Documentation
-
-
 
 # Acknowledgements
 
