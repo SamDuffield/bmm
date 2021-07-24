@@ -133,8 +133,9 @@ def sample_route(graph: MultiDiGraph,
         full_sampled_route = proposal.process_proposal_output(full_sampled_route, sampled_route, sampled_dis_route,
                                                               time_interval, True)
 
-    polyline = full_sampled_route[edges.observation_time_indices(full_sampled_route[:, 0]), 5:7] \
-               + mm_model.gps_sd * np.random.normal(size=(num_obs, 2))
+    obs_indices = edges.observation_time_indices(full_sampled_route[:, 0])
+    polyline = full_sampled_route[obs_indices, 5:7] \
+               + mm_model.gps_sd * np.random.normal(size=(obs_indices.sum(), 2))
 
     return full_sampled_route, polyline
 

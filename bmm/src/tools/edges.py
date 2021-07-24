@@ -21,6 +21,7 @@ def edge_interpolate(geometry: LineString,
                      alpha: float) -> np.ndarray:
     """
     Given edge and proportion travelled, return (x,y) coordinate.
+
     :param geometry: edge geometry
     :param alpha: in (0,1] proportion of edge travelled
     :return: cartesian coordinate
@@ -32,12 +33,12 @@ def get_geometry(graph: MultiDiGraph,
                  edge: np.ndarray) -> LineString:
     """
     Extract geometry of an edge from global cam_graph object. If geometry doesn't exist set to straight line.
+
     :param graph: encodes road network, simplified and projected to UTM
-    :param edge: length = 3
-        elements u, v, k
-            u: int, edge start node
-            v: int, edge end node
-            k: int, edge key
+    :param edge: length = 3 with elements u, v, k
+        * u: int, edge start node
+        * v: int, edge end node
+        * k: int, edge key
     :return: edge geometry
     """
     edge_tuple = tuple(int(e) for e in edge)
@@ -50,6 +51,7 @@ def get_geometry_cached(graph: MultiDiGraph,
     """
     Cacheable
     Extract geometry of an edge from global cam_graph object. If geometry doesn't exist set to straight line.
+
     :param graph: encodes road network, simplified and projected to UTM
     :param edge_tuple: (hashable for lru_cache), length = 3
         elements u, v, k
@@ -79,6 +81,7 @@ def discretise_geometry(geom: LineString,
     """
     Given edge, return series of [edge, alpha] points at determined discretisation increments along edge.
     alpha is proportion of edge traversed.
+
     :param geom: edge geometry
     :param d_refine: metres, resolution of distance discretisation
     :param return_dists: if true return distance along edge as well as alpha (proportion)
@@ -95,19 +98,18 @@ def discretise_edge(graph: MultiDiGraph,
     """
     Discretises edge to given edge refinement parameter.
     Returns array of proportions along edge, xy cartesian coordinates and distances along edge
+
     :param graph: encodes road network, simplified and projected to UTM
-    :param edge: list-like, length = 3
-        elements u, v, k
-            u: int, edge start node
-            v: int, edge end node
-            k: int, edge key
+    :param edge: list-like, length = 3 with elements u, v, k
+        * u: int, edge start node
+        * v: int, edge end node
+        * k: int, edge key
     :param d_refine: metres, resolution of distance discretisation
-    :return: shape = (_, 4)
-        columns
-            alpha: float in (0,1], position along edge
-            x: float, metres, cartesian x coordinate
-            y: float, metres, cartesian y coordinate
-            distance: float, distance from start of edge
+    :return: shape = (_, 4) with columns
+        * alpha: float in (0,1], position along edge
+        * x: float, metres, cartesian x coordinate
+        * y: float, metres, cartesian y coordinate
+        * distance: float, distance from start of edge
     """
     edge_tuple = tuple(int(e) for e in edge)
     return discretise_edge_cached(graph, edge_tuple, d_refine).copy()
@@ -252,6 +254,7 @@ def get_truncated_discrete_edges(graph: MultiDiGraph,
 def observation_time_indices(times: np.ndarray) -> np.ndarray:
     """
     Remove zeros (other than the initial zero) from a series
+
     :param times: series of timestamps
     :return: bool array of timestamps that are either non-zero or the first timestamp
     """
@@ -261,6 +264,7 @@ def observation_time_indices(times: np.ndarray) -> np.ndarray:
 def observation_time_rows(path: np.ndarray) -> np.ndarray:
     """
     Returns rows of path only at observation times (not intersections)
+
     :param path: numpy.ndarray, shape=(_, 5+)
         columns - t, u, v, k, alpha, ...
     :return: trimmed path
@@ -273,7 +277,7 @@ def long_lat_to_utm(points: Union[list, np.ndarray], graph=None) -> np.ndarray:
     """
     Converts a collection of long-lat points to UTM
     :param points: points to be projected, shape = (N, 2)
-    :param graph: optional cam_graph containing desired crs in cam_graph.gra['crs']
+    :param graph: optional graph containing desired crs in graph.graph['crs']
     :return: array of projected points
     """
     points = np.atleast_2d(points)
@@ -286,13 +290,6 @@ def long_lat_to_utm(points: Union[list, np.ndarray], graph=None) -> np.ndarray:
     points_gdf_utm['x'] = points_gdf_utm['geometry'].map(lambda point: point.x)
     points_gdf_utm['y'] = points_gdf_utm['geometry'].map(lambda point: point.y)
     return np.squeeze(np.array(points_gdf_utm[['x', 'y']]))
-
-
-
-
-
-
-
 
 
 def interpolate_path(graph: MultiDiGraph,
@@ -333,7 +330,8 @@ def interpolate_path(graph: MultiDiGraph,
 
 def cartesianise_path(graph, path, t_column=True, observation_time_only=False):
     """
-    Converts particle or array of edges and alphas into cartesian points.
+    Converts particle or array of edges and alphas into cartesian (x,y) points.
+
     :param path: numpy.ndarray, shape=(_, 5+)
         columns - (t), u, v, k, alpha, ...
     :param t_column: boolean

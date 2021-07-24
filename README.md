@@ -7,7 +7,7 @@ pip install bmm
 ```
 
 ## Load graph and convert to UTM
-UTM (Universal Transverse Mercator) is a commonly used projection of spherical longtitude-latitude
+UTM (Universal Transverse Mercator) is a commonly used projection of spherical longitude-latitude
 coordinates into square x-y coordinates.
 ```python
 import numpy as np

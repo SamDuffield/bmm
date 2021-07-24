@@ -19,6 +19,7 @@ def plot(graph, particles=None, polyline=None, label_start_end=True,
          **kwargs):
     """
     Plots particle approximation of trajectory
+
     :param graph: NetworkX MultiDiGraph
         UTM projection
         encodes road network

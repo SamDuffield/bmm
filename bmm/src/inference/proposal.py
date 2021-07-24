@@ -69,6 +69,7 @@ def get_possible_routes(graph: MultiDiGraph,
                         num_inter_cut_off: int = np.inf) -> list:
     """
     Given a route so far and maximum distance to travel, calculate and return all possible routes on cam_graph.
+
     :param graph: encodes road network, simplified and projected to UTM
     :param in_route: shape = (_, 9)
         columns: t, u, v, k, alpha, x, y, n_inter, d

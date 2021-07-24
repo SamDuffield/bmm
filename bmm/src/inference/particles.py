@@ -6,6 +6,7 @@
 ########################################################################################################################
 
 import copy
+from typing import List
 
 from bmm.src.tools.edges import observation_time_indices
 
@@ -15,39 +16,52 @@ import numpy as np
 
 class MMParticles:
     """
-    Class to store trajectories from map-matching algorithm.
+    Class to store trajectories from a map-matching algorithm.
 
-    In particular contains the following object:
-    self.particles: list, length = n_samps of arrays
-        each array with shape = (_, 8)
-        columns: t, u, v, k, alpha, x, y, d
-            t: seconds, observation time
-            u: int, edge start node
-            v: int, edge end node
-            k: int, edge key
-            alpha: in [0,1], position along edge
-            x: float, metres, cartesian x coordinate
-            y: float, metres, cartesian y coordinate
-            d: float, metres, distance travelled since previous observation time
+    In particular, contains the ``self.particles`` object, which is a
+    list of n arrays each with shape = (_, 8) and columns:
+    - t: seconds, observation time
+    - u: int, edge start node
+    - v: int, edge end node
+    - k: int, edge key
+    - alpha: in [0,1], position along edge
+    - x: float, metres, cartesian x coordinate
+    - y: float, metres, cartesian y coordinate
+    - d: float, metres, distance travelled since previous observation time
 
     As well as some useful properties:
-        self.n: number of particles
-        self.m: number of observations
-        self.observation_times: np.array of observation times
-        self.latest_observation_time: time of most recently received observation
-        self.route_nodes list of length n, each element contains the series of nodes traversed for that particle
+    * ``self.n``: number of particles
+    * ``self.m``: number of observations
+    * ``self.observation_times``: array of observation times
+    * ``self.latest_observation_time``: time of most recently received observation
+    * ``self.route_nodes``: list of length n, each element contains the series of nodes traversed for that particle
+
+    Initiate MMParticles storage of trajectories with some start positions as input.
+
+    :param initial_positions: list, length = n_samps, each element is an array of length 6 with elements
+
+        * u: int, edge start node
+        * v: int, edge end node
+        * k: int, edge key
+        * alpha: in [0,1], position along edge
+        * x: float, metres, cartesian x coordinate
+        * y: float, metres, cartesian y coordinate
+
     """
-    def __init__(self, initial_positions):
+    __module__ = 'bmm'
+
+    def __init__(self, initial_positions: List[np.ndarray]):
         """
         Initiate storage of trajectories with some start positions as input.
-        :param initial_positions: list-like, length = n_samps
-            each element is list-like of length 6 with elements u, v, k, alpha, x, y
-            u: int, edge start node
-            v: int, edge end node
-            k: int, edge key
-            alpha: in [0,1], position along edge
-            x: float, metres, cartesian x coordinate
-            y: float, metres, cartesian y coordinate
+        :param initial_positions: list, length = n_samps, each element is an array of length 6 with elements
+
+            * u: int, edge start node
+            * v: int, edge end node
+            * k: int, edge key
+            * alpha: in [0,1], position along edge
+            * x: float, metres, cartesian x coordinate
+            * y: float, metres, cartesian y coordinate
+
         """
         if initial_positions is not None:
             self.n = len(initial_positions)
@@ -56,9 +70,6 @@ class MMParticles:
                 self.particles[i][0, 1:7] = initial_positions[i]
             self.ess_pf = np.zeros(1)
             self.time = 0
-
-    def __repr__(self) -> str:
-        return 'bmm.MMParticles'
 
     def copy(self) -> 'MMParticles':
         out_part = MMParticles(None)

@@ -52,15 +52,16 @@ def initiate_particles(graph: MultiDiGraph,
     """
     Initiate start of a trajectory by sampling points around the first observation.
     Note that coordinate system of inputs must be the same, typically a UTM projection (not longtitude-latitude!).
+
     :param graph: encodes road network, simplified and projected to UTM
     :param mm_model: MapMatchingModel
     :param first_observation: cartesian coordinate in UTM
     :param n_samps: number of samples to generate
     :param d_refine: metres, resolution of distance discretisation
-    :param d_truncate: metres, distance beyond which to assume zero likelihood probability
-        defaults to 5 * mm_model.gps_sd
-    :param ess_all: if true initiate effective sample size for each particle for each observation
-        otherwise initiate effective sample size only for each observation
+    :param d_truncate: metres, distance beyond which to assume zero likelihood probability defaults
+            to 5 * mm_model.gps_sd
+    :param ess_all: if true initiate effective sample size for each particle for each observation otherwise initiate
+            effective sample size only for each observation
     :param filter_store: whether to initiate storage of filter particles and weights
     :return: MMParticles object
     """
@@ -184,6 +185,7 @@ def update_particles_flbs(graph: MultiDiGraph,
     """
     Joint fixed-lag update in light of a newly received observation, uses partial backward simulation runs for stitching
     Propose + reweight then backward simulation + fixed-lag stitching.
+
     :param graph: encodes road network, simplified and projected to UTM
     :param particles: unweighted particle approximation up to the previous observation time
     :param new_observation: cartesian coordinate in UTM
@@ -302,6 +304,7 @@ def update_particles(graph: MultiDiGraph,
                      **kwargs) -> MMParticles:
     """
     Updates particle approximation in receipt of new observation
+
     :param graph: encodes road network, simplified and projected to UTM
     :param particles: unweighted particle approximation up to the previous observation time
     :param new_observation: cartesian coordinate in UTM
@@ -309,15 +312,16 @@ def update_particles(graph: MultiDiGraph,
     :param mm_model: MapMatchingModel
     :param proposal_func: function to propagate and weight single particle
     :param update:
-        'PF' for particle filter fixed-lag update
-        'BSi' for backward simulation fixed-lag update
+        * 'PF' for particle filter fixed-lag update
+        * 'BSi' for backward simulation fixed-lag update
+
         must be consistent across updates
     :param lag: fixed lag for resampling/stitching
     :param max_rejections: number of rejections to attempt before doing full fixed-lag stitching
-        0 will do full fixed-lag stitching and track ess_stitch
+            0 will do full fixed-lag stitching and track ess_stitch
     :param kwargs: optional parameters to pass to proposal
-        i.e. d_max, d_refine or var
-        as well as ess_threshold for backward simulation update
+            i.e. d_max, d_refine or var
+            as well as ess_threshold for backward simulation update
     :return: MMParticles object
     """
 
@@ -361,24 +365,24 @@ def _offline_map_match_fl(graph: MultiDiGraph,
     """
     Runs offline map-matching but uses online fixed-lag techniques.
     Only recommended for simulation purposes.
+
     :param graph: encodes road network, simplified and projected to UTM
     :param polyline: series of cartesian coordinates in UTM
-    :param n_samps: int
-        number of particles
-    :param timestamps: seconds
-        either float if all times between observations are the same, or a series of timestamps in seconds/UNIX timestamp
+    :param n_samps: int number of particles
+    :param timestamps: seconds, either float if all times between observations are the same, or a series of timestamps
+        in seconds/UNIX timestamp
     :param mm_model: MapMatchingModel
-    :param proposal_func: function to propagate and weight single particle
-        defaults to optimal (discretised) proposal
+    :param proposal_func: function to propagate and weight single particle defaults to optimal (discretised) proposal
     :param update:
-        'PF' for particle filter fixed-lag update
-        'BSi' for backward simulation fixed-lag update
+        * 'PF' for particle filter fixed-lag update
+        * 'BSi' for backward simulation fixed-lag update
+
         must be consistent across updates
     :param lag: fixed lag for resampling/stitching
     :param d_refine: metres, resolution of distance discretisation
-    :param initial_d_truncate: distance beyond which to assume zero likelihood probability at time zero
+    :param initial_d_truncate: distance beyond which to assume zero likelihood probability at time zero,
         defaults to 5 * mm_model.gps_sd
-    :param max_rejections: number of rejections to attempt before doing full fixed-lag stitching
+    :param max_rejections: number of rejections to attempt before doing full fixed-lag stitching,
         0 will do full fixed-lag stitching and track ess_stitch
     :param verbose: bool whether to print ESS at each iterate
     :param kwargs: optional parameters to pass to proposal
@@ -437,9 +441,10 @@ def offline_map_match(graph: MultiDiGraph,
                       verbose: bool = True,
                       **kwargs) -> MMParticles:
     """
-    Runs offline map-matching. I.e. receives a full polyline and returns an equal probability collection
+    Runs offline map-matching, i.e. receives a full polyline and returns an equal probability collection
     of trajectories.
     Forward-filtering backward-simulation implementation - no fixed-lag approximation needed for offline inference.
+
     :param graph: encodes road network, simplified and projected to UTM
     :param polyline: series of cartesian cooridnates in UTM
     :param n_samps: int
@@ -508,6 +513,10 @@ def offline_map_match(graph: MultiDiGraph,
 
         if not resample:
             temp_weights *= live_weights
+
+        if temp_weights.sum() == 0.:
+            raise ValueError('Map-matching failed: filtering weights all zero,'
+                             'try examining polyline bmm.plot(graph, polyline=polyline')
 
         temp_weights /= np.sum(temp_weights)
         filter_weights[i + 1] = temp_weights.copy()

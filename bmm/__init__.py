@@ -8,13 +8,13 @@ from bmm.src.inference.smc import _offline_map_match_fl
 
 from bmm.src.inference.smc import updates
 
+from bmm.src.inference.sample import sample_route
+from bmm.src.inference.sample import random_positions
+
 from bmm.src.inference.model import MapMatchingModel
 from bmm.src.inference.model import ExponentialMapMatchingModel
 
 from bmm.src.inference.proposal import get_possible_routes
-
-from bmm.src.inference.sample import sample_route
-from bmm.src.inference.sample import random_positions
 
 from bmm.src.tools.plot import plot
 
