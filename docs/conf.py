@@ -12,8 +12,9 @@
 #
 import os
 import sys
-sys.path.insert(0, os.path.abspath('../..'))
+import numpy
 sys.path.insert(0, os.path.abspath('..'))
+print(sys.executable)
 
 
 # -- Project information -----------------------------------------------------
@@ -64,4 +65,3 @@ html_theme = 'sphinx_rtd_theme'
 html_static_path = ['_static']
 
 autodoc_typehints = "description"
-
