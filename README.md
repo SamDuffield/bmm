@@ -1,6 +1,8 @@
 # bmm: Bayesian Map-Matching
 Map-matching using particle smoothing methods.
 
+[Docs](https://bmm.readthedocs.io/en/latest/) and [methodology](https://arxiv.org/abs/2012.04602).
+
 ## Install
 ```
 pip install bmm
