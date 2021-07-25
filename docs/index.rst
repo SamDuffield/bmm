@@ -8,7 +8,8 @@ Map-matching converts a series of noisy GPS coordinates into a continuous trajec
 
 ``bmm`` is built on top of ``OSMnx``, an `awesome package for retrieving and processing OpenStreetMap data <https://github.com/gboeing/osmnx>`_.
 
-The probabilistic model and particle smoothing methodology behind ``bmm`` can be found `here <https://arxiv.org/abs/2012.04602>`_.
+The probabilistic model and particle smoothing methodology behind ``bmm`` can be found on `arXiv <https://arxiv.org/abs/2012.04602>`_
+and the source code on `GitHub <https://github.com/SamDuffield/bmm>`_.
 
 
 Docs
