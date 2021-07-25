@@ -23,7 +23,7 @@ def get_out_edges(graph: MultiDiGraph,
     """
     Extracts out edges from a given node
     :param graph: encodes road network, simplified and projected to UTM
-    :param node: cam_graph index to a single node
+    :param node: graph index to a single node
     :return: array with columns u, v, k with u = node
     """
     return np.atleast_2d([[u, v, k] for u, v, k in graph.out_edges(node, keys=True)])
@@ -68,7 +68,7 @@ def get_possible_routes(graph: MultiDiGraph,
                         all_routes: bool = False,
                         num_inter_cut_off: int = np.inf) -> list:
     """
-    Given a route so far and maximum distance to travel, calculate and return all possible routes on cam_graph.
+    Given a route so far and maximum distance to travel, calculate and return all possible routes on graph.
 
     :param graph: encodes road network, simplified and projected to UTM
     :param in_route: shape = (_, 9)

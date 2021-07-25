@@ -32,7 +32,7 @@ def edge_interpolate(geometry: LineString,
 def get_geometry(graph: MultiDiGraph,
                  edge: np.ndarray) -> LineString:
     """
-    Extract geometry of an edge from global cam_graph object. If geometry doesn't exist set to straight line.
+    Extract geometry of an edge from global graph object. If geometry doesn't exist set to straight line.
 
     :param graph: encodes road network, simplified and projected to UTM
     :param edge: length = 3 with elements u, v, k
@@ -50,7 +50,7 @@ def get_geometry_cached(graph: MultiDiGraph,
                         edge_tuple: tuple) -> LineString:
     """
     Cacheable
-    Extract geometry of an edge from global cam_graph object. If geometry doesn't exist set to straight line.
+    Extract geometry of an edge from global graph object. If geometry doesn't exist set to straight line.
 
     :param graph: encodes road network, simplified and projected to UTM
     :param edge_tuple: (hashable for lru_cache), length = 3
@@ -201,7 +201,7 @@ def get_truncated_discrete_edges(graph: MultiDiGraph,
     """
     Discretises edges within dist_retain of coord
     :param graph: encodes road network, simplified and projected to UTM
-    :param coord: conformal with cam_graph (i.e. UTM)
+    :param coord: conformal with graph (i.e. UTM)
     :param d_refine: metres, resolution of distance discretisation
     :param d_truncate: metres, distance within which of coord to retain points
     :param return_dists_to_coord: if true additionally return array of distances to coord
@@ -298,7 +298,7 @@ def interpolate_path(graph: MultiDiGraph,
                      t_column: bool = False) -> np.ndarray:
     """
     Turns path into a discrete collection of positions to be plotted
-    :param graph: simplified cam_graph
+    :param graph: simplified graph
     :param path: numpy.ndarray, shape = (_, 4)
     :param d_refine: float
         metres

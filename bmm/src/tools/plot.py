@@ -23,7 +23,7 @@ def plot(graph, particles=None, polyline=None, label_start_end=True,
     :param graph: NetworkX MultiDiGraph
         UTM projection
         encodes road network
-        generating using OSMnx, see tools.cam_graph.py
+        e.g. generated using OSMnx
     :param particles: MMParticles object (from inference.particles)
         particle approximation
     :param polyline: list-like, each element length 2
