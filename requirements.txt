@@ -7,3 +7,4 @@ networkx
 geopandas
 numba
 scipy
+pillow>=6.2.0
