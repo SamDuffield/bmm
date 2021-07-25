@@ -44,6 +44,7 @@ def sample_route(graph: MultiDiGraph,
     Runs offline map-matching. I.e. receives a full polyline and returns an equal probability collection
     of trajectories.
     Forward-filtering backward-simulation implementation - no fixed-lag approximation needed for offline inference.
+
     :param graph: encodes road network, simplified and projected to UTM
     :param timestamps: seconds
         either float if all times between observations are the same, or a series of timestamps in seconds/UNIX timestamp

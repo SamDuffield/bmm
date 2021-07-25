@@ -22,7 +22,7 @@ copyright = '2021, Sam Duffield'
 author = 'Sam Duffield'
 
 # The full version, including alpha/beta/rc tags
-release = '1.0'
+release = '1.1'
 
 
 # -- General configuration ---------------------------------------------------
@@ -53,7 +53,8 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'alabaster'
+# html_theme = 'alabaster'
+html_theme = 'sphinx_rtd_theme'
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,

@@ -88,6 +88,7 @@ class MapMatchingModel:
         """
         Evaluate distance prior/transition density
         Vectorised to handle multiple evaluations at once
+
         :param distance: metres
             array if multiple evaluations at once
         :param time_interval: seconds, time between observations
@@ -101,6 +102,7 @@ class MapMatchingModel:
         """
         Evaluate gradient of distance prior/transition density in distance_params
         Vectorised to handle multiple evaluations at once
+
         :param distance: metres
             array if multiple evaluations at once
         :param time_interval: seconds, time between observations
@@ -128,6 +130,7 @@ class MapMatchingModel:
         """
         Initiates default value of the maximum distance possibly travelled in the time interval.
         Assumes a maximum possible speed.
+
         :param time_interval: float
             seconds
             time between observations
@@ -261,6 +264,7 @@ class ExponentialMapMatchingModel(MapMatchingModel):
         """
         Evaluate distance prior/transition density
         Vectorised to handle multiple evaluations at once
+
         :param distance: metres
             array if multiple evaluations at once
         :param time_interval: seconds, time between observations
@@ -295,6 +299,7 @@ class ExponentialMapMatchingModel(MapMatchingModel):
         """
         Evaluate gradient of distance prior/transition density in distance_params
         Vectorised to handle multiple evaluations at once
+
         :param distance: metres
             array if multiple evaluations at once
         :param time_interval: seconds, time between observations

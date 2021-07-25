@@ -17,9 +17,8 @@ Docs
 .. toctree::
     :maxdepth: 3
 
-    functions
-    classes
-
+    source/functions
+    source/classes
 
 
 Install
