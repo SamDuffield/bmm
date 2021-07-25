@@ -12,7 +12,6 @@
 #
 import os
 import sys
-import numpy
 sys.path.insert(0, os.path.abspath('..'))
 print(sys.executable)
 
