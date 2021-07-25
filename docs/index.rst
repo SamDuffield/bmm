@@ -20,6 +20,7 @@ Docs
 
     functions
     classes
+    genindex
 
 
 Install
@@ -69,7 +70,7 @@ Sanity Check
 =============
 You can manually test that ``bmm`` is working sensibly for a given graph by generating synthetic data::
 
-    graph = ox.graph_from_place('Cambridge, UK')
+    graph = ox.graph_from_place('London, UK')
     graph = ox.project_graph(graph)
     generated_route, generated_polyline = bmm.sample_route(graph, timestamps=15, num_obs=20)
 
@@ -89,10 +90,3 @@ Plot map-matched particles::
 
 .. image:: sanity_check_mm.png
 
-
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`search`
