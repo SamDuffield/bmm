@@ -1,0 +1,10 @@
+pandas
+osmnx
+numpy
+matplotlib
+Shapely
+networkx
+geopandas
+numba
+scipy
+bmm
