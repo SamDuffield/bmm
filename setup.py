@@ -7,20 +7,15 @@ DESCRIPTION = 'Bayesian Map-matching'
 with open('README.md') as f:
     long_description = f.read()
 
+with open('requirements.txt') as f:
+    install_requires = f.read().splitlines()
+
 METADATA = dict(
     name="bmm",
     version='1.1',
     url='http://github.com/SamDuffield/bmm',
     author='Sam Duffield',
-    install_requires=['numpy',
-                      'matplotlib',
-                      'scipy',
-                      'numba',
-                      'pandas',
-                      'geopandas',
-                      'osmnx',
-                      'networkx'
-                      ],
+    install_requires=install_requires,
     author_email='sddd2@cam.ac.uk',
     description=DESCRIPTION,
     long_description=long_description,
