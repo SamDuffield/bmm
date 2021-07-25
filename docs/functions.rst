@@ -1,8 +1,6 @@
 Functions
 ==========
 
-
-
 .. autofunction:: bmm.offline_map_match
 
 .. autofunction:: bmm.initiate_particles
