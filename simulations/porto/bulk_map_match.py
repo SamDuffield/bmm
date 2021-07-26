@@ -15,10 +15,10 @@ test_route_data_path = '/Users/samddd/Main/Data/pkdd-15-predict-taxi-service-tra
 save_dir = '/Users/samddd/Main/bmm/simulations/porto/bulk_output/'
 
 # Load long-lat polylines
-polylines_ll = pd.read_csv(test_route_data_path, chunksize=1000).get_chunk()['POLYLINE'].apply(json.loads)
+polylines_ll = pd.read_csv(test_route_data_path, chunksize=5000).get_chunk()['POLYLINE'].apply(json.loads)
 polylines_ll = [np.array(a) for a in polylines_ll]
 
-num_routes = 100
+num_routes = 500
 min_length = 20
 max_length = 60
 polylines_ll = [c for c in polylines_ll if min_length <= len(c) <= max_length]
