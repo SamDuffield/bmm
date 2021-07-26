@@ -18,7 +18,7 @@ bibliography: paper.bib
 
 # Summary
 
-`bmm` provides probabilistic map-matching with uncertainty quantification, built on top of `OSMnx` Boeing2017.
+`bmm` provides probabilistic map-matching with uncertainty quantification, built on top of `OSMnx` [@Boeing2017].
 Map-matching is the task of converting a polyline (series of noisy location observations - e.g. GPS data)
 and a graph (collection of edges and nodes) into a logical route restricted to the graph.
 `bmm` uses particle smoothing methods to produce a collection of particles, each of which representing a
