@@ -44,8 +44,10 @@ Samuel Duffield acknowledges support from the EPSRC.
 of OpenStreetMap data OpenStreetMap. Although, `bmm` is applicable to be used on any suitably
 labelled NetworkX graph Hagberg2008.
 
-In addition, `bmm` utilises `numpy` [@Harris2020] and `numba` [@Lam2015] for fast scientific calculations,
-`pandas` [@Reback2020] and `geopandas` [@Jordahl2020] for spatial data storage and manipulation
-as well as `matplotlib` [@Hunter2007] for visualisation.
+[comment]: <> (In addition, `bmm` utilises `numpy` [@Harris2020] and `numba` [@Lam2015] for fast scientific calculations,)
+
+[comment]: <> (`pandas` [@Reback2020] and `geopandas` [@Jordahl2020] for spatial data storage and manipulation)
+
+[comment]: <> (as well as `matplotlib` [@Hunter2007] for visualisation.)
 
 # References
