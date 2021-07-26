@@ -6,7 +6,6 @@ tags:
   - GPS
 authors:
   - name: Samuel Duffield
-    orcid: 0000-0002-8656-8734
     affiliation: 1
 affiliations:
  - name: University of Cambridge
@@ -40,16 +39,12 @@ support for both offline and online computation.
 
 Samuel Duffield acknowledges support from the EPSRC.
 
-[comment]: <> (`bmm` is built on top of `OSMnx` [@Boeing2017] - a python package assisting with the retrieval and processing)
+`bmm` is built on top of `OSMnx` [@Boeing2017] - a python package assisting with the retrieval and processing
+of OpenStreetMap data [@OpenStreetMap]. Although, `bmm` is applicable to be used on any suitably
+labelled NetworkX graph Hagberg2008.
 
-[comment]: <> (of OpenStreetMap data OpenStreetMap. Although, `bmm` is applicable to be used on any suitably)
-
-[comment]: <> (labelled NetworkX graph Hagberg2008.)
-
-[comment]: <> (In addition, `bmm` utilises `numpy` [@Harris2020] and `numba` [@Lam2015] for fast scientific calculations,)
-
-[comment]: <> (`pandas` [@Reback2020] and `geopandas` [@Jordahl2020] for spatial data storage and manipulation)
-
-[comment]: <> (as well as `matplotlib` [@Hunter2007] for visualisation.)
+In addition, `bmm` utilises `numpy` [@Harris2020] and `numba` [@Lam2015] for fast scientific calculations,
+`pandas` [@Reback2020] and `geopandas` [@Jordahl2020] for spatial data storage and manipulation
+as well as `matplotlib` [@Hunter2007] for visualisation.
 
 # References
