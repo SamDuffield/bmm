@@ -41,11 +41,11 @@ support for both offline and online computation.
 Samuel Duffield acknowledges support from the EPSRC.
 
 `bmm` is built on top of `OSMnx` [@Boeing2017] - a python package assisting with the retrieval and processing
-of OpenStreetMap data [@OpenStreetMap]. Although, `bmm` is applicable to be used on any suitably
+of OpenStreetMap data OpenStreetMap. Although, `bmm` is applicable to be used on any suitably
 labelled NetworkX graph Hagberg2008.
 
-In addition, `bmm` utilises `numpy` Harris2020 and `numba` Lam2015 for fast scientific calculations,
-`pandas` Reback2020 and `geopandas` Jordahl2020 for spatial data storage and manipulation
-as well as `matplotlib` Hunter2007 for visualisation.
+In addition, `bmm` utilises `numpy` [@Harris2020] and `numba` [@Lam2015] for fast scientific calculations,
+`pandas` [@Reback2020] and `geopandas` [@Jordahl2020] for spatial data storage and manipulation
+as well as `matplotlib` [@Hunter2007] for visualisation.
 
 # References
