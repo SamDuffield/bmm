@@ -1,7 +1,7 @@
 ---
 title: 'bmm: Bayesian Map-matching'
 tags:
-  - Python
+  - python
   - map-matching
   - GPS
 authors:
