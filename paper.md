@@ -29,8 +29,10 @@ Map-matching is a vital task for data driven inference involving GPS data.
 Map-matching is often non-trivial, i.e. when the graph is dense, the observation noise is significant
 and/or the time between observations is large. In these cases there may be multiple routes
 that could have feasibly generated the observed polyline and returning a single trajectory is suboptimal.
-Indeed, of 100 routes successfully map-matched using `bmm` from the Porto taxi dataset [@taxidata], 96 exhibited
-multi-modality in the route that would not be captured in a single trajectory approach.
+Indeed, of 500 routes successfully map-matched using `bmm` from the Porto taxi dataset [@taxidata], 467 exhibited
+multi-modality. This uncertainty over the inferred route would not be captured in the single trajectory
+approach that is adopted by the most prominent map-matching software [@Luxen2011] and [@Yang2018], which adapt a Viterbi
+algorithm - first applied to map-matching in [@Newson2009].
 
 `bmm` adopts a state-space model approach as described in [@Duffield2020]
 and produces a particle approximation that duly represents probabilistic

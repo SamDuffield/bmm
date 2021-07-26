@@ -7,12 +7,12 @@ import pandas as pd
 import bmm
 
 porto_sim_dir = os.getcwd()
-porto_sim_dir = '/Users/samddd/Main/bmm/simulations/porto'
 graph_path = porto_sim_dir + '/portotaxi_graph_portugal-140101.osm._simple.graphml'
 graph = ox.load_graphml(graph_path)
 
-test_route_data_path = '/Users/samddd/Main/Data/pkdd-15-predict-taxi-service-trajectory-i/train.csv'
-save_dir = '/Users/samddd/Main/bmm/simulations/porto/bulk_output/'
+test_route_data_path = ''   # Download from https://archive.ics.uci.edu/ml/datasets/Taxi+Service+Trajectory+-+Prediction+Challenge,+ECML+PKDD+2015
+save_dir = porto_sim_dir + '/bulk_output/'
+
 
 # Load long-lat polylines
 polylines_ll = pd.read_csv(test_route_data_path, chunksize=5000).get_chunk()['POLYLINE'].apply(json.loads)
