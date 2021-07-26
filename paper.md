@@ -19,9 +19,9 @@ bibliography: paper.bib
 
 `bmm` provides probabilistic map-matching with uncertainty quantification, built on top of `OSMnx` [@Boeing2017].
 Map-matching is the task of converting a polyline (series of noisy location observations - e.g. GPS data)
-and a graph (collection of edges and nodes) into a logical route restricted to the graph.
+and a graph (collection of edges and nodes) into a continuous route trajectory restricted to the graph.
 `bmm` uses Bayesian particle smoothing methods to produce a collection of particles, each of which representing a
-continuous, plausible route.
+continuous, plausible route along edges in the graph.
 
 # Statement of need
 
@@ -31,10 +31,10 @@ and/or the time between observations is large. In these cases there may be multi
 that could have feasibly generated the observed polyline and returning a single trajectory is suboptimal.
 Indeed, of 500 routes successfully map-matched using `bmm` from the Porto taxi dataset [@taxidata], 467 exhibited
 multi-modality. This uncertainty over the inferred route would not be captured in the single trajectory
-approach that is adopted by the most prominent map-matching software [@Luxen2011] and [@Yang2018], which adapt a Viterbi
-algorithm - first applied to map-matching in [@Newson2009].
+approach that is adopted by the most prominent map-matching software @Luxen2011 and @Yang2018, which adapt a Viterbi
+algorithm - first applied to map-matching in @Newson2009.
 
-`bmm` adopts a state-space model approach as described in [@Duffield2020]
+`bmm` adopts a state-space model approach as described in @Duffield2020
 and produces a particle approximation that duly represents probabilistic
 uncertainty in both the route taken and the positions at observation times. Additionally, `bmm` offers
 support for both offline and online computation.
