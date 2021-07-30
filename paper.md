@@ -64,6 +64,8 @@ is UTM (Universal Transverse Mercator) which as a square coordinate system (with
 cumbersome than the spherical longitude-latitude coordinates system (with unit degrees). `bmm` can convert
 longitude-latitude to UTM using the `bmm.long_lat_to_utm` function.
 
+#### Offline Map-matching
+
 Given a suitable graph and polyline `bmm` can be easily used to map-match
 ```python
 matched_particles = bmm.offline_map_match(graph, polyline=polyline_utm, n_samps=100, timestamps=15)
@@ -77,6 +79,8 @@ The output of `bmm.offline_map_match` is a `bmm.MMParticles` object that contain
 the possible trajectories the algorithm has managed to fit to the polyline - full details can be found at
 [bmm.readthedocs.io](https://bmm.readthedocs.io/en/latest/).
 
+#### Online Map-matching
+
 `bmm` can also map-match data that arrives in an online or sequential manner. Initiate a `bmm.MMParticles`
 with the first observation
 ```python
@@ -87,10 +91,15 @@ and then update as new data comes in
 matched_particles = bmm.update_particles(graph, matched_particles, new_observation=polyline_utm[1], time_interval=15)
 ```
 
+#### Parameter Tuning
+
 The statistical model described in @Duffield2020 has various parameters which can be adjusted to fit the features
 of the graph and time interval setup. This can be done by adjusting a `bmm.MapMatchingModel` argument or its
 default `bmm.ExponetialMapMatchingModel` which is taken as an optional `mm_model` argument in the above
 map-matching functions. In addition, these parameters can be learnt from a series of polylines using `bmm.offline_em`. 
+
+
+#### Plotting
 
 Once a polyline has been succesfully map-matched, it can be visualised using `bmm`
 ```python
