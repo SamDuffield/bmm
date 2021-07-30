@@ -64,11 +64,12 @@ is UTM (Universal Transverse Mercator) which as a square coordinate system (with
 cumbersome than the spherical longitude-latitude coordinates system (with unit degrees). `bmm` can convert
 longitude-latitude to UTM using the `bmm.long_lat_to_utm` function.
 
-#### Offline Map-matching
+### Offline Map-matching
 
 Given a suitable graph and polyline `bmm` can be easily used to map-match
 ```python
-matched_particles = bmm.offline_map_match(graph, polyline=polyline_utm, n_samps=100, timestamps=15)
+matched_particles = bmm.offline_map_match(graph, polyline=polyline_utm,
+                                          n_samps=100, timestamps=15)
 ```
 Here the `n_samps` parameter represents the number of particles/trajectories to output and `timestamps` is the
 number of seconds between polyline observations - this can be a float if all observation times are equally spaced,
@@ -79,19 +80,24 @@ The output of `bmm.offline_map_match` is a `bmm.MMParticles` object that contain
 the possible trajectories the algorithm has managed to fit to the polyline - full details can be found at
 [bmm.readthedocs.io](https://bmm.readthedocs.io/en/latest/).
 
-#### Online Map-matching
+### Online Map-matching
 
 `bmm` can also map-match data that arrives in an online or sequential manner. Initiate a `bmm.MMParticles`
 with the first observation
 ```python
-matched_particles = bmm.initiate_particles(graph, first_observation=polyline_utm[0], n_samps=100)
+matched_particles = bmm.initiate_particles(graph,
+                                           first_observation=polyline_utm[0],
+                                           n_samps=100)
 ```
 and then update as new data comes in
 ```python
-matched_particles = bmm.update_particles(graph, matched_particles, new_observation=polyline_utm[1], time_interval=15)
+matched_particles = bmm.update_particles(graph,
+                                         matched_particles,
+                                         new_observation=polyline_utm[1],
+                                         time_interval=15)
 ```
 
-#### Parameter Tuning
+### Parameter Tuning
 
 The statistical model described in @Duffield2020 has various parameters which can be adjusted to fit the features
 of the graph and time interval setup. This can be done by adjusting a `bmm.MapMatchingModel` argument or its
@@ -99,7 +105,7 @@ default `bmm.ExponetialMapMatchingModel` which is taken as an optional `mm_model
 map-matching functions. In addition, these parameters can be learnt from a series of polylines using `bmm.offline_em`. 
 
 
-#### Plotting
+### Plotting
 
 Once a polyline has been succesfully map-matched, it can be visualised using `bmm`
 ```python
