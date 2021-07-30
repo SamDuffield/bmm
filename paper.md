@@ -105,7 +105,7 @@ Once a polyline has been succesfully map-matched, it can be visualised using `bm
 ```python
 bmm.plot(graph, particles=matched_particles, polyline=polyline_utm)
 ```
-![](https://github.com/SamDuffield/bmm/blob/master/simulations/porto/test_route.png)
+![](simulations/porto/test_route.png)
 
 
 
