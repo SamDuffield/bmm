@@ -144,13 +144,19 @@ def comp_plot(n_samps,
               leg=False,
               **kwargs):
     fig, ax = plt.subplots()
+    fig.set_figwidth(5)
+    fig.set_figwidth(5)
+    fig.set_figheight(7)
+    fig.set_figheight(7)
     for i, n in reversed(list(enumerate(n_samps))):
         ax.plot(max_rejects, times[i], label=str(n), linestyle=line_styles[i], **kwargs)
         # ax.plot(max_rejects, times[i], label=str(n))
-    ax.set_xlabel(r'$R$')
-    ax.set_ylabel('Runtime per observation, s')
+    ax.set_xlabel(r'$R$', fontsize=16)
+    ax.set_ylabel('Runtime per observation, s', fontsize=16)
     if leg:
-        ax.legend(loc='upper right', title=r'$N$')
+        l = ax.legend(loc='upper right', title=r'$N$', fontsize=16)
+        plt.setp(l.get_title(), fontsize=16)
+
     fig.tight_layout()
     return fig, ax
 
@@ -160,8 +166,8 @@ pf_fig, pf_ax = comp_plot(n_samps, max_rejections, np.mean(fl_pf_times_per_obs, 
 bsi_fig, bsi_ax = comp_plot(n_samps, max_rejections, np.mean(fl_bsi_times_per_obs, axis=0), color='blue', leg=True)
 pf_ax.set_ylim(bsi_ax.get_ylim())
 
-pf_fig.savefig(save_dir + 'pf_mr_compare', dpi=400)
-bsi_fig.savefig(save_dir + 'bsi_mr_compare', dpi=400)
+pf_fig.savefig(save_dir + 'pf_mr_compare2', dpi=400)
+bsi_fig.savefig(save_dir + 'bsi_mr_compare2', dpi=400)
 
 # pf_ax.set_xticks(xt)
 # bsi_ax.set_xticks(xt)

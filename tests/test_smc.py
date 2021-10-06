@@ -18,13 +18,13 @@ from bmm.src.inference import smc, proposal
 from bmm.src.inference.model import ExponentialMapMatchingModel
 
 
-def read_data(path, chunksize=None):
-    data_reader = pd.read_csv(path, chunksize=10)
-    data_columns = data_reader.get_chunk().columns
+def read_data(path, nrows=None):
+    data_reader = pd.read_csv(path, nrows=10)
+    data_columns = data_reader.columns
     polyline_converters = {col_name: json.loads for col_name in data_columns
                            if 'POLYLINE' in col_name}
 
-    return pd.read_csv(path, converters=polyline_converters, chunksize=chunksize)
+    return pd.read_csv(path, converters=polyline_converters, nrows=nrows)
 
 
 def load_test_data(test_data_path=None, nrows=None):
@@ -37,10 +37,7 @@ def load_test_data(test_data_path=None, nrows=None):
         test_data_file = test_data_files[0]
         test_data_path = test_dir_path + '/' + test_data_file
 
-    if nrows is None:
-        return read_data(test_data_path)
-    else:
-        return read_data(test_data_path, nrows).get_chunk()
+    return read_data(test_data_path, nrows)
 
 
 def load_graph(test_graph_path=None):

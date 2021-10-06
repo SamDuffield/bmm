@@ -161,6 +161,8 @@ def update_particles_flpf(graph: MultiDiGraph,
     out_particles.ess_pf = np.append(out_particles.ess_pf, 1 / np.sum(weights ** 2))
 
     # Update time intervals
+    if not hasattr(out_particles, 'time_intervals'):
+        out_particles.time_intervals = []
     out_particles.time_intervals = np.append(out_particles.time_intervals, time_interval)
 
     # Resample
@@ -247,6 +249,8 @@ def update_particles_flbs(graph: MultiDiGraph,
     out_particles.ess_pf = np.append(out_particles.ess_pf, 1 / np.sum(weights ** 2))
 
     # Update time intervals
+    if not hasattr(out_particles, 'time_intervals'):
+        out_particles.time_intervals = []
     out_particles.time_intervals = np.append(out_particles.time_intervals, time_interval)
 
     # Run backward simulation

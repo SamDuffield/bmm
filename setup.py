@@ -12,7 +12,7 @@ with open('requirements.txt') as f:
 
 METADATA = dict(
     name="bmm",
-    version='1.1',
+    version='1.3',
     url='http://github.com/SamDuffield/bmm',
     author='Sam Duffield',
     install_requires=install_requires,
