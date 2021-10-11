@@ -42,6 +42,8 @@ coordinates into square x-y coordinates::
     graph = ox.graph_from_place('Porto, Portugal')
     graph = ox.project_graph(graph)
 
+Beware that downloading graphs using `osmnx` can take a few minutes, especially for large cities.
+
 Load polyline and convert to UTM::
 
     data_path = 'simulations/porto/test_route.csv'
@@ -73,6 +75,9 @@ You can manually test that ``bmm`` is working sensibly for a given graph by gene
     graph = ox.graph_from_place('London, UK')
     graph = ox.project_graph(graph)
     generated_route, generated_polyline = bmm.sample_route(graph, timestamps=15, num_obs=20)
+
+Note that the London graph takes some time (~10mins) to download and for testing on synthetic data it may be worth considering a smaller region
+(although not so small that the `sample_route` function consistently terminates early due to reaching the edge of the graph).
 
 Run map-matching on the generated polyline::
 
