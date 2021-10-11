@@ -19,7 +19,9 @@ class MMParticles:
     Class to store trajectories from a map-matching algorithm.
 
     In particular, contains the ``self.particles`` object, which is a
-    list of n arrays each with shape = (_, 8) and columns:
+    list of n arrays each with shape = (_, 8)
+        where _ represents the trajectory length (number of nodes that are either intersection or observation)
+        and columns:
     - t: seconds, observation time
     - u: int, edge start node
     - v: int, edge end node
@@ -131,7 +133,8 @@ class MMParticles:
         """
         Extract single particle
         :param item: index of particle to be extracted
-        :return: single path array, shape = (_, 9)
+        :return: single path array, shape = (_, 8)
+            where _ represents the trajectory length (number of nodes that are either intersection or observation)
         """
         return self.particles[item]
 
@@ -147,6 +150,7 @@ class MMParticles:
         """
         Returns n series of nodes describing the routes
         :return: length n list of arrays, shape (_,)
+            where _ represents the trajectory length (number of nodes that are either intersection or observation)
         """
         nodes = []
         for p in self.particles:
