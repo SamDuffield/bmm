@@ -1,4 +1,4 @@
-# Contributing to Transcriptase
+# Contributing to `bmm`
 `bmm` would love contributions! Whether that's:
 
 - Reporting a bug
