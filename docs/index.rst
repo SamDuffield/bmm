@@ -6,7 +6,7 @@ Welcome to ``bmm``'s documentation!
 
 Map-matching converts a series of noisy GPS coordinates into a continuous trajectory that is restricted to a graph (i.e. road network) or in the case of ``bmm`` a collection of continuous trajectories representing multiple plausible routes!
 
-``bmm`` is built on top of ``OSMnx``, an `awesome package for retrieving and processing OpenStreetMap data <https://github.com/gboeing/osmnx>`_.
+``bmm`` is built on top of ``osmnx``, an `awesome package for retrieving and processing OpenStreetMap data <https://github.com/gboeing/osmnx>`_.
 
 The probabilistic model and particle smoothing methodology behind ``bmm`` can be found on `arXiv <https://arxiv.org/abs/2012.04602>`_
 and the source code on `GitHub <https://github.com/SamDuffield/bmm>`_.
