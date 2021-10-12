@@ -24,7 +24,7 @@ continuous route is represented by series of connected edges as well as position
 observation time. `bmm` uses Bayesian particle smoothing methods to produce a collection of particles, each of which
 representing a continuous, plausible route along edges in the graph.
 
-`bmm` is built on top of `OSMnx` [@Boeing2017] - a python package assisting with the retrieval and processing
+`bmm` is built on top of `osmnx` [@Boeing2017] - a python package assisting with the retrieval and processing
 of OpenStreetMap data [@OpenStreetMap]. Although, `bmm` is applicable to be used on any suitably
 labelled NetworkX graph [@Hagberg2008].
 
@@ -44,7 +44,11 @@ that could have feasibly generated the observed polyline and returning a single 
 Indeed, of 500 routes successfully map-matched using `bmm` from the Porto taxi dataset [@taxidata], 467 exhibited
 multi-modality. This uncertainty over the inferred route would not be captured in the single trajectory
 approach that is adopted by the most prominent map-matching software @Luxen2011 and @Yang2018, which adapt a Viterbi
-algorithm - first applied to map-matching in @Newson2009.
+algorithm - first applied to map-matching in @Newson2009. The code for @Luxen2011 is found as part of
+the [OSRM project](https://github.com/Project-OSRM/osrm-backend) and represents an efficient C++ implementation
+although is not easily accessible through Python. The software package accompanying @Yang2018 is found
+at [fmm](https://github.com/cyang-kth/fmm) and provides extremely fast map-matching but without the convenience and
+accessibility of working directly with an `osmnx` graph.
 
 `bmm` adopts a state-space model approach as described in @Duffield2020
 and produces a particle approximation that duly represents probabilistic
@@ -58,7 +62,7 @@ support for both offline and online computation.
 along edges within a graph.
 
 We assume that the graph is stored as a NetworkX [@Hagberg2008] object (which can easily be
-achieved for a given region using `OSMnx` [@Boeing2017]) and that the polyline is stored as an array or list of
+achieved for a given region using `osmnx` [@Boeing2017]) and that the polyline is stored as an array or list of
 two-dimensional coordinates in the same coordinate system as the graph. A common choice for coordinate system
 is UTM (Universal Transverse Mercator) which as a square coordinate system (with unit metres) is less
 cumbersome than the spherical longitude-latitude coordinates system (with unit degrees). `bmm` can convert
