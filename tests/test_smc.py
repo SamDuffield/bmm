@@ -65,6 +65,10 @@ class TestInitiateParticles(TestWithGraphAndData):
         self.particles = smc.initiate_particles(self.graph, self.test_data['POLYLINE_UTM'][0][0], 10)
         self.assertEqual(self.particles.n, 10)
         self.assertEqual(self.particles[0].shape, (1, 8))
+        init_arr = np.array(self.particles.particles)[:, 0, :]
+        self.assertGreater(np.unique(init_arr[:, 5]).size, 3)
+        self.assertEqual(init_arr[:, 0].sum(), 0.)
+        self.assertEqual(init_arr[:, -1].sum(), 0.)
 
 
 class TestProposeParticles(TestWithGraphAndData):
@@ -76,7 +80,14 @@ class TestProposeParticles(TestWithGraphAndData):
                                                                           15,
                                                                           ExponentialMapMatchingModel())
         self.assertEqual(proposed_particle.shape[1], 8)
-        assert isinstance(weight, float)
+        self.assertIsInstance(weight, float)
+        self.assertGreater(weight, 0.)
+        self.assertGreaterEqual(proposed_particle.shape[0], 2)
+        self.assertEqual(proposed_particle.shape[1], 8)
+        self.assertEqual(np.isnan(proposed_particle).sum(), 0)
+        self.assertEqual(proposed_particle[:, 0].sum(), 15.)
+        self.assertEqual(proposed_particle[-1, 0], 15.)
+        self.assertGreaterEqual(proposed_particle[-1, -1], 0.)
 
 
 class TestUpdateParticlesPF(TestWithGraphAndData):
@@ -89,7 +100,17 @@ class TestUpdateParticlesPF(TestWithGraphAndData):
                                                       15,
                                                       ExponentialMapMatchingModel(),
                                                       proposal.optimal_proposal)
-        self.assertIs(updated_particles.n, 10)
+        self.assertEqual(updated_particles.n, 10)
+        self.assertEqual(len(updated_particles.particles), 10)
+        for proposed_particle in updated_particles:
+            self.assertEqual(proposed_particle.shape[1], 8)
+            self.assertGreaterEqual(proposed_particle.shape[0], 2)
+            self.assertEqual(proposed_particle.shape[1], 8)
+            self.assertEqual(np.isnan(proposed_particle).sum(), 0)
+            self.assertEqual(proposed_particle[:, 0].sum(), 15.)
+            self.assertEqual(proposed_particle[-1, 0], 15.)
+            self.assertGreaterEqual(proposed_particle[-1, -1], 0.)
+        self.assertGreater(np.unique([pp[-1, 5] for pp in updated_particles]).size, 3)
 
 
 class TestUpdateParticlesBSi(TestWithGraphAndData):
@@ -102,7 +123,17 @@ class TestUpdateParticlesBSi(TestWithGraphAndData):
                                                       15,
                                                       ExponentialMapMatchingModel(),
                                                       proposal.optimal_proposal)
-        self.assertIs(updated_particles.n, 10)
+        self.assertEqual(updated_particles.n, 10)
+        self.assertEqual(len(updated_particles.particles), 10)
+        for proposed_particle in updated_particles:
+            self.assertEqual(proposed_particle.shape[1], 8)
+            self.assertGreaterEqual(proposed_particle.shape[0], 2)
+            self.assertEqual(proposed_particle.shape[1], 8)
+            self.assertEqual(np.isnan(proposed_particle).sum(), 0)
+            self.assertEqual(proposed_particle[:, 0].sum(), 15.)
+            self.assertEqual(proposed_particle[-1, 0], 15.)
+            self.assertGreaterEqual(proposed_particle[-1, -1], 0.)
+        self.assertGreater(np.unique([pp[-1, 5] for pp in updated_particles]).size, 3)
 
 
 if __name__ == '__main__':
