@@ -22,7 +22,7 @@ def multinomial(particles: Union[list, np.ndarray, MMParticles],
     Full multinomial resampling scheme. Lengths of particles and weights must conform.
     :param particles: list-like or MMParticles object to be resampled
     :param weights: resampling probabilities
-    :return: unweighted collection of objects in the same form as input
+    :return: unweighted collection of objects in the same form as input particles
     """
     # Number of samples
     n = len(weights)
