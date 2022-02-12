@@ -1,4 +1,7 @@
 # bmm: Bayesian Map-Matching
+
+[![DOI](https://joss.theoj.org/papers/10.21105/joss.03651/status.svg)](https://doi.org/10.21105/joss.03651)
+
 Map-matching using particle smoothing methods.
 
 [Docs](https://bmm.readthedocs.io/en/latest/) and [methodology](https://arxiv.org/abs/2012.04602).
