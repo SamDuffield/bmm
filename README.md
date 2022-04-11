@@ -59,6 +59,18 @@ bmm.plot(graph, particles=matched_particles, polyline=polyline_utm)
 ```
 ![porto_mm](simulations/porto/test_route.png?raw=true "Map-matched route - Porto")
 
-
-
-
+## Cite
+```
+@article{Duffield2022,
+  doi = {10.21105/joss.03651},
+  url = {https://doi.org/10.21105/joss.03651},
+  year = {2022},
+  publisher = {The Open Journal},
+  volume = {7},
+  number = {70},
+  pages = {3651},
+  author = {Samuel Duffield},
+  title = {bmm: Bayesian Map-matching},
+  journal = {Journal of Open Source Software}
+}
+```
